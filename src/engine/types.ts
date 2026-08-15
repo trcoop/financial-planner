@@ -110,14 +110,19 @@ export interface PeriodState {
    * Last annual withdrawal, used to inflation-adjust the following period's withdrawal.
    * `null` until the first retirement-year withdrawal is set.
    *
-   * OPEN DECISION (raised in FIN-15 review, not yet resolved): when a
-   * {@link WithdrawalStrategy} satisfies only part of the requested `shortfall`, does this
-   * field carry the *requested* figure or the *sourced* `WithdrawalPlan.amount`? The two
-   * are identical under `withdrawFullShortfall`, so nothing in Stories 1-3 can
-   * distinguish them and no test here pins it. They diverge the moment a partially-
-   * satisfying strategy ships (Story 4+), at which point the inflation chain compounds
-   * whichever one was chosen. FIN-16 must not pick silently — resolve it on the ticket
-   * first and record the answer here.
+   * Carries the *requested* withdrawal — the `shortfall` {@link WithdrawalStrategy} was
+   * asked for — and never the *sourced* {@link WithdrawalPlan} `amount` it managed to
+   * supply. Resolved 2026-08-15 (raised in FIN-15 review); FIN-16's `computeWithdrawals`
+   * must inflate this figure, not the sourced one.
+   *
+   * The two are identical under `withdrawFullShortfall`, so nothing in Stories 1-3 can
+   * distinguish them — they diverge the moment a partially-satisfying strategy ships
+   * (Story 4+), and by then the inflation chain has been compounding one of them for
+   * decades. This models a *spending need*: a retiree's cost of living rises with
+   * inflation whether or not the portfolio could fund last year's draw. Compounding the
+   * sourced amount instead would silently ratchet planned spending down after any
+   * shortfall, so a failing plan would appear to recover — hiding exactly the failure
+   * state Story 1 requires the engine to surface.
    */
   priorWithdrawal: number | null;
   /** Output rows accumulated so far; `recordPeriod` appends this period's row. */
