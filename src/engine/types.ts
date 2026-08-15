@@ -94,8 +94,9 @@ export type PlanEvent =
  * round 2 review).
  *
  * Every stage returns a new state rather than mutating the one it was given — see
- * {@link PipelineStage}. "Snapshot" and "overwrite" below describe the value flow, not
- * in-place assignment.
+ * {@link PipelineStage}. Where `applyGrowth`'s own doc in `pipeline.ts` says it
+ * "snapshots" `beginningBalance` and "overwrites" `balance`, that describes the value
+ * flow, not in-place assignment.
  */
 export interface PeriodState {
   age: number;
@@ -112,7 +113,7 @@ export interface PeriodState {
    * OPEN DECISION (raised in FIN-15 review, not yet resolved): when a
    * {@link WithdrawalStrategy} satisfies only part of the requested `shortfall`, does this
    * field carry the *requested* figure or the *sourced* `WithdrawalPlan.amount`? The two
-   * are identical under {@link withdrawFullShortfall}, so nothing in Stories 1-3 can
+   * are identical under `withdrawFullShortfall`, so nothing in Stories 1-3 can
    * distinguish them and no test here pins it. They diverge the moment a partially-
    * satisfying strategy ships (Story 4+), at which point the inflation chain compounds
    * whichever one was chosen. FIN-16 must not pick silently — resolve it on the ticket

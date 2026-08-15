@@ -141,4 +141,38 @@ describe('runPeriod', () => {
 
     expect(state).toEqual(periodState());
   });
+
+  /**
+   * Proves `runPeriod` is actually wired to `pipelineStages`, which the assertions above
+   * cannot show while every stage is an identity stub — they pass just as happily against
+   * a `runPeriod` that ignores the pipeline entirely.
+   *
+   * Works by swapping the array's *contents* rather than rebinding the identifier:
+   * `readonly` is erased at compile time, so `runPeriod` reads through to whatever this
+   * array holds at call time. That is also the one coupling to be aware of — if
+   * `pipelineStages` is ever frozen, this `splice` throws and the test fails loudly rather
+   * than silently going green.
+   */
+  it('invokes every stage held in pipelineStages, in order, threading each result into the next', () => {
+    const mutableStages = pipelineStages as PipelineStage[];
+    const realStages = [...mutableStages];
+    const calls: string[] = [];
+    const probe =
+      (name: string): PipelineStage =>
+      (state) => {
+        calls.push(name);
+        return { ...state, balance: state.balance + 1 };
+      };
+
+    mutableStages.splice(0, mutableStages.length, probe('first'), probe('second'), probe('third'));
+
+    try {
+      const result = runPeriod(periodState({ balance: 0 }), runPeriodInput());
+
+      expect(calls).toEqual(['first', 'second', 'third']);
+      expect(result.balance).toBe(3);
+    } finally {
+      mutableStages.splice(0, mutableStages.length, ...realStages);
+    }
+  });
 });
