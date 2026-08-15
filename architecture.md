@@ -30,7 +30,7 @@ Two layers, kept strictly separate:
 1. **Engine** (`src/engine/`) — pure, framework-agnostic TypeScript functions
    (projection calculation, Monte Carlo simulation). No React dependency, no I/O.
    The engine validates its own inputs and throws typed errors on invariant
-   violations (e.g., retirement age ≤ current age) — it does not trust its
+   violations (e.g., current age exceeding the planning horizon) — it does not trust its
    caller, since it's an isolated unit that could end up called from more than
    just this UI (tests, potentially a worker or another client later).
 2. **UI** (`src/ui/`) — React components. Owns state via `useState`/`useReducer`.
@@ -41,18 +41,24 @@ A thin `src/storage/` module handles localStorage read/write, decoupled from bot
 the engine and the UI, with defensive error handling (quota exceeded, storage
 disabled) that falls back to in-memory-only rather than crashing.
 
+A thin `src/workers/` module owns Web Worker lifecycle for Tier 2 (instantiate,
+`postMessage`, `terminate`/respawn on cancel), and reconstructs typed errors that
+cross the worker boundary back into real engine error instances before resolving
+or rejecting its promise-based API back to the UI. It wraps calls to a pure
+per-trial function that lives in `src/engine/` and is executed inside the worker
+script — the orchestration itself is impure (Worker lifecycle, Promise-based), so
+it stays outside `src/engine/` rather than violating the engine's no-I/O rule.
+
 ## Computation model (two-tier)
 
 - **Tier 1 (base projection)**: recalculated on every input change, ~300ms
   debounced, runs synchronously on the main thread. Cheap enough (rough math:
   well under a millisecond) not to need a Web Worker.
-- **Tier 2 (stress test / Monte Carlo)**: runs synchronously on explicit user
-  trigger, not tied to the debounced input flow. Stays independent of Tier 1 —
-  changing inputs afterward doesn't re-trigger or clear it.
-
-If real performance data later shows either tier needs to move off the main
-thread, the engine's pure-function design ports to a Web Worker without a
-rewrite — deferred until there's evidence it's needed.
+- **Tier 2 (stress test / Monte Carlo)**: runs in a Web Worker on explicit user
+  trigger, off the main thread. If the user changes any input while a run is
+  in-flight, the run is cancelled (worker `terminate()`'d and respawned) and
+  the trigger button re-enables — no auto-restart, no queueing. Previously
+  completed results stay on screen; only the in-flight run is discarded.
 
 ## Open / deferred decisions
 
