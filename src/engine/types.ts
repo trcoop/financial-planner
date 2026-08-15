@@ -56,15 +56,22 @@ export interface ProjectionRow {
   /** Years elapsed. 0-indexed: year 0 is the current year, at `currentAge`. */
   year: number;
   /** Balance at the start of the year, before returns, contributions, and withdrawals. */
-  beginningBalance: number;
+  beginningBalance: PortfolioValue;
   /** Dollars contributed this year. Always 0 in retirement. */
   annualContribution: number;
-  /** Dollars earned from investment returns: `beginningBalance * annualReturnRate`. */
+  /**
+   * Dollars earned from investment returns: `beginningBalance * returnForPeriod`.
+   *
+   * Deliberately stated against the period's return rather than
+   * `assumptions.annualReturnRate`: this same row type is the per-path output of Monte
+   * Carlo, where the multiplier is that period's GBM draw. The deterministic projection
+   * is the case where `returnForPeriod` happens to equal `annualReturnRate` every year.
+   */
   investmentReturn: number;
   /** Dollars withdrawn this year. Always 0 pre-retirement. */
   annualWithdrawal: number;
   /** Balance at the end of the year. May go negative — that is a valid failure state. */
-  endingBalance: number;
+  endingBalance: PortfolioValue;
 }
 
 /**
@@ -81,9 +88,14 @@ export type PlanEvent =
  * State threaded from one period to the next by the fold.
  *
  * `beginningBalance` and `investmentReturn` are working fields, not carried history:
- * `applyGrowth` snapshots them before it overwrites `balance` with the post-growth value,
- * and `recordPeriod` reads them back when constructing the row. Without them, neither
- * value is recoverable by the time the last stage runs (ERD §4, round 2 review).
+ * `applyGrowth` carries them forward into the state it returns, alongside a `balance` set
+ * to the post-growth value, and `recordPeriod` reads them back when constructing the row.
+ * Without them, neither value is recoverable by the time the last stage runs (ERD §4,
+ * round 2 review).
+ *
+ * Every stage returns a new state rather than mutating the one it was given — see
+ * {@link PipelineStage}. "Snapshot" and "overwrite" below describe the value flow, not
+ * in-place assignment.
  */
 export interface PeriodState {
   age: number;
@@ -96,6 +108,15 @@ export interface PeriodState {
   /**
    * Last annual withdrawal, used to inflation-adjust the following period's withdrawal.
    * `null` until the first retirement-year withdrawal is set.
+   *
+   * OPEN DECISION (raised in FIN-15 review, not yet resolved): when a
+   * {@link WithdrawalStrategy} satisfies only part of the requested `shortfall`, does this
+   * field carry the *requested* figure or the *sourced* `WithdrawalPlan.amount`? The two
+   * are identical under {@link withdrawFullShortfall}, so nothing in Stories 1-3 can
+   * distinguish them and no test here pins it. They diverge the moment a partially-
+   * satisfying strategy ships (Story 4+), at which point the inflation chain compounds
+   * whichever one was chosen. FIN-16 must not pick silently — resolve it on the ticket
+   * first and record the answer here.
    */
   priorWithdrawal: number | null;
   /** Output rows accumulated so far; `recordPeriod` appends this period's row. */

@@ -46,7 +46,7 @@ export const computeWithdrawals: PipelineStage = (state, _input) => state;
 /** Applies tax owed on this period's income and withdrawals. Zero for Stories 1-3. */
 export const applyTax: PipelineStage = (state, _input) => state;
 
-/** Appends this period's {@link ProjectionRow} to the accumulated output. */
+/** Appends this period's `ProjectionRow` to the accumulated output. */
 export const recordPeriod: PipelineStage = (state, _input) => state;
 
 /**

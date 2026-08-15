@@ -44,10 +44,13 @@ export type ProjectionErrorCode =
  * Thrown when caller-supplied engine input violates an invariant.
  *
  * Carries a stable `.code` for programmatic handling alongside a human-readable
- * `.message` for display. Both survive the Web Worker boundary: `postMessage`'s
- * structured clone does not preserve custom prototypes, so the worker orchestration
- * layer forwards `{ code, message }` and reconstructs a real instance from them
- * (ERD §7).
+ * `.message` for display.
+ *
+ * Does not survive a Web Worker boundary as an instance: `postMessage`'s structured
+ * clone drops the prototype, so a cloned error arrives as a plain `Error` with `.name`
+ * of `'Error'` and `.code` of `undefined`. The worker must therefore forward
+ * `{ code, message }` as a plain payload and the orchestration layer reconstructs a real
+ * instance from it (ERD §7) — never post the caught error object itself.
  */
 export class InvalidProjectionInputError extends Error {
   readonly code: ProjectionErrorCode;

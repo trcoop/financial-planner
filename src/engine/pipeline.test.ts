@@ -21,7 +21,10 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   priorIncome: 0,
   priorWithdrawal: null,
   rows: [],
-  beginningBalance: 100_000,
+  // Deliberately different from `balance` so that a stage which sets `beginningBalance`
+  // from `balance` — a half-implemented `applyGrowth` — is caught by the identity
+  // assertions below rather than passing as "still a stub".
+  beginningBalance: 42_000,
   investmentReturn: 0,
   ...overrides,
 });
