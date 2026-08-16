@@ -60,6 +60,9 @@ describe('public surface', () => {
     'pipelineStages',
     'runStages',
     'runPeriod',
+    'runProjection',
+    'validatePlanAssumptions',
+    'createInitialPeriodState',
   ];
 
   it.each(runtimeExports)('re-exports %s', (name) => {
