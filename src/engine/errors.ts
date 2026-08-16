@@ -31,6 +31,13 @@ export type ProjectionErrorCode =
    * single-asset portfolio is out of scope for Story 2's two-asset GBM blend.
    */
   | 'ALLOCATION_ZERO_WEIGHT'
+  /**
+   * A Monte Carlo run was asked for a path count that is not a positive whole number.
+   *
+   * Zero paths divide by zero into a `NaN` success rate, and a fractional count runs
+   * `Math.floor(count)` paths while reporting the fraction back in `meta` (FIN-17 review).
+   */
+  | 'SIMULATION_COUNT_INVALID'
   /** Any numeric input field is `NaN`, `Infinity`, `-Infinity`, or not a number. */
   | 'NON_FINITE_INPUT'
   /** `currentAge`, `retirementAge`, or `planningHorizonEndAge` is negative. */

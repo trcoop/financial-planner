@@ -76,6 +76,27 @@ const PERIOD_YEARS = 1;
  * `meanReturn` is the single blended mean return for the whole portfolio
  * (`PlanAssumptions.annualReturnRate`) — Story 2 does not split mean return by asset class,
  * only volatility.
+ *
+ * **OPEN DECISION (FIN-17 review, 2026-08-16) — is `annualReturnRate` the log-drift or the
+ * expected return?** This implementation follows ERD §5's formula literally: the user's rate
+ * goes into the exponent as `mu`. But under GBM `E[R] = exp(mu) - 1`, so a plan that says
+ * "7% return" actually has an expected return of 7.2508%, and ERD §5 simultaneously calls
+ * `mu` "the single blended mean return" — which it is not. Two consequences:
+ *
+ * 1. Story 1's deterministic projection applies `annualReturnRate` as a plain arithmetic
+ *    rate (ERD §5, `investmentReturn = beginningBalance x annualReturnRate`), so the Monte
+ *    Carlo *mean* sits ~7.3% above the Tier 1 line at 30 years and ~16.7% at 66 years,
+ *    purely from this interpretation. Story 3 plots both on one chart.
+ * 2. An external calculator asked for "7%" produces the 7% projection, which is ~6.4% away
+ *    from this engine's mean over a 25-year horizon — outside the ticket's own 2% band.
+ *
+ * The one-line alternative is `mu = Math.log(1 + annualReturnRate)`, which makes `E[R]`
+ * exactly the user's 7% and reconciles both tiers. That is a product decision about what the
+ * "Investment return" input means, not an implementation detail, so it is deliberately left
+ * as the ERD specifies rather than changed unilaterally here. Needs Travis's call before
+ * FIN-19 draws Tier 1 and Tier 2 together. The test
+ * `treats annualReturnRate as GBM log-drift, so the expected return is exp(rate) - 1` pins
+ * the current convention, so switching is a deliberate edit rather than a silent drift.
  */
 export const gbmPeriodReturn = (meanReturn: number, volatility: number, deviate: number): number =>
   Math.exp(
@@ -149,6 +170,12 @@ export const extractPercentiles = (balancesByPath: readonly PathBalances[]): Per
  * the horizon after running dry mid-retirement is still a failed plan.
  */
 export const computeSuccessRate = (balancesByPath: readonly PathBalances[]): number => {
+  // No paths means nothing succeeded. `runMonteCarloTrials` rejects an empty batch before
+  // reaching here, but the naked division would otherwise hand the UI a NaN success rate.
+  if (balancesByPath.length === 0) {
+    return 0;
+  }
+
   const successes = balancesByPath.filter((path) =>
     path.every((balance) => balance >= 0),
   ).length;
@@ -258,6 +285,10 @@ export interface TrialConfig {
    *
    * Overridable so a caller can fold a different stage list — the seam this ticket's tests
    * use to exercise real Story 1 math while `pipeline.ts`'s stages are still stubs.
+   *
+   * @internal Scaffolding, not a supported extension point. Once FIN-16's real stages land
+   * there is no legitimate reason for a caller to substitute the per-period step, and the
+   * mirror of this field on {@link MonteCarloOptions} should be deleted at FIN-19.
    */
   runPeriodFn?: PipelineStage;
   withdrawalStrategy?: WithdrawalStrategy;
@@ -326,7 +357,11 @@ export interface MonteCarloOptions {
   seed?: number;
   /** Paths to simulate. Defaults to {@link DEFAULT_SIMULATION_COUNT}; lowered by tests. */
   simulationCount?: number;
-  /** See {@link TrialConfig.runPeriodFn}. */
+  /**
+   * See {@link TrialConfig.runPeriodFn}.
+   *
+   * @internal Delete at FIN-19, once the real pipeline stages remove the reason it exists.
+   */
   runPeriodFn?: PipelineStage;
   withdrawalStrategy?: WithdrawalStrategy;
   taxCalculator?: TaxCalculator;
@@ -356,10 +391,12 @@ export interface MonteCarloResult {
  * `src/workers/`, because that orchestration is impure and does not belong in `src/engine/`
  * (ERD §3, round-1 review).
  *
- * Validates the allocation and volatility it owns. `PlanAssumptions` is validated by Story
- * 1's own input-boundary validator, which lands with `runProjection` (FIN-16) and should be
- * called from here once available — until then a caller passing, say, a `currentAge` past
- * the horizon gets empty percentile arrays rather than a typed error.
+ * Validates the allocation, volatility, path count and seed it owns, plus the one
+ * `PlanAssumptions` field it cannot run without (a horizon that ends before it starts).
+ * The rest of `PlanAssumptions` is validated by Story 1's own input-boundary validator,
+ * `validatePlanAssumptions`, which lands with `runProjection` (FIN-16) and is explicitly
+ * exported there for this function to call. Wiring the two together is a FIN-19 follow-up:
+ * until then a caller passing, say, a negative `initialBalance` is not rejected here.
  */
 export const runMonteCarloTrials = (
   plan: PlanAssumptions,
@@ -372,8 +409,31 @@ export const runMonteCarloTrials = (
   assertFinite(volatilityAssumptions?.stocks, 'volatilityAssumptions.stocks');
   assertFinite(volatilityAssumptions?.bonds, 'volatilityAssumptions.bonds');
 
+  assertFinite(plan?.currentAge, 'currentAge');
+  assertFinite(plan?.planningHorizonEndAge, 'planningHorizonEndAge');
+  if (plan.currentAge > plan.planningHorizonEndAge) {
+    // Without this the fold runs zero periods, every path is `[]`, and `[].every(...)` is
+    // vacuously true — so a nonsense plan would report a reassuring 100% success rate.
+    throw new InvalidProjectionInputError(
+      'CURRENT_AGE_EXCEEDS_HORIZON',
+      `currentAge (${plan.currentAge}) must not exceed planningHorizonEndAge (${plan.planningHorizonEndAge}).`,
+    );
+  }
+
   const simulationCount = options.simulationCount ?? DEFAULT_SIMULATION_COUNT;
-  const draw = createSeededRandom(options.seed ?? createRandomSeed());
+  assertFinite(simulationCount, 'simulationCount');
+  if (!Number.isInteger(simulationCount) || simulationCount < 1) {
+    throw new InvalidProjectionInputError(
+      'SIMULATION_COUNT_INVALID',
+      `simulationCount must be a positive whole number, received ${simulationCount}.`,
+    );
+  }
+
+  const seed = options.seed ?? createRandomSeed();
+  // `seed >>> 0` would quietly turn NaN into 0, handing back a fixed sequence to a caller
+  // who believes they asked for a random one.
+  assertFinite(seed, 'seed');
+  const draw = createSeededRandom(seed);
   const config: TrialConfig = {
     allocation,
     volatility: volatilityAssumptions,

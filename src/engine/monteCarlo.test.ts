@@ -253,6 +253,22 @@ describe('gbmPeriodReturn', () => {
     expect(gbmPeriodReturn(0.07, 0, -3)).toBeCloseTo(0.07250818125421654, 12);
   });
 
+  /**
+   * Pins the OPEN DECISION documented on `gbmPeriodReturn`: `annualReturnRate` is fed in as
+   * GBM log-drift, so the *expected* return it produces is `exp(rate) - 1`, not `rate`. A
+   * plan that says 7% therefore has a 7.2508% expected return, and Story 1's deterministic
+   * tier — which applies the same field as a plain arithmetic rate — sits below it.
+   *
+   * This test exists to make the convention explicit and to force any switch to
+   * `mu = ln(1 + rate)` to be a deliberate edit here rather than a silent change in results.
+   */
+  it('treats annualReturnRate as GBM log-drift, so the expected return is exp(rate) - 1', () => {
+    const expectedReturn = gbmPeriodReturn(0.07, 0, 0);
+
+    expect(expectedReturn).toBeCloseTo(Math.exp(0.07) - 1, 12);
+    expect(expectedReturn).not.toBeCloseTo(0.07, 4);
+  });
+
   it('never returns a loss worse than -100%, however extreme the draw', () => {
     // A lognormal price ratio is strictly positive, so `exp(...) - 1 > -1` always. An
     // additive (non-exponential) formulation would wipe past -100% at -10 sigma.
@@ -911,35 +927,117 @@ describe('runMonteCarloTrials', () => {
   });
 });
 
+describe('degenerate inputs', () => {
+  it('rejects a plan whose horizon ends before it starts', () => {
+    // Left ungated, `periodCount` goes <= 0, every path is `[]`, and `[].every(...)` is
+    // `true` — so a nonsense plan reports a reassuring 100% success rate to the UI.
+    const code = codeThrownBy(() =>
+      runMonteCarloTrials(
+        assumptions({ currentAge: 70, planningHorizonEndAge: 65 }),
+        allocation70_30,
+      ),
+    );
+
+    expect(code).toBe('CURRENT_AGE_EXCEEDS_HORIZON');
+  });
+
+  it('accepts a plan whose horizon is a single year', () => {
+    const result = runMonteCarloTrials(
+      assumptions({ currentAge: 65, planningHorizonEndAge: 65 }),
+      allocation70_30,
+      undefined,
+      [],
+      { seed: 5, simulationCount: 20, runPeriodFn: referenceRunPeriod },
+    );
+
+    expect(result.percentiles.p50).toHaveLength(1);
+  });
+
+  it.each([
+    ['zero', 0],
+    ['negative', -5],
+    ['fractional', 2.7],
+  ])('rejects a %s simulation count', (_label, simulationCount) => {
+    // Zero divides by zero into a NaN success rate; a fractional count silently runs
+    // `Math.floor` paths while reporting the fraction back in `meta`.
+    const code = codeThrownBy(() =>
+      runMonteCarloTrials(assumptions(), allocation70_30, undefined, [], { simulationCount }),
+    );
+
+    expect(code).toBe('SIMULATION_COUNT_INVALID');
+  });
+
+  it('rejects a non-finite simulation count as a non-finite input', () => {
+    const code = codeThrownBy(() =>
+      runMonteCarloTrials(assumptions(), allocation70_30, undefined, [], {
+        simulationCount: Number.NaN,
+      }),
+    );
+
+    expect(code).toBe('NON_FINITE_INPUT');
+  });
+
+  it('rejects a non-finite seed rather than silently seeding from zero', () => {
+    // `seed >>> 0` turns NaN into 0, so a caller who thinks they passed a random seed
+    // would get a fixed one and never know.
+    const code = codeThrownBy(() =>
+      runMonteCarloTrials(assumptions(), allocation70_30, undefined, [], {
+        seed: Number.NaN,
+      }),
+    );
+
+    expect(code).toBe('NON_FINITE_INPUT');
+  });
+
+  it('reports a zero success rate for an empty batch rather than NaN', () => {
+    expect(computeSuccessRate([])).toBe(0);
+  });
+});
+
 /**
  * Accuracy spot-check: FIN-17's acceptance criterion asks that results agree with an
- * established external retirement calculator within 2% on a handful of scenarios.
+ * established external retirement calculator within 2% across five scenarios.
  *
- * Reference figures: the closed-form textbook formulas below are exactly what a
- * deterministic retirement calculator (Bankrate/NerdWallet/Vanguard-style "what will my
- * savings be worth" tools) computes — future value of a lump sum plus a growing annuity,
- * and a lump sum drawn down by an inflation-indexed withdrawal. They are written here as
- * summations, independently of the engine's period-by-period fold, so a bug in the fold
- * cannot hide by being mirrored in the expectation.
+ * Reference figures: the closed forms below are the standard future-value arithmetic such
+ * calculators are built on — a lump sum plus a growing annuity, and a lump sum drawn down
+ * by an inflation-indexed withdrawal. They are written as direct summations rather than
+ * period-by-period recursions, so they are genuinely independent of the fold under test
+ * and a bug there cannot hide by being mirrored in the expectation. What they are *not*
+ * is a figure copied from a named third-party tool: the "contributions earn no return in
+ * the year they are made" convention (ERD §5) is a modelling choice not every calculator
+ * shares, so pinning someone else's number would test their convention, not ours.
+ * Cross-checking one scenario against a named external tool is worth doing at FIN-19,
+ * once the real pipeline stages make the engine's numbers final.
  *
  * Which statistic to compare, and why it is *not* p50: for GBM,
  * `E[exp((μ − σ²/2)Δt + σ√Δt·Z)] = exp(μ)`, so the expected per-period return is
  * `exp(μ) − 1` regardless of volatility or allocation, while the *median* per-period
- * return is only `exp(μ − σ²/2) − 1`. At μ=7%, σ=15% that median sits ~1.1%/yr below the
- * deterministic rate — roughly 10% cumulative over 30 years — so comparing p50 against a
- * deterministic calculator would fail by construction, not because of a bug. The mean
- * path is the right comparison: contributions are deterministic and withdrawals are
- * linear in the path's own balance, so expectation propagates through the recursion
- * exactly and `E[balance_t]` equals the deterministic projection at rate `exp(μ) − 1`.
+ * return is the lower `exp(μ − σ²/2) − 1` (exact per asset; the blend of two independent
+ * lognormals has no such closed form, but lands between the two legs). The mean is the
+ * right comparison because expectation propagates through the recursion exactly:
+ * contributions are deterministic and every withdrawal is linear in the path's own
+ * balance, so `E[balance_t]` equals the deterministic projection at rate `exp(μ) − 1`.
+ * Measured p50-versus-closed-form gaps across these scenarios are −4.8% to −17.5%, so a
+ * p50 comparison would blow the 2% band by construction rather than because of a bug.
  *
- * Tolerance budget: 8,000 paths keeps the standard error of the mean well under 1% for
- * these horizons, leaving comfortable headroom inside the 2% band. Seeds are pinned so
- * the suite is deterministic, but they are not load-bearing — all five scenarios were
- * re-run against three independent seed sets during development and stayed inside the
- * tolerance every time, so this is not a case of tuning until one seed passed.
+ * Seeds are pinned so the suite is deterministic, but they are not load-bearing: every
+ * scenario was re-run against three independent seed sets during development, and a
+ * 25-seed sweep during review measured the sampling spread directly (see the path counts
+ * below). This is not a case of tuning until one seed passed.
  */
 describe('accuracy against deterministic reference figures', () => {
-  const ACCURACY_PATHS = 8_000;
+  /**
+   * Path counts per scenario, chosen from a measured 25-seed sweep of the relative error
+   * (FIN-17 review). Accumulation-only scenarios have a sampling standard deviation of
+   * 0.25-0.48% at 8,000 paths — 4-8σ of headroom inside the 2% band. The two scenarios
+   * that include a drawdown are noisier (0.80% and 1.02%), because each retirement
+   * withdrawal is proportional to a balance that has already accumulated variance, and at
+   * 8,000 paths they sat only ~2σ from the tolerance — about a 1-in-20 chance of a red
+   * run on an unlucky seed. Since the standard error falls as 1/√N, 32,000 paths restores
+   * them to ~4-5σ.
+   */
+  const ACCUMULATION_PATHS = 8_000;
+  const DRAWDOWN_PATHS = 32_000;
   const ACCURACY_TOLERANCE = 0.02;
 
   /** The arithmetic mean per-period return implied by a 7% GBM drift. */
@@ -1008,14 +1106,14 @@ describe('accuracy against deterministic reference figures', () => {
     );
   };
 
-  const meanFinalBalance = (plan: PlanAssumptions, seed: number): number => {
+  const meanFinalBalance = (plan: PlanAssumptions, seed: number, paths: number): number => {
     const draw = createSeededRandom(seed);
     let total = 0;
-    for (let path = 0; path < ACCURACY_PATHS; path += 1) {
+    for (let path = 0; path < paths; path += 1) {
       const balances = runMonteCarloTrial(plan, [], draw, trialConfig());
       total += balances[balances.length - 1];
     }
-    return total / ACCURACY_PATHS;
+    return total / paths;
   };
 
   const expectWithinTolerance = (actual: number, expected: number): void => {
@@ -1032,7 +1130,7 @@ describe('accuracy against deterministic reference figures', () => {
     });
 
     expectWithinTolerance(
-      meanFinalBalance(plan, 90_210),
+      meanFinalBalance(plan, 90_210, ACCUMULATION_PATHS),
       accumulationFutureValue(plan, periodCount(plan), plan.initialBalance),
     );
   });
@@ -1049,7 +1147,7 @@ describe('accuracy against deterministic reference figures', () => {
     });
 
     expectWithinTolerance(
-      meanFinalBalance(plan, 90_211),
+      meanFinalBalance(plan, 90_211, ACCUMULATION_PATHS),
       accumulationFutureValue(plan, periodCount(plan), plan.initialBalance),
     );
   });
@@ -1066,7 +1164,7 @@ describe('accuracy against deterministic reference figures', () => {
     });
 
     expectWithinTolerance(
-      meanFinalBalance(plan, 90_213),
+      meanFinalBalance(plan, 90_213, ACCUMULATION_PATHS),
       accumulationFutureValue(plan, periodCount(plan), plan.initialBalance),
     );
   });
@@ -1081,7 +1179,7 @@ describe('accuracy against deterministic reference figures', () => {
     });
 
     expectWithinTolerance(
-      meanFinalBalance(plan, 90_212),
+      meanFinalBalance(plan, 90_212, DRAWDOWN_PATHS),
       drawdownFutureValue(plan, periodCount(plan), plan.initialBalance),
     );
   });
@@ -1098,18 +1196,21 @@ describe('accuracy against deterministic reference figures', () => {
     });
 
     expectWithinTolerance(
-      meanFinalBalance(plan, 90_214),
+      meanFinalBalance(plan, 90_214, DRAWDOWN_PATHS),
       accumulateThenDrawDownFutureValue(plan),
     );
   });
 });
 
 describe('performance', () => {
-  it('runs 1,000 paths over a full horizon well inside the 500ms budget', () => {
-    // FIN-17's budget is 500ms for the pure engine work. Asserting against half of it
-    // leaves room for FIN-16's real stage bodies, which are heavier than this fixture,
-    // while still failing loudly if someone reintroduces per-period allocation or sorting
-    // inside the path loop.
+  it('runs 1,000 paths over a full horizon inside the 500ms budget', () => {
+    // FIN-17's budget is 500ms for the pure engine work, and the assertion is pinned to
+    // exactly that rather than to a tighter local figure. Measured cost is 32-38ms on
+    // developer hardware — a ~14x margin — but `npm test` also runs on shared CI runners
+    // that are slower and much noisier, and a wall-clock assertion tuned to local speed
+    // becomes a flaky merge blocker rather than a performance guard. At 500ms this still
+    // fails loudly if someone reintroduces per-period allocation or sorting inside the
+    // path loop, which costs orders of magnitude, not tens of percent.
     const plan = assumptions({ currentAge: 35, planningHorizonEndAge: 100 });
 
     const startedAt = performance.now();
@@ -1121,6 +1222,6 @@ describe('performance', () => {
 
     expect(result.meta.simulationCount).toBe(1_000);
     expect(result.percentiles.p50).toHaveLength(66);
-    expect(elapsedMs).toBeLessThan(250);
+    expect(elapsedMs).toBeLessThan(500);
   });
 });
