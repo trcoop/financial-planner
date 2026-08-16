@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import { InvalidProjectionInputError } from './errors';
 import type { ProjectionErrorCode } from './errors';
+import { pipelineStages } from './pipeline';
 import { runProjection } from './projection';
-import type { PlanAssumptions, PlanEvent } from './types';
+import type { PipelineStage, PlanAssumptions, PlanEvent } from './types';
 
 /** The Story 1 PRD's happy-path assumptions, overridable per scenario. */
 const assumptions = (overrides: Partial<PlanAssumptions> = {}): PlanAssumptions => ({
@@ -113,6 +114,40 @@ describe('runProjection purity', () => {
     const second = runProjection(assumptions());
 
     expect(first).not.toBe(second);
+  });
+});
+
+describe('runProjection life-event threading', () => {
+  /**
+   * `applyLifeEvents` is a deliberate no-op until Story 3, so no projected number can reveal
+   * whether `runProjection` actually hands the caller's events to the pipeline. Left unpinned,
+   * FIN-19 could implement that stage perfectly and still see an empty list forever — and
+   * every assertion in this file would stay green. Confirmed as a live mutation survivor
+   * before this test was added.
+   *
+   * Probed the way `runPeriod`'s wiring test probes stage order: by swapping the *contents* of
+   * `pipelineStages`, which is read through at call time.
+   */
+  it('hands the caller events to the stages rather than an empty list', () => {
+    const mutableStages = pipelineStages as PipelineStage[];
+    const realStages = [...mutableStages];
+    const seen: PlanEvent[][] = [];
+    const events: PlanEvent[] = [{ type: 'oneTimeExpense', atAge: 40, amount: 25_000, label: 'Roof' }];
+    const probe: PipelineStage = (state, input) => {
+      seen.push(input.events);
+      return state;
+    };
+
+    mutableStages.splice(0, mutableStages.length, probe);
+
+    try {
+      runProjection(assumptions({ currentAge: 35, retirementAge: 67, planningHorizonEndAge: 36 }), events);
+    } finally {
+      mutableStages.splice(0, mutableStages.length, ...realStages);
+    }
+
+    expect(seen).toHaveLength(2);
+    seen.forEach((received) => expect(received).toEqual(events));
   });
 });
 
@@ -423,5 +458,15 @@ describe('runProjection input validation', () => {
     // A projection that validated lazily would emit rows for the valid early years before
     // tripping. Throwing is the only observable outcome.
     expect(() => runProjection(assumptions({ currentAge: 101 }))).toThrow(InvalidProjectionInputError);
+  });
+
+  it('rejects an infinite planning horizon instead of folding forever', () => {
+    // The one case where validating *before* the fold is observable from outside, and the
+    // reason it matters: `while (age <= Infinity)` is an unbounded synchronous loop. Nothing
+    // can interrupt it — not Vitest's per-test timeout, not the worker's cancellation path —
+    // so a horizon that reached the fold would wedge the thread rather than surface an error.
+    // Moving the validation call below the fold makes this the only test in the suite to fail,
+    // by hanging; the assertion above passes either way.
+    expectRejection(assumptions({ planningHorizonEndAge: Number.POSITIVE_INFINITY }), 'NON_FINITE_INPUT');
   });
 });

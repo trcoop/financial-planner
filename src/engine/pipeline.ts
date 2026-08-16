@@ -5,10 +5,11 @@
  * step function). Later stories extend the engine by filling in stages, swapping strategy
  * implementations, or adding `PlanEvent` types — not by reordering this list.
  *
- * Scaffolding note: every stage below is an identity stub. The real pre-retirement and
- * retirement math lands in the next ticket (ERD §5, WP-1b), which fills in these bodies
- * without changing their signatures. Downstream work packages can build against these
- * signatures now.
+ * Every stage carries its Story 1 accumulation and drawdown behaviour (ERD §5, WP-1b), with
+ * the sole exception of {@link applyLifeEvents}, which stays an intentional no-op until
+ * Story 3 gives `PlanEvent` a meaning. The horizon is deliberately not represented here:
+ * folding these stages across a range of years is `runProjection`'s job, which is what lets
+ * Monte Carlo reuse the same step function with a per-period return.
  */
 
 import type { PeriodState, PipelineStage, PlanAssumptions, RunPeriodInput } from './types';

@@ -186,6 +186,16 @@ describe('computeIncome', () => {
     expect(result.balance).toBe(107_000);
   });
 
+  it('zeroes income in retirement rather than freezing the last working salary', () => {
+    // The retirement cases above all start from a `priorIncome` of 0, where "set it to 0" and
+    // "leave it alone" are indistinguishable — a mutation survivor. The difference is invisible
+    // in Story 1's rows, but a frozen salary would feed phantom earned income to a real
+    // `TaxCalculator` every retirement year from Story 4 on.
+    const result = computeIncome(periodState({ age: 67, year: 32, priorIncome: 103_000 }), runPeriodInput());
+
+    expect(result.priorIncome).toBe(0);
+  });
+
   it('treats an already-retired starting age as retirement at year 0', () => {
     const result = computeIncome(
       periodState({ age: 70, year: 0, balance: 500_000 }),
@@ -231,6 +241,18 @@ describe('computeWithdrawals', () => {
     expect(result.annualWithdrawal).toBe(0);
     expect(result.balance).toBe(119_000);
     expect(result.priorWithdrawal).toBeNull();
+  });
+
+  it('resets the withdrawal to zero pre-retirement rather than leaving a stale one', () => {
+    // The mirror of `computeIncome`'s retirement reset. Unreachable inside `runProjection`,
+    // where age only ever increases — but `computeWithdrawals` is exported and reused, and the
+    // reset is part of its contract rather than an accident of the caller's ordering.
+    const result = computeWithdrawals(
+      periodState({ age: 35, year: 0, balance: 119_000, annualWithdrawal: 40_000 }),
+      runPeriodInput(),
+    );
+
+    expect(result.annualWithdrawal).toBe(0);
   });
 
   it('takes the configured rate of the first retirement year opening balance', () => {
