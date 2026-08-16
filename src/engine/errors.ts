@@ -10,7 +10,7 @@
  * Stable, programmatically-matchable codes for engine input-validation failures.
  *
  * Extension point: this union is deliberately open to additions. Story 2's allocation
- * codes (`ALLOCATION_SUM_INVALID`, `ALLOCATION_ZERO_WEIGHT`) land with the Monte Carlo
+ * codes (`ALLOCATION_SUM_INVALID`, `ALLOCATION_ZERO_WEIGHT`) landed with the Monte Carlo
  * ticket by adding members here — no change to `InvalidProjectionInputError` itself.
  *
  * Note: `retirementAge <= currentAge` is deliberately absent. That is the valid
@@ -19,6 +19,18 @@
 export type ProjectionErrorCode =
   /** `currentAge > planningHorizonEndAge` — the one-row-per-year loop bound would be reversed. */
   | 'CURRENT_AGE_EXCEEDS_HORIZON'
+  /**
+   * A Monte Carlo allocation's `stocksPercent + bondsPercent` is not 100.
+   *
+   * Compared with a `1e-9` epsilon rather than exact equality: a legitimate non-integer
+   * split such as 33.33/66.67 sums to 100.00000000000001 in IEEE-754 (ERD §6).
+   */
+  | 'ALLOCATION_SUM_INVALID'
+  /**
+   * A Monte Carlo allocation puts zero or negative weight on stocks or on bonds. A
+   * single-asset portfolio is out of scope for Story 2's two-asset GBM blend.
+   */
+  | 'ALLOCATION_ZERO_WEIGHT'
   /** Any numeric input field is `NaN`, `Infinity`, `-Infinity`, or not a number. */
   | 'NON_FINITE_INPUT'
   /** `currentAge`, `retirementAge`, or `planningHorizonEndAge` is negative. */

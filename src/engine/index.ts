@@ -46,3 +46,24 @@ export type {
   WithdrawalPlan,
   WithdrawalStrategy,
 } from './types';
+
+export {
+  createRandomSeed,
+  createSeededRandom,
+  runMonteCarloTrial,
+  runMonteCarloTrials,
+  validateAllocation,
+  DEFAULT_SIMULATION_COUNT,
+  DEFAULT_VOLATILITY_ASSUMPTIONS,
+} from './monteCarlo';
+
+export type {
+  MonteCarloOptions,
+  MonteCarloResult,
+  PathBalances,
+  PercentilePaths,
+  PortfolioAllocation,
+  RandomSource,
+  TrialConfig,
+  VolatilityAssumptions,
+} from './monteCarlo';
