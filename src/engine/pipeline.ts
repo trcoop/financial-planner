@@ -21,7 +21,21 @@ import type { PeriodState, PipelineStage, RunPeriodInput } from './types';
  * both of which {@link recordPeriod} reads back. Neither is recoverable once `balance` is
  * overwritten with the post-growth value, which is why they are carried explicitly.
  */
-export const applyGrowth: PipelineStage = (state, _input) => state;
+export const applyGrowth: PipelineStage = (state, input) => {
+  const beginningBalance = state.balance;
+
+  return {
+    ...state,
+    beginningBalance,
+    // Stated against the period's own return, not `assumptions.annualReturnRate`: the
+    // deterministic projection is just the case where the two are equal every year, while a
+    // Monte Carlo trial varies `returnForPeriod` per period through this same stage.
+    investmentReturn: beginningBalance * input.returnForPeriod,
+    // `x * (1 + r)` rather than `x + investmentReturn` to match ERD §5's ending-balance
+    // formula literally — the two differ in the last bit or two under IEEE-754.
+    balance: beginningBalance * (1 + input.returnForPeriod),
+  };
+};
 
 /** Applies any life events active this period. Always a no-op for Stories 1-3 — no UI populates events yet. */
 export const applyLifeEvents: PipelineStage = (state, _input) => state;

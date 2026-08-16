@@ -12,7 +12,7 @@ import {
   runStages,
 } from './pipeline';
 import { withdrawFullShortfall, zeroTax } from './strategies';
-import type { PeriodState, PipelineStage, RunPeriodInput } from './types';
+import type { PeriodState, PipelineStage, ProjectionRow, RunPeriodInput } from './types';
 
 const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   age: 35,
@@ -62,7 +62,7 @@ describe('pipelineStages', () => {
   });
 });
 
-describe('stage stubs', () => {
+describe('stage purity', () => {
   const stages: ReadonlyArray<[string, PipelineStage]> = [
     ['applyGrowth', applyGrowth],
     ['applyLifeEvents', applyLifeEvents],
@@ -72,18 +72,59 @@ describe('stage stubs', () => {
     ['recordPeriod', recordPeriod],
   ];
 
-  it.each(stages)('%s is callable and leaves the state unchanged until it is implemented', (_name, stage) => {
-    const state = periodState();
-
-    expect(stage(state, runPeriodInput())).toEqual(state);
-  });
-
   it.each(stages)('%s does not mutate the state it is given', (_name, stage) => {
     const state = periodState();
 
     stage(state, runPeriodInput());
 
     expect(state).toEqual(periodState());
+  });
+
+  it.each(stages)('%s does not mutate the rows array it is given', (_name, stage) => {
+    const rows: ProjectionRow[] = [];
+    const state = periodState({ rows });
+
+    stage(state, runPeriodInput());
+
+    expect(rows).toEqual([]);
+  });
+});
+
+describe('applyGrowth', () => {
+  it('grows the balance by the period return', () => {
+    const result = applyGrowth(periodState({ balance: 100_000 }), runPeriodInput({ returnForPeriod: 0.07 }));
+
+    expect(result.balance).toBe(107_000);
+  });
+
+  it('snapshots the incoming balance as this period beginning balance', () => {
+    const result = applyGrowth(periodState({ balance: 100_000 }), runPeriodInput({ returnForPeriod: 0.07 }));
+
+    expect(result.beginningBalance).toBe(100_000);
+  });
+
+  it('records the investment return in dollars', () => {
+    const result = applyGrowth(periodState({ balance: 100_000 }), runPeriodInput({ returnForPeriod: 0.07 }));
+
+    // `toBeCloseTo`, not `toBe`: 100_000 * 0.07 is 7000.000000000001 under IEEE-754, and
+    // ERD §5 mandates raw floats with no intermediate rounding anywhere in the engine.
+    expect(result.investmentReturn).toBeCloseTo(7_000, 6);
+  });
+
+  it('uses the period return, not the assumptions return rate, so Monte Carlo can vary it', () => {
+    // `assumptions.annualReturnRate` stays at 0.07 here — only `returnForPeriod` changes.
+    const result = applyGrowth(periodState({ balance: 200_000 }), runPeriodInput({ returnForPeriod: -0.2 }));
+
+    expect(result.balance).toBe(160_000);
+    expect(result.investmentReturn).toBe(-40_000);
+  });
+
+  it('drives a negative balance further negative rather than flooring it', () => {
+    const result = applyGrowth(periodState({ balance: -50_000 }), runPeriodInput({ returnForPeriod: 0.07 }));
+
+    expect(result.beginningBalance).toBe(-50_000);
+    expect(result.investmentReturn).toBeCloseTo(-3_500, 6);
+    expect(result.balance).toBeCloseTo(-53_500, 6);
   });
 });
 
@@ -128,10 +169,11 @@ describe('runStages', () => {
 });
 
 describe('runPeriod', () => {
-  it('returns a period state, so callers can fold it across a horizon', () => {
-    const state = periodState();
+  it('leaves age and year alone — advancing to the next period is the fold job, not the pipeline', () => {
+    const result = runPeriod(periodState({ age: 35, year: 0 }), runPeriodInput());
 
-    expect(runPeriod(state, runPeriodInput())).toEqual(state);
+    expect(result.age).toBe(35);
+    expect(result.year).toBe(0);
   });
 
   it('does not mutate the state it is given', () => {
