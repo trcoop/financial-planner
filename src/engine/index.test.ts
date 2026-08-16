@@ -2,17 +2,25 @@ import { describe, expect, it } from 'vitest';
 
 import * as engine from './index';
 import type {
+  MonteCarloOptions,
+  MonteCarloResult,
+  PathBalances,
+  PercentilePaths,
   PeriodState,
   PipelineStage,
   PlanAssumptions,
   PlanEvent,
+  PortfolioAllocation,
   PortfolioValue,
   ProjectionErrorCode,
   ProjectionRow,
+  RandomSource,
   RunPeriodInput,
   TaxCalculator,
   TaxContext,
   TaxResult,
+  TrialConfig,
+  VolatilityAssumptions,
   WithdrawalPlan,
   WithdrawalStrategy,
 } from './index';
@@ -38,6 +46,14 @@ type PublicTypeSurface = {
   taxResult: TaxResult;
   withdrawalPlan: WithdrawalPlan;
   withdrawalStrategy: WithdrawalStrategy;
+  monteCarloOptions: MonteCarloOptions;
+  monteCarloResult: MonteCarloResult;
+  pathBalances: PathBalances;
+  percentilePaths: PercentilePaths;
+  portfolioAllocation: PortfolioAllocation;
+  randomSource: RandomSource;
+  trialConfig: TrialConfig;
+  volatilityAssumptions: VolatilityAssumptions;
 };
 
 /**
@@ -63,6 +79,13 @@ describe('public surface', () => {
     'runProjection',
     'validatePlanAssumptions',
     'createInitialPeriodState',
+    'createSeededRandom',
+    'createRandomSeed',
+    'validateAllocation',
+    'runMonteCarloTrial',
+    'runMonteCarloTrials',
+    'DEFAULT_SIMULATION_COUNT',
+    'DEFAULT_VOLATILITY_ASSUMPTIONS',
   ];
 
   it.each(runtimeExports)('re-exports %s', (name) => {
