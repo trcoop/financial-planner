@@ -145,6 +145,14 @@ describe('computeIncome', () => {
     expect(result.priorIncome).toBe(80_000);
   });
 
+  it('ignores any prior income in year 0, keying off the year rather than a zero balance', () => {
+    // Guards a mutant that survived otherwise: `priorIncome * (1 + raise) || currentIncome`
+    // is indistinguishable from the spec whenever year 0's priorIncome happens to be 0.
+    const result = computeIncome(periodState({ age: 35, year: 0, priorIncome: 55_000 }), runPeriodInput());
+
+    expect(result.priorIncome).toBe(80_000);
+  });
+
   it('applies the raise rate to the prior year income from year 1 on', () => {
     const result = computeIncome(periodState({ age: 36, year: 1, priorIncome: 80_000 }), runPeriodInput());
 

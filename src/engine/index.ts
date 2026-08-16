@@ -24,6 +24,14 @@ export {
   runStages,
 } from './pipeline';
 
+/**
+ * `validatePlanAssumptions` and `createInitialPeriodState` are exported alongside the
+ * entry point because Story 2's Monte Carlo validates the same `PlanAssumptions` at its own
+ * boundary and folds from the same year-0 state — sharing them keeps the two entry points
+ * from drifting on error codes or initial conditions.
+ */
+export { createInitialPeriodState, runProjection, validatePlanAssumptions } from './projection';
+
 export type {
   PeriodState,
   PipelineStage,

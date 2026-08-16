@@ -12,6 +12,8 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   rows: [],
   beginningBalance: 1_000_000,
   investmentReturn: 0,
+  annualContribution: 0,
+  annualWithdrawal: 0,
   ...overrides,
 });
 
