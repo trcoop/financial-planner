@@ -118,10 +118,37 @@ export const computeWithdrawals: PipelineStage = (state, input) => {
 };
 
 /** Applies tax owed on this period's income and withdrawals. Zero for Stories 1-3. */
-export const applyTax: PipelineStage = (state, _input) => state;
+export const applyTax: PipelineStage = (state, input) => {
+  const { taxOwed } = input.taxCalculator(state.priorIncome, state.annualWithdrawal, {
+    age: state.age,
+    year: state.year,
+  });
+
+  // Always zero for Stories 1-3, so this subtraction is a no-op today. It is wired anyway so
+  // that swapping in real bracket math is an implementation change behind the existing
+  // interface, not a pipeline change.
+  return { ...state, balance: state.balance - taxOwed };
+};
 
 /** Appends this period's `ProjectionRow` to the accumulated output. */
-export const recordPeriod: PipelineStage = (state, _input) => state;
+export const recordPeriod: PipelineStage = (state, _input) => ({
+  ...state,
+  // A projection of the state the earlier stages built, with no arithmetic of its own —
+  // every figure here was computed by the stage that owns it. A new array rather than a
+  // push, so the state handed in is never mutated.
+  rows: [
+    ...state.rows,
+    {
+      age: state.age,
+      year: state.year,
+      beginningBalance: state.beginningBalance,
+      annualContribution: state.annualContribution,
+      investmentReturn: state.investmentReturn,
+      annualWithdrawal: state.annualWithdrawal,
+      endingBalance: state.balance,
+    },
+  ],
+});
 
 /**
  * The pipeline's fixed stage order.

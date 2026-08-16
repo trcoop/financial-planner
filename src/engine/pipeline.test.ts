@@ -17,6 +17,8 @@ import type {
   PipelineStage,
   ProjectionRow,
   RunPeriodInput,
+  TaxCalculator,
+  TaxContext,
   WithdrawalStrategy,
 } from './types';
 
@@ -314,6 +316,95 @@ describe('computeWithdrawals', () => {
   });
 });
 
+describe('applyTax', () => {
+  it('leaves the balance untouched under the Stories 1-3 zero-tax calculator', () => {
+    const result = applyTax(periodState({ balance: 119_000 }), runPeriodInput());
+
+    expect(result.balance).toBe(119_000);
+  });
+
+  it('asks the calculator about this period income, withdrawal, age and year', () => {
+    const seen: Array<[number, number, TaxContext]> = [];
+    const spyTax: TaxCalculator = (income, withdrawals, context) => {
+      seen.push([income, withdrawals, context]);
+      return { taxOwed: 0 };
+    };
+
+    applyTax(
+      periodState({ age: 67, year: 32, priorIncome: 80_000, annualWithdrawal: 40_000 }),
+      runPeriodInput({ taxCalculator: spyTax }),
+    );
+
+    expect(seen).toEqual([[80_000, 40_000, { age: 67, year: 32 }]]);
+  });
+
+  it('deducts what the calculator says is owed, so a real tax seam changes the ending balance', () => {
+    const flatTax: TaxCalculator = () => ({ taxOwed: 9_000 });
+
+    const result = applyTax(periodState({ balance: 119_000 }), runPeriodInput({ taxCalculator: flatTax }));
+
+    expect(result.balance).toBe(110_000);
+  });
+});
+
+describe('recordPeriod', () => {
+  const recorded = (overrides: Partial<PeriodState> = {}): ProjectionRow => {
+    const result = recordPeriod(
+      periodState({
+        age: 35,
+        year: 0,
+        beginningBalance: 100_000,
+        investmentReturn: 7_000,
+        annualContribution: 12_000,
+        annualWithdrawal: 0,
+        balance: 119_000,
+        ...overrides,
+      }),
+      runPeriodInput(),
+    );
+
+    return result.rows[result.rows.length - 1];
+  };
+
+  it('appends exactly one row per period', () => {
+    const existing: ProjectionRow[] = [
+      { age: 34, year: -1, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0 },
+    ];
+
+    const result = recordPeriod(periodState({ rows: existing }), runPeriodInput());
+
+    expect(result.rows).toHaveLength(2);
+  });
+
+  it('records the period age and year', () => {
+    expect(recorded()).toMatchObject({ age: 35, year: 0 });
+  });
+
+  it('records the balance applyGrowth snapshotted, not the running balance', () => {
+    expect(recorded().beginningBalance).toBe(100_000);
+  });
+
+  it('records the investment return applyGrowth computed', () => {
+    expect(recorded().investmentReturn).toBe(7_000);
+  });
+
+  it('records the contribution computeIncome computed', () => {
+    expect(recorded().annualContribution).toBe(12_000);
+  });
+
+  it('records the withdrawal computeWithdrawals sourced', () => {
+    expect(recorded({ annualWithdrawal: 40_000 }).annualWithdrawal).toBe(40_000);
+  });
+
+  it('records the running balance as the ending balance', () => {
+    expect(recorded().endingBalance).toBe(119_000);
+  });
+
+  it('records a negative ending balance rather than flooring it', () => {
+    expect(recorded({ balance: -6_950 }).endingBalance).toBe(-6_950);
+  });
+});
+
 describe('runStages', () => {
   const addToBalance = (amount: number): PipelineStage => (state) => ({
     ...state,
@@ -355,6 +446,16 @@ describe('runStages', () => {
 });
 
 describe('runPeriod', () => {
+  it('produces exactly one row per call, running the whole pipeline end to end', () => {
+    const result = runPeriod(periodState({ age: 35, year: 0, balance: 100_000 }), runPeriodInput());
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ age: 35, year: 0, beginningBalance: 100_000, annualWithdrawal: 0 });
+    expect(result.rows[0].annualContribution).toBeCloseTo(12_000, 6);
+    expect(result.rows[0].investmentReturn).toBeCloseTo(7_000, 6);
+    expect(result.rows[0].endingBalance).toBeCloseTo(119_000, 6);
+  });
+
   it('leaves age and year alone — advancing to the next period is the fold job, not the pipeline', () => {
     const result = runPeriod(periodState({ age: 35, year: 0 }), runPeriodInput());
 
