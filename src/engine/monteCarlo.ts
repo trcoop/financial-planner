@@ -86,8 +86,11 @@ const PERIOD_YEARS = 1;
  * 1. Story 1's deterministic projection applies `annualReturnRate` as a plain arithmetic
  *    rate (ERD §5, `investmentReturn = beginningBalance x annualReturnRate`), so the Monte
  *    Carlo *mean* sits ~7.3% above the Tier 1 line at 30 years and ~16.7% at 66 years,
- *    purely from this interpretation. Story 3 plots both on one chart.
- * 2. An external calculator asked for "7%" produces the 7% projection, which is ~6.4% away
+ *    purely from this interpretation. Story 3 plots both on one chart. (Those are growth
+ *    factor ratios, `(exp(0.07) / 1.07)^n - 1`, i.e. the lump-sum case; a plan with
+ *    contributions and withdrawals diverges by a different amount — 4.3% over the 25-year
+ *    accumulation scenario, 21.9% over a 66-year full lifecycle.)
+ * 2. An external calculator asked for "7%" produces the 7% projection, which is ~6.0% away
  *    from this engine's mean over a 25-year horizon — outside the ticket's own 2% band.
  *
  * The one-line alternative is `mu = Math.log(1 + annualReturnRate)`, which makes `E[R]`
@@ -394,9 +397,10 @@ export interface MonteCarloResult {
  * Validates the allocation, volatility, path count and seed it owns, plus the one
  * `PlanAssumptions` field it cannot run without (a horizon that ends before it starts).
  * The rest of `PlanAssumptions` is validated by Story 1's own input-boundary validator,
- * `validatePlanAssumptions`, which lands with `runProjection` (FIN-16) and is explicitly
- * exported there for this function to call. Wiring the two together is a FIN-19 follow-up:
- * until then a caller passing, say, a negative `initialBalance` is not rejected here.
+ * which lands with `runProjection` (FIN-16, not yet merged) and should be called from here
+ * once it exists — FIN-16's branch exports it as `validatePlanAssumptions` for exactly this
+ * purpose. Until that wiring lands, a caller passing, say, a negative `initialBalance` is
+ * not rejected here.
  */
 export const runMonteCarloTrials = (
   plan: PlanAssumptions,

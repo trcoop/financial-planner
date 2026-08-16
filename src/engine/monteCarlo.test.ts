@@ -941,6 +941,20 @@ describe('degenerate inputs', () => {
     expect(code).toBe('CURRENT_AGE_EXCEEDS_HORIZON');
   });
 
+  it.each([['currentAge'], ['planningHorizonEndAge']])(
+    'rejects a non-finite %s before it reaches the loop bound',
+    (field) => {
+      // The same false-100% failure mode as a reversed horizon, through a different door:
+      // a NaN age makes `periodCount` NaN, the fold runs zero periods, and an empty batch
+      // reads as a plan that never went negative.
+      const code = codeThrownBy(() =>
+        runMonteCarloTrials(assumptions({ [field]: Number.NaN }), allocation70_30),
+      );
+
+      expect(code).toBe('NON_FINITE_INPUT');
+    },
+  );
+
   it('accepts a plan whose horizon is a single year', () => {
     const result = runMonteCarloTrials(
       assumptions({ currentAge: 65, planningHorizonEndAge: 65 }),
@@ -1017,8 +1031,8 @@ describe('degenerate inputs', () => {
  * right comparison because expectation propagates through the recursion exactly:
  * contributions are deterministic and every withdrawal is linear in the path's own
  * balance, so `E[balance_t]` equals the deterministic projection at rate `exp(μ) − 1`.
- * Measured p50-versus-closed-form gaps across these scenarios are −4.8% to −17.5%, so a
- * p50 comparison would blow the 2% band by construction rather than because of a bug.
+ * Measured p50-versus-closed-form gaps across these scenarios run from −4.4% to −18.5%, so
+ * a p50 comparison would blow the 2% band by construction rather than because of a bug.
  *
  * Seeds are pinned so the suite is deterministic, but they are not load-bearing: every
  * scenario was re-run against three independent seed sets during development, and a

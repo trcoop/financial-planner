@@ -34,7 +34,7 @@ export type ProjectionErrorCode =
   /**
    * A Monte Carlo run was asked for a path count that is not a positive whole number.
    *
-   * Zero paths divide by zero into a `NaN` success rate, and a fractional count runs
+   * Zero or negative paths describe no simulation at all, and a fractional count runs
    * `Math.floor(count)` paths while reporting the fraction back in `meta` (FIN-17 review).
    */
   | 'SIMULATION_COUNT_INVALID'
