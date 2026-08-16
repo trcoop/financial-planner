@@ -11,7 +11,16 @@
  * signatures now.
  */
 
-import type { PeriodState, PipelineStage, RunPeriodInput } from './types';
+import type { PeriodState, PipelineStage, PlanAssumptions, RunPeriodInput } from './types';
+
+/**
+ * Whether a period falls in the drawdown phase.
+ *
+ * `>=`, so the retirement year itself is a drawdown year. Already-retired users
+ * (`retirementAge <= currentAge`) are therefore in drawdown from year 0 — a valid, supported
+ * scenario rather than an input error (Story 1 PRD, Edge Cases).
+ */
+const isRetired = (age: number, assumptions: PlanAssumptions): boolean => age >= assumptions.retirementAge;
 
 /**
  * Grows the balance by this period's return.
@@ -46,7 +55,30 @@ export const applyLifeEvents: PipelineStage = (state, _input) => state;
  * Pre-retirement only: year 0 uses `currentAnnualIncome` as-is, later years apply
  * `annualRaiseRate` to the prior year's income. Contributions are 0 in retirement.
  */
-export const computeIncome: PipelineStage = (state, _input) => state;
+export const computeIncome: PipelineStage = (state, input) => {
+  const { assumptions } = input;
+
+  // Retirement has no earned income in Story 1's model, so the raise chain is a
+  // pre-retirement concern only. Income is zeroed rather than frozen at its last working
+  // value so that `priorIncome` always reads as "income earned this period".
+  if (isRetired(state.age, assumptions)) {
+    return { ...state, priorIncome: 0, annualContribution: 0 };
+  }
+
+  // Raises start in year 1: year 0 is the user's income as entered today.
+  const income =
+    state.year === 0 ? assumptions.currentAnnualIncome : state.priorIncome * (1 + assumptions.annualRaiseRate);
+  const annualContribution = income * assumptions.annualContributionRate;
+
+  return {
+    ...state,
+    priorIncome: income,
+    annualContribution,
+    // Contributions land at year end and so earn no return in the year they are made
+    // (Story 1 PRD, Edge Cases) — hence added after `applyGrowth`, not before it.
+    balance: state.balance + annualContribution,
+  };
+};
 
 /**
  * Determines this period's intended withdrawal and asks the withdrawal strategy to source it.

@@ -26,6 +26,7 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   // assertions below rather than passing as "still a stub".
   beginningBalance: 42_000,
   investmentReturn: 0,
+  annualContribution: 0,
   ...overrides,
 });
 
@@ -125,6 +126,67 @@ describe('applyGrowth', () => {
     expect(result.beginningBalance).toBe(-50_000);
     expect(result.investmentReturn).toBeCloseTo(-3_500, 6);
     expect(result.balance).toBeCloseTo(-53_500, 6);
+  });
+});
+
+describe('computeIncome', () => {
+  it('uses currentAnnualIncome as-is in year 0, before any raise applies', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0, priorIncome: 0 }), runPeriodInput());
+
+    expect(result.priorIncome).toBe(80_000);
+  });
+
+  it('applies the raise rate to the prior year income from year 1 on', () => {
+    const result = computeIncome(periodState({ age: 36, year: 1, priorIncome: 80_000 }), runPeriodInput());
+
+    expect(result.priorIncome).toBeCloseTo(82_400, 6);
+  });
+
+  it('compounds the raise off the prior year income, not off currentAnnualIncome', () => {
+    // Year 2 from an already-raised 82_400 must reach 84_872, not 80_000 * 1.03 again.
+    const result = computeIncome(periodState({ age: 37, year: 2, priorIncome: 82_400 }), runPeriodInput());
+
+    expect(result.priorIncome).toBeCloseTo(84_872, 6);
+  });
+
+  it('contributes the configured share of this year income', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0 }), runPeriodInput());
+
+    expect(result.annualContribution).toBeCloseTo(12_000, 6);
+  });
+
+  it('adds the contribution to the balance', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0, balance: 107_000 }), runPeriodInput());
+
+    expect(result.balance).toBeCloseTo(119_000, 6);
+  });
+
+  it('contributes nothing and earns nothing once at retirement age', () => {
+    const result = computeIncome(periodState({ age: 67, year: 32, balance: 107_000 }), runPeriodInput());
+
+    expect(result.annualContribution).toBe(0);
+    expect(result.priorIncome).toBe(0);
+    expect(result.balance).toBe(107_000);
+  });
+
+  it('treats an already-retired starting age as retirement at year 0', () => {
+    const result = computeIncome(
+      periodState({ age: 70, year: 0, balance: 500_000 }),
+      runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, currentAge: 70, retirementAge: 67 } }),
+    );
+
+    expect(result.annualContribution).toBe(0);
+    expect(result.balance).toBe(500_000);
+  });
+
+  it('contributes zero on zero income without special-casing it', () => {
+    const result = computeIncome(
+      periodState({ age: 35, year: 0, balance: 750_000 }),
+      runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, currentAnnualIncome: 0 } }),
+    );
+
+    expect(result.annualContribution).toBe(0);
+    expect(result.balance).toBe(750_000);
   });
 });
 

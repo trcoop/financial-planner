@@ -131,6 +131,16 @@ export interface PeriodState {
   beginningBalance: PortfolioValue;
   /** This period's investment-return dollars. Set by `applyGrowth`, read by `recordPeriod`. */
   investmentReturn: number;
+  /**
+   * This period's contribution dollars. Set by `computeIncome`, read by `recordPeriod`.
+   *
+   * ERD §4 originally judged this field unnecessary on the grounds that `recordPeriod`
+   * could re-derive it from `priorIncome * annualContributionRate`. Carried explicitly
+   * instead, because re-deriving would duplicate `computeIncome`'s pre-retirement/retirement
+   * branch inside `recordPeriod` — two places that must agree about which phase the period
+   * is in, and that a later `PlanEvent` affecting contributions would silently desync.
+   */
+  annualContribution: number;
 }
 
 /** What a {@link WithdrawalStrategy} decided to actually withdraw. */
