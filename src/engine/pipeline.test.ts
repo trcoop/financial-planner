@@ -12,7 +12,13 @@ import {
   runStages,
 } from './pipeline';
 import { withdrawFullShortfall, zeroTax } from './strategies';
-import type { PeriodState, PipelineStage, ProjectionRow, RunPeriodInput } from './types';
+import type {
+  PeriodState,
+  PipelineStage,
+  ProjectionRow,
+  RunPeriodInput,
+  WithdrawalStrategy,
+} from './types';
 
 const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   age: 35,
@@ -27,6 +33,7 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   beginningBalance: 42_000,
   investmentReturn: 0,
   annualContribution: 0,
+  annualWithdrawal: 0,
   ...overrides,
 });
 
@@ -187,6 +194,123 @@ describe('computeIncome', () => {
 
     expect(result.annualContribution).toBe(0);
     expect(result.balance).toBe(750_000);
+  });
+});
+
+describe('computeWithdrawals', () => {
+  /** A retirement period state, post-`applyGrowth`: 1M at the start of the year, grown 7%. */
+  const retiredState = (overrides: Partial<PeriodState> = {}): PeriodState =>
+    periodState({
+      age: 67,
+      year: 0,
+      beginningBalance: 1_000_000,
+      balance: 1_070_000,
+      investmentReturn: 70_000,
+      ...overrides,
+    });
+
+  const retiredInput = (overrides: Partial<RunPeriodInput> = {}): RunPeriodInput =>
+    runPeriodInput({
+      assumptions: { ...runPeriodInput().assumptions, currentAge: 67, retirementAge: 67 },
+      ...overrides,
+    });
+
+  it('withdraws nothing before retirement age', () => {
+    const result = computeWithdrawals(periodState({ age: 35, year: 0, balance: 119_000 }), runPeriodInput());
+
+    expect(result.annualWithdrawal).toBe(0);
+    expect(result.balance).toBe(119_000);
+    expect(result.priorWithdrawal).toBeNull();
+  });
+
+  it('takes the configured rate of the first retirement year opening balance', () => {
+    const result = computeWithdrawals(retiredState(), retiredInput());
+
+    expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
+  });
+
+  it('rates the balance at the START of the retirement year, not the post-growth balance', () => {
+    // 4% of the grown 1_070_000 would be 42_800 — the spec says 40_000.
+    const result = computeWithdrawals(retiredState(), retiredInput());
+
+    expect(result.annualWithdrawal).not.toBeCloseTo(42_800, 6);
+    expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
+  });
+
+  it('inflates the prior withdrawal in later retirement years instead of re-rating the balance', () => {
+    const result = computeWithdrawals(
+      retiredState({ age: 68, year: 1, priorWithdrawal: 40_000, beginningBalance: 900_000, balance: 963_000 }),
+      retiredInput(),
+    );
+
+    expect(result.annualWithdrawal).toBeCloseTo(41_000, 6);
+  });
+
+  it('deducts the sourced withdrawal from the balance', () => {
+    const result = computeWithdrawals(retiredState(), retiredInput());
+
+    expect(result.balance).toBeCloseTo(1_030_000, 6);
+  });
+
+  it('hands the strategy the shortfall it computed, alongside the current state', () => {
+    const seen: Array<{ shortfall: number; age: number }> = [];
+    const spyStrategy: WithdrawalStrategy = (state, shortfall) => {
+      seen.push({ shortfall, age: state.age });
+      return { amount: shortfall };
+    };
+
+    computeWithdrawals(retiredState(), retiredInput({ withdrawalStrategy: spyStrategy }));
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0].age).toBe(67);
+    expect(seen[0].shortfall).toBeCloseTo(40_000, 6);
+  });
+
+  /**
+   * The resolved decision from FIN-15's review (ERD §5, `PeriodState.priorWithdrawal`
+   * TSDoc): the inflation chain compounds the *requested* figure, never the amount a
+   * strategy managed to source. Invisible under `withdrawFullShortfall`, where the two are
+   * equal — so it takes a deliberately partial strategy to pin it down.
+   */
+  it('carries the REQUESTED withdrawal forward, not the amount the strategy sourced', () => {
+    const halfShortfall: WithdrawalStrategy = (_state, shortfall) => ({ amount: shortfall / 2 });
+
+    const result = computeWithdrawals(retiredState(), retiredInput({ withdrawalStrategy: halfShortfall }));
+
+    expect(result.priorWithdrawal).toBeCloseTo(40_000, 6);
+    expect(result.annualWithdrawal).toBeCloseTo(20_000, 6);
+  });
+
+  it('reports the SOURCED withdrawal as this year withdrawal and deducts only that much', () => {
+    const halfShortfall: WithdrawalStrategy = (_state, shortfall) => ({ amount: shortfall / 2 });
+
+    const result = computeWithdrawals(retiredState(), retiredInput({ withdrawalStrategy: halfShortfall }));
+
+    expect(result.annualWithdrawal).toBeCloseTo(20_000, 6);
+    expect(result.balance).toBeCloseTo(1_050_000, 6);
+  });
+
+  it('keeps inflating the requested need after a shortfall rather than ratcheting spending down', () => {
+    const halfShortfall: WithdrawalStrategy = (_state, shortfall) => ({ amount: shortfall / 2 });
+
+    const first = computeWithdrawals(retiredState(), retiredInput({ withdrawalStrategy: halfShortfall }));
+    const second = computeWithdrawals(
+      { ...first, age: 68, year: 1, beginningBalance: first.balance },
+      retiredInput({ withdrawalStrategy: halfShortfall }),
+    );
+
+    // 40_000 * 1.025 — the need, not 20_000 * 1.025 which would hide the failing plan.
+    expect(second.priorWithdrawal).toBeCloseTo(41_000, 6);
+  });
+
+  it('keeps withdrawing from an exhausted portfolio rather than clamping at zero', () => {
+    const result = computeWithdrawals(
+      retiredState({ age: 75, year: 8, priorWithdrawal: 12_000, beginningBalance: 5_000, balance: 5_350 }),
+      retiredInput(),
+    );
+
+    expect(result.annualWithdrawal).toBeCloseTo(12_300, 6);
+    expect(result.balance).toBeCloseTo(-6_950, 6);
   });
 });
 

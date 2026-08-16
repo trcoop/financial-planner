@@ -141,6 +141,17 @@ export interface PeriodState {
    * is in, and that a later `PlanEvent` affecting contributions would silently desync.
    */
   annualContribution: number;
+  /**
+   * This period's withdrawal dollars as actually *sourced*. Set by `computeWithdrawals`
+   * from the {@link WithdrawalPlan} it received, read by `recordPeriod`.
+   *
+   * Deliberately distinct from {@link PeriodState.priorWithdrawal}, which carries the
+   * *requested* figure. `ProjectionRow.annualWithdrawal` reports money that actually left
+   * the portfolio, and it is this amount — not the request — that the ending balance is
+   * reduced by, so it cannot be re-derived from `priorWithdrawal` once a partially-
+   * satisfying strategy ships (Story 4+).
+   */
+  annualWithdrawal: number;
 }
 
 /** What a {@link WithdrawalStrategy} decided to actually withdraw. */

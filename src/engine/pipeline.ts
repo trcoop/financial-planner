@@ -87,7 +87,35 @@ export const computeIncome: PipelineStage = (state, input) => {
  * `balanceAtStartOfFirstRetirementYear * withdrawalRateInRetirement`, and every year after
  * inflates the prior withdrawal by `inflationRate`.
  */
-export const computeWithdrawals: PipelineStage = (state, _input) => state;
+export const computeWithdrawals: PipelineStage = (state, input) => {
+  const { assumptions, withdrawalStrategy } = input;
+
+  if (!isRetired(state.age, assumptions)) {
+    return { ...state, annualWithdrawal: 0 };
+  }
+
+  // `priorWithdrawal === null` is what marks the first retirement year, so this works
+  // identically whether retirement is reached mid-projection or was already underway at
+  // year 0. The first year rates `beginningBalance` — the balance at the *start* of the
+  // year, before `applyGrowth` — per ERD §5.
+  const requested =
+    state.priorWithdrawal === null
+      ? state.beginningBalance * assumptions.withdrawalRateInRetirement
+      : state.priorWithdrawal * (1 + assumptions.inflationRate);
+
+  const plan = withdrawalStrategy(state, requested);
+
+  return {
+    ...state,
+    // The *requested* figure compounds, never the sourced one: this models a spending need
+    // that rises with inflation whether or not the portfolio could fund last year's draw.
+    // See `PeriodState.priorWithdrawal` (resolved 2026-08-15, FIN-15 review).
+    priorWithdrawal: requested,
+    // The row reports, and the balance is reduced by, what actually left the portfolio.
+    annualWithdrawal: plan.amount,
+    balance: state.balance - plan.amount,
+  };
+};
 
 /** Applies tax owed on this period's income and withdrawals. Zero for Stories 1-3. */
 export const applyTax: PipelineStage = (state, _input) => state;
