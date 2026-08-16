@@ -23,9 +23,16 @@ loop trustworthy rather than theater; they're not specific to PRDs.
 - The artifact is concrete and editable in place (a Linear document, a set of
   Linear issues, a repo file) — not a free-floating discussion.
 
-Don't use this for a single reviewer with no real second perspective (that's
-just a review), and don't use it for code review (a different concern with
-its own tooling).
+Don't use this for a single reviewer with no real second perspective — that's
+just a review.
+
+**Code review:** an earlier version of this skill ruled it out. That was
+wrong. Run on a PR (FIN-15, 2026-08-15) the mechanics held up and caught a
+real untested wiring gap that a green suite and eyeball review both missed —
+but code review needs modifications, not this page as written: additive-edits
+only doesn't apply, the reviewer must *run* the tests rather than read them,
+and mutation testing has to be the rubric's core. See the `project-dri`
+skill's "Peer review on a PR" section for the adapted version.
 
 ## Core principles
 
