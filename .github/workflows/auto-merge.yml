@@ -3,12 +3,10 @@ name: Auto-merge
 on:
   pull_request_review:
     types: [submitted]
-  pull_request:
-    types: [closed]
 
 jobs:
   enable-auto-merge:
-    if: github.event_name == 'pull_request_review' && github.event.review.state == 'approved'
+    if: github.event.review.state == 'approved'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -18,14 +16,3 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
-
-  delete-branch:
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Delete head branch
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/${{ github.event.pull_request.head.ref }}"
