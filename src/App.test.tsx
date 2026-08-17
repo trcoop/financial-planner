@@ -1,6 +1,18 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+
+// jsdom has no real Worker; App's StressTestSection creates a real orchestrator by default,
+// which would throw on mount. These tests exercise the projection table, not the stress
+// test, so a minimal orchestrator double is enough to let the tree render.
+vi.mock('./workers', () => ({
+  createMonteCarloOrchestrator: () => ({
+    getState: () => ({ status: 'idle' }),
+    subscribe: () => () => {},
+    run: () => new Promise(() => {}),
+    cancel: () => {},
+  }),
+}))
 
 describe('App', () => {
   afterEach(() => cleanup())
@@ -17,8 +29,11 @@ describe('App', () => {
   it('populates the projection table immediately on first load, one row per age through 100', () => {
     render(<App />)
     // 35 through 100 inclusive = 66 rows
-    expect(screen.getAllByRole('row')).toHaveLength(66 + 1) // + header row
-    expect(screen.getByRole('cell', { name: '35' })).toBeInTheDocument()
+    const rows = screen.getAllByRole('row')
+    expect(rows).toHaveLength(66 + 1) // + header row
+    // Age is the 2nd column; the Year column can coincidentally contain the same digits
+    // as an Age value elsewhere in the table, so scope the check to the first data row.
+    expect(within(rows[1]).getAllByRole('cell')[1]).toHaveTextContent('35')
   })
 
   it('recalculates the table when a core input changes, debounced ~300ms', async () => {
@@ -27,12 +42,12 @@ describe('App', () => {
     fireEvent.change(age, { target: { value: '60' } })
 
     // Immediately after the change, recalculation must not have fired yet — it's debounced.
-    expect(screen.getByRole('cell', { name: '35' })).toBeInTheDocument()
+    expect(within(screen.getAllByRole('row')[1]).getAllByRole('cell')[1]).toHaveTextContent('35')
 
     // 60 through 100 inclusive = 41 rows
     await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(41 + 1))
-    expect(screen.queryByRole('cell', { name: '35' })).not.toBeInTheDocument()
-    expect(screen.getByRole('cell', { name: '60' })).toBeInTheDocument()
+    const firstDataRow = screen.getAllByRole('row')[1]
+    expect(within(firstDataRow).getAllByRole('cell')[1]).toHaveTextContent('60')
   })
 
   it('pauses recalculation while a core field is out of range, keeping the last valid table', async () => {
