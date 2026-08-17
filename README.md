@@ -44,6 +44,7 @@ See [`architecture.md`](./architecture.md) for how the system is structured, inc
 ```
 src/
 ├── engine/      Pure calculation functions (projection, Monte Carlo)
+├── workers/     Web Worker orchestration for Monte Carlo simulation
 ├── ui/          React components with live state
 └── storage/     localStorage persistence layer
 ```
