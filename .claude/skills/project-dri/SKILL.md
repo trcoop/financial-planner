@@ -113,6 +113,34 @@ fabricate a pending agent's result.
 each remaining agent to rebase on `main` and re-verify before it opens its
 own PR — especially the ones consuming a file the just-merged ticket owned.
 
+## A single ticket is still a dispatch, not a solo
+
+The same reasoning applies at n=1. Implement the ticket by dispatching an
+agent (worktree-isolated), not by writing the code yourself in the
+orchestrator session — even when there's only one ticket in the wave. The
+orchestrator's job is dispatching, briefing, reviewing what comes back,
+running the peer-review loop, and handling Linear/git bookkeeping and
+escalation. Writing the code isn't; every file read and tool-output byte
+spent implementing directly is context the orchestrator needs for the rest
+of the run, and running solo in the shared working tree also reintroduces
+the exact collision risk worktrees exist to avoid — including with your own
+uncommitted edits sitting in that tree (see the note on committing before
+dispatching, below).
+
+Exception: a genuinely tiny fix — a few lines, no real design decision — may
+cost more in dispatch overhead than it saves. Use judgment, but default to
+delegating.
+
+**Commit or stash your own uncommitted edits before dispatching into a
+shared (non-worktree) directory.** An agent given no `isolation` runs in the
+same working tree you do. It cannot tell your in-progress, uncommitted edits
+from stray or unrelated changes, and a reasonable agent will "clean up" what
+looks like debris before committing its own work — silently discarding
+something you hadn't saved yet. This already happened once: an uncommitted
+skill-doc edit sitting in the tree was reverted by an unrelated review agent
+that assumed it didn't belong. Commit first, or isolate the agent, not both
+forgotten at once.
+
 ## Per-ticket lifecycle
 
 Run this for every ticket, in order:
