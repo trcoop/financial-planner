@@ -92,4 +92,60 @@ describe('ProjectionTable', () => {
     expect(thead).not.toBeNull()
     expect(thead?.className).toMatch(/stickyHead/)
   })
+
+  describe('retirement transition (FIN-12)', () => {
+    it('labels the combined column "Annual Contribution ($)" when still pre-retirement at row 0', () => {
+      render(
+        <ProjectionTable
+          rows={[makeRow({ year: 0, age: 35 }), makeRow({ year: 1, age: 36 })]}
+          retirementAge={65}
+        />,
+      )
+      const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
+      expect(headers).toContain('Annual Contribution ($)')
+    })
+
+    it('labels the combined column "Annual Withdrawal ($)" when already retired at row 0', () => {
+      render(<ProjectionTable rows={[makeRow({ year: 0, age: 70 })]} retirementAge={65} />)
+      const headers = screen.getAllByRole('columnheader').map((h) => h.textContent)
+      expect(headers).toContain('Annual Withdrawal ($)')
+    })
+
+    it('highlights the first row where age >= retirementAge', () => {
+      const rows = [
+        makeRow({ year: 0, age: 63, annualContribution: 10000, annualWithdrawal: 0 }),
+        makeRow({ year: 1, age: 64, annualContribution: 10000, annualWithdrawal: 0 }),
+        makeRow({ year: 2, age: 65, annualContribution: 0, annualWithdrawal: 40000 }),
+        makeRow({ year: 3, age: 66, annualContribution: 0, annualWithdrawal: 40000 }),
+      ]
+      render(<ProjectionTable rows={rows} retirementAge={65} />)
+      const dataRows = screen.getAllByRole('row').slice(1)
+      expect(dataRows[0].className).not.toMatch(/retirementTransition/)
+      expect(dataRows[1].className).not.toMatch(/retirementTransition/)
+      expect(dataRows[2].className).toMatch(/retirementTransition/)
+      expect(dataRows[3].className).not.toMatch(/retirementTransition/)
+    })
+
+    it('highlights row 0 when the user is already retired at the start (edge case)', () => {
+      const rows = [
+        makeRow({ year: 0, age: 70, annualContribution: 0, annualWithdrawal: 40000 }),
+        makeRow({ year: 1, age: 71, annualContribution: 0, annualWithdrawal: 41000 }),
+      ]
+      render(<ProjectionTable rows={rows} retirementAge={65} />)
+      const dataRows = screen.getAllByRole('row').slice(1)
+      expect(dataRows[0].className).toMatch(/retirementTransition/)
+      expect(dataRows[1].className).not.toMatch(/retirementTransition/)
+    })
+
+    it('highlights no row when retirement is never reached within the projection', () => {
+      const rows = [
+        makeRow({ year: 0, age: 35, annualContribution: 10000, annualWithdrawal: 0 }),
+        makeRow({ year: 1, age: 36, annualContribution: 10000, annualWithdrawal: 0 }),
+      ]
+      render(<ProjectionTable rows={rows} retirementAge={65} />)
+      const dataRows = screen.getAllByRole('row').slice(1)
+      expect(dataRows[0].className).not.toMatch(/retirementTransition/)
+      expect(dataRows[1].className).not.toMatch(/retirementTransition/)
+    })
+  })
 })
