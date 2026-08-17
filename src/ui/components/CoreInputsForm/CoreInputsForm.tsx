@@ -1,4 +1,5 @@
 import { NumberField } from '../NumberField/NumberField'
+import { CORE_FIELD_RANGES, rangeError } from './validation'
 
 export interface CoreInputValues {
   currentAge: number
@@ -18,20 +19,27 @@ interface FieldSpec {
   suffix?: string
 }
 
-const FIELDS: FieldSpec[] = [
-  { key: 'currentAge', label: 'Current age', min: 18, max: 100 },
-  { key: 'retirementAge', label: 'Retirement age', min: 18, max: 100 },
-  { key: 'initialBalance', label: 'Current investment balance', min: 0, max: 10_000_000, prefix: '$' },
-  { key: 'currentAnnualIncome', label: 'Current annual income', min: 0, max: 5_000_000, prefix: '$' },
-  { key: 'annualContributionRatePercent', label: 'Annual savings percentage', min: 0, max: 100, suffix: '%' },
-]
-
-function rangeError(value: number, min: number, max: number): string | undefined {
-  if (value < min || value > max) {
-    return `Must be between ${min.toLocaleString()} and ${max.toLocaleString()}`
-  }
-  return undefined
+const LABELS: Record<keyof CoreInputValues, string> = {
+  currentAge: 'Current age',
+  retirementAge: 'Retirement age',
+  initialBalance: 'Current investment balance',
+  currentAnnualIncome: 'Current annual income',
+  annualContributionRatePercent: 'Annual savings percentage',
 }
+
+const ADORNMENTS: Partial<Record<keyof CoreInputValues, { prefix?: string; suffix?: string }>> = {
+  initialBalance: { prefix: '$' },
+  currentAnnualIncome: { prefix: '$' },
+  annualContributionRatePercent: { suffix: '%' },
+}
+
+const FIELDS: FieldSpec[] = CORE_FIELD_RANGES.map((range) => ({
+  key: range.key,
+  label: LABELS[range.key],
+  min: range.min,
+  max: range.max,
+  ...ADORNMENTS[range.key],
+}))
 
 interface CoreInputsFormProps {
   values: CoreInputValues
