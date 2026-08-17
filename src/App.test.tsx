@@ -1,6 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { runProjection } from './engine'
 
 // jsdom has no real Worker; App's StressTestSection creates a real orchestrator by default,
 // which would throw on mount. These tests exercise the projection table, not the stress
@@ -77,5 +79,79 @@ describe('App', () => {
       expect(screen.getAllByRole('row')).toHaveLength(66 + 1)
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
+  })
+
+  it('renders the advanced assumptions section, collapsed, with FIN-10 defaults', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    expect(screen.getByText('⋯ Advanced assumptions')).toBeInTheDocument()
+    const details = screen.getByText('⋯ Advanced assumptions').closest('details')
+    expect(details).not.toHaveAttribute('open')
+
+    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    expect(screen.getByLabelText('Expected annual raise')).toHaveValue(3)
+    expect(screen.getByLabelText('Investment return assumption')).toHaveValue(7)
+    expect(screen.getByLabelText('Inflation rate')).toHaveValue(2.5)
+    expect(screen.getByLabelText('Withdrawal rate in retirement')).toHaveValue(4)
+  })
+
+  it('recalculates the table when an advanced input changes, debounced ~300ms', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByText('⋯ Advanced assumptions'))
+
+    const beforeCells = screen.getAllByRole('cell').map((c) => c.textContent)
+
+    const returnField = screen.getByLabelText('Investment return assumption')
+    fireEvent.change(returnField, { target: { value: '2' } })
+
+    // Immediately after the change, recalculation must not have fired yet — it's debounced.
+    expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(beforeCells)
+
+    await waitFor(() => {
+      expect(screen.getAllByRole('cell').map((c) => c.textContent)).not.toEqual(beforeCells)
+    })
+  })
+
+  it('converts the advanced assumption percentages to fractions correctly (FIN-10 defaults)', () => {
+    render(<App />)
+
+    // Cross-check the rendered first-row "Investment Return ($)" cell against the engine
+    // computed directly with FIN-10's default assumptions (3% raise, 7% return, 2.5%
+    // inflation, 4% withdrawal, expressed as fractions) — this pins the App-level
+    // percent-to-fraction conversion so a regression like forgetting `/ 100` fails loudly
+    // instead of merely producing a differently-shaped, still-plausible-looking table.
+    const expectedRows = runProjection({
+      currentAge: 35,
+      retirementAge: 67,
+      initialBalance: 250000,
+      currentAnnualIncome: 85000,
+      annualContributionRate: 0.15,
+      planningHorizonEndAge: 100,
+      annualRaiseRate: 0.03,
+      annualReturnRate: 0.07,
+      inflationRate: 0.025,
+      withdrawalRateInRetirement: 0.04,
+    })
+
+    const firstDataRow = screen.getAllByRole('row')[1]
+    const cells = within(firstDataRow).getAllByRole('cell')
+    // Investment Return ($) is the 5th column (Year, Age, Balance Start, Contribution, Return, Balance End).
+    const expectedReturn = Math.round(expectedRows[0].investmentReturn).toLocaleString('en-US')
+    expect(cells[4]).toHaveTextContent(`$${expectedReturn}`)
+  })
+
+  it('pauses recalculation while an advanced field is out of range, keeping the last valid table', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    const beforeCells = screen.getAllByRole('cell').map((c) => c.textContent)
+
+    const returnField = screen.getByLabelText('Investment return assumption')
+    fireEvent.change(returnField, { target: { value: '-60' } })
+
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    await new Promise((resolve) => setTimeout(resolve, 350))
+    expect(screen.getAllByRole('cell').map((c) => c.textContent)).toEqual(beforeCells)
   })
 })
