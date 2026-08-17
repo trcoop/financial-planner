@@ -1,0 +1,29 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.caption {
+  text-align: left;
+  padding-bottom: var(--space-2);
+  font-weight: 600;
+}
+
+.row {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.row td,
+.row th {
+  padding: var(--space-2) var(--space-3);
+  text-align: right;
+}
+
+.row td:first-child,
+.row th:first-child {
+  text-align: left;
+}
+
+.row[data-highlighted='true'] {
+  background: var(--color-highlight);
+}

@@ -49,6 +49,45 @@ per-trial function that lives in `src/engine/` and is executed inside the worker
 script — the orchestration itself is impure (Worker lifecycle, Promise-based), so
 it stays outside `src/engine/` rather than violating the engine's no-I/O rule.
 
+## UI conventions
+
+Full rationale: [UI Foundation Design](https://linear.app/travis-playground/document/ui-foundation-design-57ec12f039d3) (Linear).
+
+- **Design tokens**: `src/ui/theme.css` defines color, spacing, typography,
+  radii, and shadow as CSS custom properties on `:root`, plus a minimal
+  reset. Components consume tokens for color, spacing, radii, shadows, and
+  typography — no hardcoded hex/color values. Structural literals (e.g. 1px
+  border widths, layout breakpoints) may stay as plain values where
+  tokenizing them wouldn't serve a real redesign lever.
+- **Component library**: reusable primitives live in `src/ui/components/`,
+  one folder per component (`Component.tsx` + `Component.module.css` +
+  `Component.test.tsx`), CSS Modules only, exported via a barrel
+  `src/ui/components/index.ts`. Feature composition (forms, tables, the
+  app shell) lives directly under `src/ui/`, not under `components/`.
+  Primitives own only their own state/behavior — no engine or app-state
+  knowledge.
+- **Shared hooks**: `src/ui/hooks/` for cross-cutting UI behavior used by
+  more than one component (e.g. the Tier 1 debounce).
+- **Accessibility baseline**: real `<label htmlFor>` associations (not
+  placeholder-as-label), validation wired via `aria-describedby` +
+  `aria-invalid`, native `<details>`/`<summary>` for disclosure widgets.
+  Component tests query by role/label as the primary interaction surface.
+  WCAG AA contrast target (4.5:1 text, 3:1 UI components) — checked
+  manually against `theme.css`'s tokens when they change; oxlint's
+  `jsx-a11y` plugin catches missing labels/roles/alt text but does not
+  check color contrast, so this isn't automatically enforced. A
+  `--focus-ring` token drives `:focus-visible` styling everywhere —
+  never suppressed.
+- **Testing**: co-located `Component.test.tsx`, Vitest + React Testing
+  Library, behavior-focused — matches the engine's existing co-located
+  test convention.
+- **Controlled inputs**: primitives that wrap an input (e.g.
+  `NumberField`) take `value`/`onChange` and render `value` directly —
+  never mirror a prop into local `useState` + `useEffect`. On parse
+  failure (e.g. a cleared or partial numeric input), swallow the
+  non-finite result rather than propagating it via `onChange` — the
+  engine throws on invalid input, so `NaN` must never reach it.
+
 ## Computation model (two-tier)
 
 - **Tier 1 (base projection)**: recalculated on every input change, ~300ms
