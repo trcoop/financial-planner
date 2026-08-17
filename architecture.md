@@ -55,8 +55,10 @@ Full rationale: [UI Foundation Design](https://linear.app/travis-playground/docu
 
 - **Design tokens**: `src/ui/theme.css` defines color, spacing, typography,
   radii, and shadow as CSS custom properties on `:root`, plus a minimal
-  reset. Components consume tokens only — no hardcoded hex/px values — so a
-  redesign is a token-file edit, not a component rewrite.
+  reset. Components consume tokens for color, spacing, radii, shadows, and
+  typography — no hardcoded hex/color values. Structural literals (e.g. 1px
+  border widths, layout breakpoints) may stay as plain values where
+  tokenizing them wouldn't serve a real redesign lever.
 - **Component library**: reusable primitives live in `src/ui/components/`,
   one folder per component (`Component.tsx` + `Component.module.css` +
   `Component.test.tsx`), CSS Modules only, exported via a barrel
