@@ -44,6 +44,12 @@ describe('Button', () => {
     )
   })
 
+  it('defaults to the primary variant when none is given', () => {
+    render(<Button>Default Button</Button>)
+    const button = screen.getByRole('button', { name: 'Default Button' })
+    expect(button.className).toMatch(/primary/)
+  })
+
   it('applies the correct CSS class for primary variant', () => {
     render(<Button variant="primary">Primary Button</Button>)
     const button = screen.getByRole('button', { name: 'Primary Button' })

@@ -72,12 +72,21 @@ Full rationale: [UI Foundation Design](https://linear.app/travis-playground/docu
   placeholder-as-label), validation wired via `aria-describedby` +
   `aria-invalid`, native `<details>`/`<summary>` for disclosure widgets.
   Component tests query by role/label as the primary interaction surface.
-  WCAG AA contrast target (4.5:1 text, 3:1 UI components), enforced at
-  write-time via oxlint's built-in `jsx-a11y` plugin. A `--focus-ring`
-  token drives `:focus-visible` styling everywhere — never suppressed.
+  WCAG AA contrast target (4.5:1 text, 3:1 UI components) — checked
+  manually against `theme.css`'s tokens when they change; oxlint's
+  `jsx-a11y` plugin catches missing labels/roles/alt text but does not
+  check color contrast, so this isn't automatically enforced. A
+  `--focus-ring` token drives `:focus-visible` styling everywhere —
+  never suppressed.
 - **Testing**: co-located `Component.test.tsx`, Vitest + React Testing
   Library, behavior-focused — matches the engine's existing co-located
   test convention.
+- **Controlled inputs**: primitives that wrap an input (e.g.
+  `NumberField`) take `value`/`onChange` and render `value` directly —
+  never mirror a prop into local `useState` + `useEffect`. On parse
+  failure (e.g. a cleared or partial numeric input), swallow the
+  non-finite result rather than propagating it via `onChange` — the
+  engine throws on invalid input, so `NaN` must never reach it.
 
 ## Computation model (two-tier)
 

@@ -27,4 +27,8 @@ describe('formatPercent', () => {
   it('formats zero', () => {
     expect(formatPercent(0)).toBe('0%')
   })
+
+  it('rounds to one decimal place, not two', () => {
+    expect(formatPercent(4.567)).toBe('4.6%')
+  })
 })

@@ -1,8 +1,9 @@
 :root {
-  /* Color — WCAG AA checked against --color-bg (#ffffff) for text use */
+  /* Color — WCAG AA checked against --color-bg (#ffffff): 4.5:1 for text
+     tokens, 3:1 for non-text UI tokens (--color-border, --focus-ring) */
   --color-bg: #ffffff;
   --color-surface: #f8fafc;
-  --color-border: #d0d7de;
+  --color-border: #6b7280;
   --color-text: #1a1f26;
   --color-text-muted: #57606a;
   --color-primary: #1d4ed8;
@@ -11,7 +12,7 @@
   --color-warning: #b45309;
   --color-error: #b91c1c;
   --color-highlight: #fef3c7;
-  --focus-ring: 0 0 0 3px rgba(29, 78, 216, 0.5);
+  --focus-ring: 0 0 0 3px var(--color-primary);
 
   /* Spacing — 4px base scale */
   --space-1: 4px;
