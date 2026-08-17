@@ -9,6 +9,12 @@
   color: var(--color-text);
 }
 
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .input {
   font: inherit;
   font-size: var(--font-size-base);
@@ -17,6 +23,13 @@
   border-radius: var(--radius-sm);
   color: var(--color-text);
   background: var(--color-bg);
+  flex: 1;
+  min-width: 0;
+}
+
+.adornment {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-base);
 }
 
 .input:focus-visible {

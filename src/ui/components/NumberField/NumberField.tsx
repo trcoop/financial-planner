@@ -9,9 +9,23 @@ interface NumberFieldProps {
   max: number
   step?: number
   error?: string
+  /** Visual adornment before the input, e.g. "$". Display only — not part of the value. */
+  prefix?: string
+  /** Visual adornment after the input, e.g. "%". Display only — not part of the value. */
+  suffix?: string
 }
 
-export function NumberField({ label, value, onChange, min, max, step = 1, error }: NumberFieldProps) {
+export function NumberField({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  error,
+  prefix,
+  suffix,
+}: NumberFieldProps) {
   const inputId = useId()
   const errorId = useId()
 
@@ -27,18 +41,30 @@ export function NumberField({ label, value, onChange, min, max, step = 1, error 
       <label htmlFor={inputId} className={styles.label}>
         {label}
       </label>
-      <input
-        id={inputId}
-        type="number"
-        className={styles.input}
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={error ? errorId : undefined}
-        onChange={handleChange}
-      />
+      <div className={styles.inputRow}>
+        {prefix && (
+          <span className={styles.adornment} aria-hidden="true">
+            {prefix}
+          </span>
+        )}
+        <input
+          id={inputId}
+          type="number"
+          className={styles.input}
+          value={value}
+          min={min}
+          max={max}
+          step={step}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
+          onChange={handleChange}
+        />
+        {suffix && (
+          <span className={styles.adornment} aria-hidden="true">
+            {suffix}
+          </span>
+        )}
+      </div>
       {error && (
         <p id={errorId} role="alert" className={styles.error}>
           {error}
