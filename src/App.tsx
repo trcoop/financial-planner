@@ -103,7 +103,7 @@ function App() {
           <output>{error}</output>
         ) : (
           <>
-            <ProjectionTable rows={rows} />
+            <ProjectionTable rows={rows} retirementAge={debouncedCoreValues.retirementAge} />
             <StressTestSection assumptions={assumptions} />
           </>
         )
