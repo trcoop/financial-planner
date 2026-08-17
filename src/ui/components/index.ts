@@ -1,4 +1,7 @@
 export { Button } from './Button/Button'
+export { CoreInputsForm } from './CoreInputsForm/CoreInputsForm'
+export type { CoreInputValues } from './CoreInputsForm/CoreInputsForm'
+export { isCoreInputValid } from './CoreInputsForm/validation'
 export { NumberField } from './NumberField/NumberField'
 export { CollapsibleSection } from './CollapsibleSection/CollapsibleSection'
 export { Table, TableRow } from './Table/Table'
