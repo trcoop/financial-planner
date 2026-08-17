@@ -22,7 +22,7 @@ Visit http://localhost:5173 in your browser.
 
 - `npm run dev` — Start dev server (Vite)
 - `npm test` — Run tests (Vitest + React Testing Library)
-- `npm run build` — typecheck + production build
+- `npm run build` — Typecheck + production build
 - `npm run lint` — Lint code (oxlint)
 
 ## Tech Stack
