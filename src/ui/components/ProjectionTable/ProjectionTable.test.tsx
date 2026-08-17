@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ProjectionRow } from '../../../engine/types'
 import { ProjectionTable } from './ProjectionTable'
@@ -44,10 +44,11 @@ describe('ProjectionTable', () => {
   it('maps year to a 1-indexed Year column and displays age', () => {
     render(<ProjectionTable rows={[makeRow({ year: 0, age: 35 }), makeRow({ year: 1, age: 36 })]} />)
     const rows = screen.getAllByRole('row').slice(1) // drop header row
-    expect(rows[0]).toHaveTextContent('1')
-    expect(rows[0]).toHaveTextContent('35')
-    expect(rows[1]).toHaveTextContent('2')
-    expect(rows[1]).toHaveTextContent('36')
+    const cellsOf = (row: HTMLElement) => within(row).getAllByRole('cell').map((c) => c.textContent)
+    expect(cellsOf(rows[0])[0]).toBe('1')
+    expect(cellsOf(rows[0])[1]).toBe('35')
+    expect(cellsOf(rows[1])[0]).toBe('2')
+    expect(cellsOf(rows[1])[1]).toBe('36')
   })
 
   it('formats currency values with $ and thousands separators', () => {
