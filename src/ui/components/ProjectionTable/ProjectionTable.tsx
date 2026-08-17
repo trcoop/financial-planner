@@ -4,6 +4,20 @@ import styles from './ProjectionTable.module.css'
 
 export interface ProjectionTableProps {
   rows: ProjectionRow[]
+  /**
+   * The plan's retirement age boundary (`PlanAssumptions.retirementAge`).
+   *
+   * Optional so this component still renders standalone (e.g. in isolation, or before the
+   * orchestrating page wires it in) with the pre-FIN-12 combined header and no highlighting.
+   * Once provided:
+   *   - the header cell switches to "Annual Contribution ($)" or "Annual Withdrawal ($)"
+   *     (see below for which), and
+   *   - the retirement-transition row — the first row where `row.age >= retirementAge` — gets
+   *     a `.retirementTransition` highlight class. If every row is already at or past
+   *     retirement (the user is retired at the start of the projection), that's row 0. If no
+   *     row reaches retirement within the projection horizon, no row is highlighted.
+   */
+  retirementAge?: number
 }
 
 /**
@@ -20,12 +34,29 @@ export interface ProjectionTableProps {
  * 0 in retirement, withdrawal is always 0 pre-retirement). No +/- sign or color coding is
  * applied; the column header alone reflects that this is a combined figure.
  *
- * FIN-12 will extend this component to highlight retirement-transition rows and to swap
- * the header label (e.g. "Annual Contribution ($)" pre-retirement / "Annual Withdrawal
- * ($)" in retirement) once a retirement-age boundary is threaded through as a prop. The
- * header cell below is kept as a single, easily-swappable JSX expression for that reason.
+ * FIN-12 header-label resolution: the AC describes the label switching "for all rows at or
+ * after retirement age," but this is a single static header for the whole column, not a
+ * per-row label. Resolved by keying the header off row 0's status — i.e. whether the plan
+ * is *already* retired at the start of the projection (`rows[0].age >= retirementAge`) —
+ * rather than off any later transition row. This matches the AC's explicit already-retired
+ * edge case ("first row is highlighted and labeled as Annual Withdrawal") and gives a
+ * single unambiguous answer for the normal case (projection starts pre-retirement, so the
+ * header reads "Annual Contribution ($)" even though later rows in the same column show
+ * withdrawal figures once the transition row is reached). Flagged as a judgment call on the
+ * FIN-12 Linear ticket rather than left silent.
  */
-export function ProjectionTable({ rows }: ProjectionTableProps) {
+export function ProjectionTable({ rows, retirementAge }: ProjectionTableProps) {
+  const alreadyRetiredAtStart = retirementAge !== undefined && rows.length > 0 && rows[0].age >= retirementAge
+  const contributionOrWithdrawalHeader =
+    retirementAge === undefined
+      ? 'Annual Contribution/Withdrawal ($)'
+      : alreadyRetiredAtStart
+        ? 'Annual Withdrawal ($)'
+        : 'Annual Contribution ($)'
+
+  const transitionRowIndex =
+    retirementAge === undefined ? -1 : rows.findIndex((row) => row.age >= retirementAge)
+
   return (
     <div className={styles.scrollContainer}>
       <table className={styles.table}>
@@ -34,17 +65,17 @@ export function ProjectionTable({ rows }: ProjectionTableProps) {
             <th>Year</th>
             <th>Age</th>
             <th>Balance Start ($)</th>
-            {/* FIN-12: swap this static label for a dynamic one at the retirement transition. */}
-            <th>Annual Contribution/Withdrawal ($)</th>
+            <th>{contributionOrWithdrawalHeader}</th>
             <th>Investment Return ($)</th>
             <th>Balance End ($)</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {rows.map((row, index) => {
             const contributionOrWithdrawal = row.annualContribution !== 0 ? row.annualContribution : row.annualWithdrawal
+            const isTransitionRow = index === transitionRowIndex
             return (
-              <tr key={row.year}>
+              <tr key={row.year} className={isTransitionRow ? styles.retirementTransition : undefined}>
                 <td>{row.year + 1}</td>
                 <td>{row.age}</td>
                 <td>{formatCurrency(row.beginningBalance)}</td>
