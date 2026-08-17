@@ -1,4 +1,4 @@
-name: Deploy Vite React App
+name: Deploy Vite React App v2
 
 on:
   push:
