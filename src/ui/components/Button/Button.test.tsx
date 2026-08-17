@@ -56,7 +56,7 @@ describe('Button', () => {
     expect(button.className).toMatch(/secondary/)
   })
 
-  it('is focusable and has focus-visible styling', async () => {
+  it('is reachable by keyboard tab', async () => {
     const user = userEvent.setup()
     render(<Button>Focusable Button</Button>)
     const button = screen.getByRole('button', { name: 'Focusable Button' })
