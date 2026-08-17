@@ -1,6 +1,7 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useState } from 'react'
 import { NumberField } from './NumberField'
 
 describe('NumberField', () => {
@@ -18,13 +19,62 @@ describe('NumberField', () => {
   it('calls onChange with a parsed number when the user types', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
-    render(<NumberField label="Current age" value={35} onChange={onChange} min={18} max={100} />)
+
+    function ControlledWrapper() {
+      const [value, setValue] = useState(0)
+      return (
+        <NumberField
+          label="Current age"
+          value={value}
+          onChange={(newValue) => {
+            onChange(newValue)
+            setValue(newValue)
+          }}
+          min={0}
+          max={100}
+        />
+      )
+    }
+
+    render(<ControlledWrapper />)
+
+    const input = screen.getByLabelText('Current age')
+    await user.type(input, '42')
+
+    expect(onChange).toHaveBeenCalledWith(42)
+  })
+
+  it('does not call onChange with NaN when clearing the input', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+
+    function ControlledWrapper() {
+      const [value, setValue] = useState(35)
+      return (
+        <NumberField
+          label="Current age"
+          value={value}
+          onChange={(newValue) => {
+            onChange(newValue)
+            setValue(newValue)
+          }}
+          min={18}
+          max={100}
+        />
+      )
+    }
+
+    render(<ControlledWrapper />)
 
     const input = screen.getByLabelText('Current age')
     await user.clear(input)
-    await user.type(input, '4')
 
-    expect(onChange).toHaveBeenCalledWith(4)
+    // Verify onChange was not called with NaN
+    for (const call of onChange.mock.calls) {
+      expect(Number.isFinite(call[0])).toBe(true)
+    }
+    // Verify onChange was not called at all (since clearing results in NaN)
+    expect(onChange).not.toHaveBeenCalled()
   })
 
   it('sets min and max from props', () => {

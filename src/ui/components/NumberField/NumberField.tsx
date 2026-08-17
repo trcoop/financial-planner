@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useId } from 'react'
 import styles from './NumberField.module.css'
 
 interface NumberFieldProps {
@@ -14,16 +14,12 @@ interface NumberFieldProps {
 export function NumberField({ label, value, onChange, min, max, step = 1, error }: NumberFieldProps) {
   const inputId = useId()
   const errorId = useId()
-  const [inputValue, setInputValue] = useState(value)
-
-  useEffect(() => {
-    setInputValue(value)
-  }, [value])
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const num = event.target.valueAsNumber
-    setInputValue(num)
-    onChange(num)
+    if (Number.isFinite(num)) {
+      onChange(num)
+    }
   }
 
   return (
@@ -35,7 +31,7 @@ export function NumberField({ label, value, onChange, min, max, step = 1, error 
         id={inputId}
         type="number"
         className={styles.input}
-        value={inputValue}
+        value={value}
         min={min}
         max={max}
         step={step}
