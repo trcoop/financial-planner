@@ -109,4 +109,20 @@ describe('NumberField', () => {
     expect(error).toHaveTextContent('Must be between 18 and 100')
     expect(input).toHaveAttribute('aria-describedby', error.id)
   })
+
+  it('renders a prefix adornment when provided', () => {
+    render(<NumberField label="Balance" value={250000} onChange={vi.fn()} min={0} max={10000000} prefix="$" />)
+    expect(screen.getByText('$')).toBeInTheDocument()
+  })
+
+  it('renders a suffix adornment when provided', () => {
+    render(<NumberField label="Savings rate" value={15} onChange={vi.fn()} min={0} max={100} suffix="%" />)
+    expect(screen.getByText('%')).toBeInTheDocument()
+  })
+
+  it('renders no adornments when prefix and suffix are not set', () => {
+    render(<NumberField label="Current age" value={35} onChange={vi.fn()} min={18} max={100} />)
+    expect(screen.queryByText('$')).not.toBeInTheDocument()
+    expect(screen.queryByText('%')).not.toBeInTheDocument()
+  })
 })
