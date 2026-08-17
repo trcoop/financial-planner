@@ -46,6 +46,9 @@ src/
 ├── engine/      Pure calculation functions (projection, Monte Carlo)
 ├── workers/     Web Worker orchestration for Monte Carlo simulation
 ├── ui/          React components with live state
+│   ├── components/  Reusable component library (tokens-driven, tested)
+│   ├── hooks/       Shared UI hooks (e.g. debounce)
+│   └── utils/       UI-only helpers (e.g. currency formatting)
 └── storage/     localStorage persistence layer
 ```
 
