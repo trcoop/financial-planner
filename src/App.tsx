@@ -1,7 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
-import { CoreInputsForm, Layout, Table, TableRow, isCoreInputValid, type CoreInputValues } from './ui/components'
+import {
+  CoreInputsForm,
+  Layout,
+  ProjectionTable,
+  StressTestSection,
+  isCoreInputValid,
+  type CoreInputValues,
+} from './ui/components'
 import { useDebouncedValue } from './ui/hooks/useDebouncedValue'
-import { formatCurrency } from './ui/utils/format'
 import { runProjection, InvalidProjectionInputError, type PlanAssumptions } from './engine'
 import './App.css'
 
@@ -73,6 +79,8 @@ function App() {
     }
   }, [debouncedCoreValues])
 
+  const assumptions = toAssumptions(debouncedCoreValues)
+
   return (
     <Layout
       form={<CoreInputsForm values={coreValues} onChange={setCoreValues} />}
@@ -80,24 +88,10 @@ function App() {
         error ? (
           <output>{error}</output>
         ) : (
-          <Table caption="Year-by-year projection">
-            <thead>
-              <tr>
-                <th>Age</th>
-                <th>Balance start</th>
-                <th>Balance end</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <TableRow key={row.year}>
-                  <td>{row.age}</td>
-                  <td>{formatCurrency(row.beginningBalance)}</td>
-                  <td>{formatCurrency(row.endingBalance)}</td>
-                </TableRow>
-              ))}
-            </tbody>
-          </Table>
+          <>
+            <ProjectionTable rows={rows} />
+            <StressTestSection assumptions={assumptions} />
+          </>
         )
       }
     />
