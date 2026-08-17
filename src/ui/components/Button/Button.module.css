@@ -33,5 +33,5 @@
 }
 
 .secondary:hover:not(:disabled) {
-  background: var(--color-border);
+  background: var(--color-surface-hover);
 }
