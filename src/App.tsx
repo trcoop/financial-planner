@@ -1,10 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
 import {
+  AdvancedAssumptionsForm,
   CoreInputsForm,
   Layout,
   ProjectionTable,
   StressTestSection,
+  isAdvancedInputValid,
   isCoreInputValid,
+  type AdvancedAssumptionValues,
   type CoreInputValues,
 } from './ui/components'
 import { useDebouncedValue } from './ui/hooks/useDebouncedValue'
@@ -19,16 +22,13 @@ const DEFAULT_CORE_VALUES: CoreInputValues = {
   annualContributionRatePercent: 15,
 }
 
-/**
- * Advanced-assumption defaults from FIN-10's spec, hardcoded here until that ticket lands
- * its own editable UI. Allocation and planning horizon are call-site defaults per FIN-19 —
- * not user input for the MVP.
- */
-const ADVANCED_DEFAULTS = {
-  annualRaiseRate: 0.03,
-  annualReturnRate: 0.07,
-  inflationRate: 0.025,
-  withdrawalRateInRetirement: 0.04,
+/** Advanced-assumption defaults per FIN-10's spec. Planning horizon is a call-site default
+ * per FIN-19 — not user input for the MVP. */
+const DEFAULT_ADVANCED_VALUES: AdvancedAssumptionValues = {
+  annualRaisePercent: 3,
+  annualReturnPercent: 7,
+  inflationPercent: 2.5,
+  withdrawalRatePercent: 4,
 }
 
 const PLANNING_HORIZON_END_AGE = 100
@@ -36,7 +36,7 @@ const PLANNING_HORIZON_END_AGE = 100
 /** Per FIN-9's notes: form updates are debounced ~300ms before triggering recalculation. */
 const RECALCULATION_DEBOUNCE_MS = 300
 
-function toAssumptions(core: CoreInputValues): PlanAssumptions {
+function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptionValues): PlanAssumptions {
   return {
     currentAge: core.currentAge,
     retirementAge: core.retirementAge,
@@ -44,7 +44,10 @@ function toAssumptions(core: CoreInputValues): PlanAssumptions {
     currentAnnualIncome: core.currentAnnualIncome,
     annualContributionRate: core.annualContributionRatePercent / 100,
     planningHorizonEndAge: PLANNING_HORIZON_END_AGE,
-    ...ADVANCED_DEFAULTS,
+    annualRaiseRate: advanced.annualRaisePercent / 100,
+    annualReturnRate: advanced.annualReturnPercent / 100,
+    inflationRate: advanced.inflationPercent / 100,
+    withdrawalRateInRetirement: advanced.withdrawalRatePercent / 100,
   }
 }
 
@@ -52,21 +55,27 @@ type ProjectionResult = { rows: ReturnType<typeof runProjection>; error: string 
 
 function App() {
   const [coreValues, setCoreValues] = useState(DEFAULT_CORE_VALUES)
+  const [advancedValues, setAdvancedValues] = useState(DEFAULT_ADVANCED_VALUES)
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes.
   const debouncedCoreValues = useDebouncedValue(coreValues, RECALCULATION_DEBOUNCE_MS)
+  const debouncedAdvancedValues = useDebouncedValue(advancedValues, RECALCULATION_DEBOUNCE_MS)
 
   // Holds the last successfully computed projection so the table can "pause" — keep
-  // showing the last valid result — while a core field is out of range (FIN-9 AC),
-  // instead of running the engine on a value the UI itself has flagged invalid.
+  // showing the last valid result — while a core or advanced field is out of range
+  // (FIN-9 / FIN-10 AC), instead of running the engine on a value the UI itself has
+  // flagged invalid.
   const lastValidResult = useRef<ProjectionResult>({ rows: [], error: undefined })
 
   const { rows, error } = useMemo((): ProjectionResult => {
-    if (!isCoreInputValid(debouncedCoreValues)) {
+    if (!isCoreInputValid(debouncedCoreValues) || !isAdvancedInputValid(debouncedAdvancedValues)) {
       return lastValidResult.current
     }
     try {
-      const result: ProjectionResult = { rows: runProjection(toAssumptions(debouncedCoreValues)), error: undefined }
+      const result: ProjectionResult = {
+        rows: runProjection(toAssumptions(debouncedCoreValues, debouncedAdvancedValues)),
+        error: undefined,
+      }
       lastValidResult.current = result
       return result
     } catch (err) {
@@ -77,13 +86,18 @@ function App() {
       }
       throw err
     }
-  }, [debouncedCoreValues])
+  }, [debouncedCoreValues, debouncedAdvancedValues])
 
-  const assumptions = toAssumptions(debouncedCoreValues)
+  const assumptions = toAssumptions(debouncedCoreValues, debouncedAdvancedValues)
 
   return (
     <Layout
-      form={<CoreInputsForm values={coreValues} onChange={setCoreValues} />}
+      form={
+        <>
+          <CoreInputsForm values={coreValues} onChange={setCoreValues} />
+          <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
+        </>
+      }
       results={
         error ? (
           <output>{error}</output>
