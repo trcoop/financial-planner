@@ -43,4 +43,26 @@ describe('Button', () => {
       'button',
     )
   })
+
+  it('applies the correct CSS class for primary variant', () => {
+    render(<Button variant="primary">Primary Button</Button>)
+    const button = screen.getByRole('button', { name: 'Primary Button' })
+    expect(button.className).toMatch(/primary/)
+  })
+
+  it('applies the correct CSS class for secondary variant', () => {
+    render(<Button variant="secondary">Secondary Button</Button>)
+    const button = screen.getByRole('button', { name: 'Secondary Button' })
+    expect(button.className).toMatch(/secondary/)
+  })
+
+  it('is focusable and has focus-visible styling', async () => {
+    const user = userEvent.setup()
+    render(<Button>Focusable Button</Button>)
+    const button = screen.getByRole('button', { name: 'Focusable Button' })
+
+    await user.tab()
+
+    expect(button).toHaveFocus()
+  })
 })

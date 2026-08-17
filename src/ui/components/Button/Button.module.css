@@ -7,6 +7,11 @@
   cursor: pointer;
 }
 
+.button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
 .button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
@@ -14,7 +19,7 @@
 
 .primary {
   background: var(--color-primary);
-  color: #ffffff;
+  color: var(--color-bg);
 }
 
 .primary:hover:not(:disabled) {
