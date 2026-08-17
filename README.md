@@ -1,6 +1,6 @@
 # DIY Financial Planner
 
-A browser-based financial planning engine with real-time projection and Monte Carlo simulation. Plan your financial future with interactive scenarios and probabilistic outcomes.
+A browser-based financial planning engine with real-time projection and Monte Carlo simulation. Plan your financial future with interactive scenarios and probabilistic outcomes — entirely client-side, with no server component.
 
 ## Features
 
