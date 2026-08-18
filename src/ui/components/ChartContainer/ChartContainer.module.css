@@ -1,4 +1,7 @@
 .card {
+  /* Fixed per-bar width for the scrollable chart track — wide enough to read height/color at
+     a glance without squeezing on long (e.g. 65-year) horizons. See FIN-35. */
+  --chart-bar-width: 20px;
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
@@ -52,15 +55,47 @@
   white-space: nowrap;
 }
 
+/* Horizontally scrollable track wrapping the plot and its labels, so a long horizon scrolls
+   instead of squeezing every bar down to a hairline. */
+.track {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* Reserve room for the scrollbar below the labels row rather than letting an overlay-style
+     scrollbar (e.g. macOS) float on top of the last label. */
+  padding-bottom: var(--space-2);
+
+  /* Thin, theme-colored scrollbar instead of the browser's default chrome. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-text-muted) transparent;
+}
+
+.track::-webkit-scrollbar {
+  height: 6px;
+}
+
+.track::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.track::-webkit-scrollbar-thumb {
+  background-color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+}
+
 .plot {
   flex: 1;
   display: flex;
   align-items: flex-end;
   gap: var(--space-1);
-  min-width: 0;
-  width: 100%;
+  min-height: 0;
   box-sizing: border-box;
-  overflow: hidden;
 }
 
 /* Row of per-bar age labels beneath the plot. Same flex distribution (gap, one flex
@@ -68,26 +103,26 @@
 .labels {
   display: flex;
   gap: var(--space-1);
-  min-width: 0;
-  width: 100%;
   box-sizing: border-box;
 }
 
 .label {
-  flex: 1 1 0;
-  min-width: 2px;
+  flex: 0 0 var(--chart-bar-width);
+  width: var(--chart-bar-width);
   text-align: center;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
+  /* Labels are sparse (every LABEL_INTERVAL bars, see ChartContainer.tsx) so neighbors have
+     room to spare — let a 3-digit age overflow its narrow bar-width column rather than
+     clipping to an ellipsis. */
+  overflow: visible;
   white-space: nowrap;
 }
 
 .bar,
 .barSelected {
-  flex: 1 1 0;
-  min-width: 2px;
+  flex: 0 0 var(--chart-bar-width);
+  width: var(--chart-bar-width);
   border: none;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   cursor: pointer;

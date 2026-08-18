@@ -65,6 +65,11 @@ function App() {
   const successRateValue =
     successRate === null ? 'Run a stress test to see this' : formatPercent(successRate)
 
+  // Default the chart/detail panel to the retirement year rather than the last year of the
+  // full horizon — that's the year people care about most on load. Falls back to the last row
+  // if, for some reason, no row's age matches (e.g. retirement age outside the horizon).
+  const retirementRow = rows.find((row) => row.age === coreValues.retirementAge) ?? rows.at(-1)
+
   return (
     <div className="shell">
       <TopBar />
@@ -101,8 +106,13 @@ function App() {
                 </div>
 
                 <div className="chartRow">
-                  <ChartContainer rows={rows} title="Investment balance by year" onSelectRow={setSelectedRow} />
-                  <YearDetailPanel row={selectedRow ?? rows.at(-1)} />
+                  <ChartContainer
+                    rows={rows}
+                    title="Investment balance by year"
+                    onSelectRow={setSelectedRow}
+                    defaultSelectedYear={retirementRow?.year}
+                  />
+                  <YearDetailPanel row={selectedRow ?? retirementRow} />
                 </div>
               </section>
 

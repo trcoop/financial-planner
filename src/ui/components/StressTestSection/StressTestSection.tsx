@@ -39,7 +39,12 @@ export function StressTestSection({
   const orchestrator = useMemo(() => injectedOrchestrator ?? createMonteCarloOrchestrator(), [injectedOrchestrator])
   const [state, setState] = useState<StressTestState>(() => orchestrator.getState())
   const [successRate, setSuccessRate] = useState<number | null>(null)
-  const isFirstRender = useRef(true)
+  // Tracks the last `assumptions` the cancel effect has seen, so it can tell "assumptions
+  // actually changed" from "this effect ran again" (e.g. StrictMode's dev-only double-invoke
+  // of effects on mount). A boolean "is this the first run" ref breaks under double-invoke: it
+  // gets flipped permanently on the first pass, so the second pass no longer recognizes itself
+  // as the initial mount and cancels the run that the auto-run effect just started.
+  const previousAssumptions = useRef(assumptions)
 
   useEffect(() => {
     const unsubscribe = orchestrator.subscribe(setState)
@@ -60,10 +65,10 @@ export function StressTestSection({
   // Cancel-on-input-change (FIN-14 AC): keyed on `assumptions` changing, but must not fire on
   // the initial mount — there is nothing in flight to cancel yet.
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
+    if (previousAssumptions.current === assumptions) {
       return
     }
+    previousAssumptions.current = assumptions
     orchestrator.cancel()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assumptions])
@@ -75,6 +80,18 @@ export function StressTestSection({
       // This catch exists solely to prevent an unhandled promise rejection.
     })
   }
+
+  // Kick off one stress test against the default assumptions on load, since the projection
+  // tab already shows other default-seeded values (chart, stat tiles) — an unrun "[Run
+  // stress test to see results]" success rate stood out next to those. Guarded on `status
+  // === 'idle'` (checked directly on the orchestrator, not React state) so this fires at
+  // most once per orchestrator instance, including under StrictMode's double-invoke.
+  useEffect(() => {
+    if (orchestrator.getState().status === 'idle') {
+      handleRunClick()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orchestrator])
 
   const isRunning = state.status === 'running'
   const buttonLabel = isRunning ? 'Running stress test...' : 'Run stress test'

@@ -41,11 +41,28 @@ describe('ChartContainer', () => {
     expect(screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })).toHaveLength(3)
   })
 
-  it("renders each row's age as a label", () => {
+  it('labels the first bar and the last bar (sparse labeling for long horizons)', () => {
     render(<ChartContainer rows={rows} title="Year-by-year balance" />)
     expect(screen.getByText('35')).toBeInTheDocument()
-    expect(screen.getByText('36')).toBeInTheDocument()
     expect(screen.getByText('37')).toBeInTheDocument()
+  })
+
+  it('labels only every 5th bar plus the last bar on a long horizon', () => {
+    const longRows: ChartRow[] = Array.from({ length: 12 }, (_, i) => ({
+      age: 35 + i,
+      year: i,
+      beginningBalance: 100_000,
+      annualContribution: 15_000,
+      investmentReturn: 7_000,
+      endingBalance: 122_000 + i * 1_000,
+    }))
+    render(<ChartContainer rows={longRows} title="Year-by-year balance" />)
+    // Labeled: index 0, 5, 10 (every 5th) plus index 11 (last) -> ages 35, 40, 45, 46.
+    for (const age of [35, 40, 45, 46]) {
+      expect(screen.getByText(String(age))).toBeInTheDocument()
+    }
+    // Not labeled: e.g. age 36 (index 1).
+    expect(screen.queryByText('36')).not.toBeInTheDocument()
   })
 
   it('renders a range subtitle spanning the first and last row ages', () => {
@@ -71,6 +88,20 @@ describe('ChartContainer', () => {
     expect(bars[1]).toHaveAttribute('aria-pressed', 'false')
   })
 
+  it('selects the row matching defaultSelectedYear instead of the last row, when provided', () => {
+    render(<ChartContainer rows={rows} title="Year-by-year balance" defaultSelectedYear={1} />)
+    const bars = screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })
+    expect(bars[1]).toHaveAttribute('aria-pressed', 'true')
+    expect(bars[0]).toHaveAttribute('aria-pressed', 'false')
+    expect(bars[2]).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('falls back to the last row when defaultSelectedYear matches no row', () => {
+    render(<ChartContainer rows={rows} title="Year-by-year balance" defaultSelectedYear={999} />)
+    const bars = screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })
+    expect(bars[2]).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('selects a bar on click, marking it pressed and calling onSelectRow with that row', async () => {
     const user = userEvent.setup()
     const onSelectRow = vi.fn()
@@ -88,6 +119,15 @@ describe('ChartContainer', () => {
     render(<ChartContainer rows={rows} title="Year-by-year balance" />)
     const chart = screen.getByRole('figure', { name: 'Year-by-year balance' })
     expect(chart).toHaveStyle({ width: '100%', maxWidth: '100%', boxSizing: 'border-box' })
+  })
+
+  it('scrolls the initially-selected (last) bar into view on mount', () => {
+    const scrollIntoView = vi.fn()
+    HTMLElement.prototype.scrollIntoView = scrollIntoView
+
+    render(<ChartContainer rows={rows} title="Year-by-year balance" />)
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'center' })
   })
 
   it('renders nothing selectable and no crash when given an empty rows array', () => {
