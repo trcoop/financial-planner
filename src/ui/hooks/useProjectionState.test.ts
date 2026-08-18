@@ -1,0 +1,178 @@
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useProjectionState } from './useProjectionState'
+import type { AdvancedAssumptionValues, CoreInputValues } from '../components'
+
+const CORE: CoreInputValues = {
+  currentAge: 35,
+  retirementAge: 67,
+  initialBalance: 250000,
+  currentAnnualIncome: 85000,
+  annualContributionRatePercent: 15,
+}
+
+const ADVANCED: AdvancedAssumptionValues = {
+  annualRaisePercent: 3,
+  annualReturnPercent: 7,
+  inflationPercent: 2.5,
+  withdrawalRatePercent: 4,
+}
+
+const DEBOUNCE_MS = 300
+
+describe('useProjectionState', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('computes rows and projectedBalanceAtRetirement from the initial values', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+
+    expect(result.current.error).toBeUndefined()
+    expect(result.current.rows.length).toBeGreaterThan(0)
+    const retirementRow = result.current.rows.find((row) => row.age >= CORE.retirementAge)
+    expect(retirementRow).toBeDefined()
+    expect(result.current.projectedBalanceAtRetirement).toBe(retirementRow!.endingBalance)
+  })
+
+  it('does not recompute before the debounce delay elapses', () => {
+    const { result, rerender } = renderHook(
+      ({ core }) => useProjectionState(core, ADVANCED, DEBOUNCE_MS),
+      { initialProps: { core: CORE } },
+    )
+    const before = result.current.rows
+
+    rerender({ core: { ...CORE, currentAge: 60 } })
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS - 1)
+    })
+
+    expect(result.current.rows).toBe(before)
+  })
+
+  it('recomputes after the debounce delay elapses', () => {
+    const { result, rerender } = renderHook(
+      ({ core }) => useProjectionState(core, ADVANCED, DEBOUNCE_MS),
+      { initialProps: { core: CORE } },
+    )
+    const before = result.current.rows
+
+    rerender({ core: { ...CORE, currentAge: 60 } })
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.rows).not.toBe(before)
+    expect(result.current.rows[0].age).toBe(60)
+  })
+
+  it('pauses on out-of-range input, keeping the last valid rows/balance and no error (FIN-9 AC)', () => {
+    const { result, rerender } = renderHook(
+      ({ core }) => useProjectionState(core, ADVANCED, DEBOUNCE_MS),
+      { initialProps: { core: CORE } },
+    )
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+    const lastGoodRows = result.current.rows
+    const lastGoodBalance = result.current.projectedBalanceAtRetirement
+
+    // currentAge above its enforced range (18-100) fails isCoreInputValid, so the hook must
+    // pause rather than run the engine at all.
+    rerender({ core: { ...CORE, currentAge: 9_000_000 } })
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.error).toBeUndefined()
+    expect(result.current.rows).toBe(lastGoodRows)
+    expect(result.current.projectedBalanceAtRetirement).toBe(lastGoodBalance)
+  })
+
+  it('resumes normal computation once the out-of-range input is corrected', () => {
+    const { result, rerender } = renderHook(
+      ({ core }) => useProjectionState(core, ADVANCED, DEBOUNCE_MS),
+      { initialProps: { core: CORE } },
+    )
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    rerender({ core: { ...CORE, currentAge: 9_000_000 } })
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+    const pausedRows = result.current.rows
+
+    rerender({ core: { ...CORE, currentAge: 40 } })
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.error).toBeUndefined()
+    expect(result.current.rows).not.toBe(pausedRows)
+    expect(result.current.rows[0].age).toBe(40)
+  })
+
+  it('surfaces an engine error (InvalidProjectionInputError) when a value passes form-level range validation but fails engine validation', () => {
+    // NaN slips past isCoreInputValid: `NaN < min` and `NaN > max` are both false, so
+    // rangeError sees no violation. The engine's own finiteness check (NON_FINITE_INPUT)
+    // then rejects it — this exercises the hook's try/catch branch, distinct from the
+    // form-level "pause" path covered above.
+    const core: CoreInputValues = { ...CORE, currentAge: Number.NaN }
+    const { result } = renderHook(() => useProjectionState(core, ADVANCED, DEBOUNCE_MS))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.error).toBeDefined()
+    expect(result.current.rows).toEqual([])
+    expect(result.current.projectedBalanceAtRetirement).toBeUndefined()
+  })
+
+  it('picks the earliest row at/after retirementAge, not the last matching row (retirement-year balance, not final-year balance)', () => {
+    // currentAge 35, retirementAge 67: many rows satisfy `age >= 67` (67 through 100).
+    // projectedBalanceAtRetirement must be the *retirement-year* row's balance, not
+    // whatever the final row (age 100) happens to hold.
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+
+    const retirementRow = result.current.rows.find((row) => row.age === CORE.retirementAge)
+    const finalRow = result.current.rows.at(-1)
+    expect(retirementRow).toBeDefined()
+    expect(retirementRow?.age).not.toBe(finalRow?.age)
+    expect(result.current.projectedBalanceAtRetirement).toBe(retirementRow?.endingBalance)
+    expect(result.current.projectedBalanceAtRetirement).not.toBe(finalRow?.endingBalance)
+  })
+
+  it('falls back to the last row ending balance when rows are non-empty but none reach retirementAge (currentAge already past retirementAge is handled by the first row; this documents the .at(-1) fallback is otherwise reserved for the empty-rows case)', () => {
+    // With the current form-enforced ranges (retirementAge 18-100, horizon fixed at 100),
+    // any valid, non-empty projection's rows span every integer age from currentAge through
+    // 100 — so retirementAge (<=100) is always found. The .at(-1) fallback is exercised in
+    // practice only when rows is empty (covered by the test below); this test pins that
+    // invariant so a future change to the horizon or age ranges doesn't silently break it
+    // without a failing test calling it out.
+    const core: CoreInputValues = { ...CORE, currentAge: 18, retirementAge: 100 }
+    const { result } = renderHook(() => useProjectionState(core, ADVANCED, DEBOUNCE_MS))
+
+    const retirementRow = result.current.rows.find((row) => row.age >= core.retirementAge)
+    expect(retirementRow).toBeDefined()
+    expect(retirementRow?.age).toBe(100)
+    expect(result.current.projectedBalanceAtRetirement).toBe(result.current.rows.at(-1)?.endingBalance)
+  })
+
+  it('leaves projectedBalanceAtRetirement undefined when rows are empty (no prior valid result to fall back on)', () => {
+    const core: CoreInputValues = { ...CORE, currentAge: Number.NaN }
+    const { result } = renderHook(() => useProjectionState(core, ADVANCED, DEBOUNCE_MS))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.rows).toEqual([])
+    expect(result.current.projectedBalanceAtRetirement).toBeUndefined()
+    expect(result.current.error).toBeDefined()
+  })
+})
