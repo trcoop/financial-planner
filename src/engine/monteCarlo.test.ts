@@ -696,10 +696,10 @@ describe('runMonteCarloTrials', () => {
     expect(result.meta.allocation).toEqual({ stocks: 70, bonds: 30 });
   });
 
-  it('runs 1,000 paths and reports the historical volatility defaults', () => {
+  it('runs 5,000 paths and reports the historical volatility defaults', () => {
     const result = runMonteCarloTrials(assumptions(), allocation70_30, undefined, [], options());
 
-    expect(result.meta.simulationCount).toBe(1000);
+    expect(result.meta.simulationCount).toBe(5000);
     expect(result.meta.stockVolatility).toBe(0.15);
     expect(result.meta.bondVolatility).toBe(0.06);
   });
@@ -1222,14 +1222,15 @@ describe('accuracy against deterministic reference figures', () => {
 });
 
 describe('performance', () => {
-  it('runs 1,000 paths over a full horizon inside the 500ms budget', () => {
+  it('runs 5,000 paths over a full horizon inside the 500ms budget', () => {
     // FIN-17's budget is 500ms for the pure engine work, and the assertion is pinned to
-    // exactly that rather than to a tighter local figure. Measured cost is 32-38ms on
-    // developer hardware — a ~14x margin — but `npm test` also runs on shared CI runners
-    // that are slower and much noisier, and a wall-clock assertion tuned to local speed
-    // becomes a flaky merge blocker rather than a performance guard. At 500ms this still
-    // fails loudly if someone reintroduces per-period allocation or sorting inside the
-    // path loop, which costs orders of magnitude, not tens of percent.
+    // exactly that rather than to a tighter local figure. FIN-54 raised the default path
+    // count from 1,000 to 5,000; measured cost at 5,000 paths is ~150-190ms on developer
+    // hardware (was 32-38ms at 1,000) — still a healthy margin — but `npm test` also runs
+    // on shared CI runners that are slower and much noisier, and a wall-clock assertion
+    // tuned to local speed becomes a flaky merge blocker rather than a performance guard.
+    // At 500ms this still fails loudly if someone reintroduces per-period allocation or
+    // sorting inside the path loop, which costs orders of magnitude, not tens of percent.
     const plan = assumptions({ currentAge: 35, planningHorizonEndAge: 100 });
 
     const startedAt = performance.now();
@@ -1239,7 +1240,7 @@ describe('performance', () => {
     });
     const elapsedMs = performance.now() - startedAt;
 
-    expect(result.meta.simulationCount).toBe(1_000);
+    expect(result.meta.simulationCount).toBe(5_000);
     expect(result.percentiles.p50).toHaveLength(66);
     expect(elapsedMs).toBeLessThan(500);
   });
