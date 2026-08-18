@@ -27,7 +27,7 @@ describe('CoreInputsForm', () => {
     expect(screen.getByLabelText('Current annual income')).toBeInTheDocument()
     expect(screen.getByLabelText('Annual savings percentage')).toBeInTheDocument()
 
-    const inputs = screen.getAllByRole('spinbutton')
+    const inputs = screen.getAllByRole('textbox')
     expect(inputs.map((i) => i.getAttribute('id'))).toEqual([
       screen.getByLabelText('Current age').id,
       screen.getByLabelText('Retirement age').id,
@@ -39,11 +39,11 @@ describe('CoreInputsForm', () => {
 
   it('pre-fills the sensible defaults on first load', () => {
     render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    expect(screen.getByLabelText('Current age')).toHaveValue(35)
-    expect(screen.getByLabelText('Retirement age')).toHaveValue(67)
-    expect(screen.getByLabelText('Current investment balance')).toHaveValue(250000)
-    expect(screen.getByLabelText('Current annual income')).toHaveValue(85000)
-    expect(screen.getByLabelText('Annual savings percentage')).toHaveValue(15)
+    expect(screen.getByLabelText('Current age')).toHaveValue('35')
+    expect(screen.getByLabelText('Retirement age')).toHaveValue('67')
+    expect(screen.getByLabelText('Current investment balance')).toHaveValue('$250,000')
+    expect(screen.getByLabelText('Current annual income')).toHaveValue('$85,000')
+    expect(screen.getByLabelText('Annual savings percentage')).toHaveValue('15%')
   })
 
   it('enforces input ranges via min/max', () => {
@@ -66,7 +66,7 @@ describe('CoreInputsForm', () => {
     const income = screen.getByLabelText('Current annual income')
     fireEvent.change(income, { target: { value: '9000000' } })
 
-    expect(income).toHaveValue(9000000)
+    expect(income).toHaveValue('$9,000,000')
     expect(screen.getByRole('alert')).toHaveTextContent(/between 0 and 5,000,000/i)
   })
 
@@ -83,12 +83,13 @@ describe('CoreInputsForm', () => {
 
   it('formats balance and income fields with a $ prefix', () => {
     render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    expect(screen.getAllByText('$')).toHaveLength(2)
+    expect(screen.getByLabelText('Current investment balance')).toHaveValue('$250,000')
+    expect(screen.getByLabelText('Current annual income')).toHaveValue('$85,000')
   })
 
   it('formats the savings percentage field with a % suffix', () => {
     render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    expect(screen.getByText('%')).toBeInTheDocument()
+    expect(screen.getByLabelText('Annual savings percentage')).toHaveValue('15%')
   })
 
   it('calls onChange with the updated field only, preserving the rest', () => {

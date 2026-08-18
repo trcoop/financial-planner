@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
@@ -13,7 +13,7 @@ describe('NumberField', () => {
 
   it('renders the current value', () => {
     render(<NumberField label="Current age" value={35} onChange={vi.fn()} min={18} max={100} />)
-    expect(screen.getByLabelText('Current age')).toHaveValue(35)
+    expect(screen.getByLabelText('Current age')).toHaveValue('35')
   })
 
   it('calls onChange with a parsed number when the user types', async () => {
@@ -110,19 +110,58 @@ describe('NumberField', () => {
     expect(input).toHaveAttribute('aria-describedby', error.id)
   })
 
-  it('renders a prefix adornment when provided', () => {
+  it('renders a prefix adornment baked into the input value when provided', () => {
     render(<NumberField label="Balance" value={250000} onChange={vi.fn()} min={0} max={10000000} prefix="$" />)
-    expect(screen.getByText('$')).toBeInTheDocument()
+    expect(screen.getByLabelText('Balance')).toHaveValue('$250,000')
   })
 
-  it('renders a suffix adornment when provided', () => {
+  it('renders a suffix adornment baked into the input value when provided', () => {
     render(<NumberField label="Savings rate" value={15} onChange={vi.fn()} min={0} max={100} suffix="%" />)
-    expect(screen.getByText('%')).toBeInTheDocument()
+    expect(screen.getByLabelText('Savings rate')).toHaveValue('15%')
+  })
+
+  it('keeps the prefix/suffix visible while typing, not just at rest', () => {
+    const onChange = vi.fn()
+
+    function ControlledWrapper() {
+      const [value, setValue] = useState(15)
+      return (
+        <NumberField
+          label="Savings rate"
+          value={value}
+          onChange={(newValue) => {
+            onChange(newValue)
+            setValue(newValue)
+          }}
+          min={0}
+          max={100}
+          suffix="%"
+        />
+      )
+    }
+
+    render(<ControlledWrapper />)
+    const input = screen.getByLabelText('Savings rate')
+    expect(input).toHaveValue('15%')
+
+    // Simulate an in-progress keystroke: the raw event value carries the baked-in suffix too.
+    fireEvent.change(input, { target: { value: '142%' } })
+
+    expect(input).toHaveValue('142%')
+    expect(onChange).toHaveBeenCalledWith(142)
+  })
+
+  it('self-heals if a keystroke eats into the suffix', () => {
+    render(<NumberField label="Savings rate" value={15} onChange={vi.fn()} min={0} max={100} suffix="%" />)
+    const input = screen.getByLabelText('Savings rate')
+
+    fireEvent.change(input, { target: { value: '1425' } })
+
+    expect(input).toHaveValue('1425%')
   })
 
   it('renders no adornments when prefix and suffix are not set', () => {
     render(<NumberField label="Current age" value={35} onChange={vi.fn()} min={18} max={100} />)
-    expect(screen.queryByText('$')).not.toBeInTheDocument()
-    expect(screen.queryByText('%')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Current age')).toHaveValue('35')
   })
 })

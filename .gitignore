@@ -1,6 +1,10 @@
 # Local-only working docs (specs, notes) — not committed
 docs/
 
+# Local design work / MCP scratch output — not committed
+.design-work/
+.playwright-mcp/
+
 # Logs
 logs
 *.log

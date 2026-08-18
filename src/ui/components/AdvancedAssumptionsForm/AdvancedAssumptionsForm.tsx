@@ -1,6 +1,7 @@
 import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
 import { NumberField } from '../NumberField/NumberField'
 import { ADVANCED_FIELD_RANGES, rangeError } from './validation'
+import styles from './AdvancedAssumptionsForm.module.css'
 
 export interface AdvancedAssumptionValues {
   /** Plain percentage (e.g. 3 for 3%), not a 0-1 fraction — matches the field's display. */
@@ -40,8 +41,8 @@ interface AdvancedAssumptionsFormProps {
 
 export function AdvancedAssumptionsForm({ values, onChange }: AdvancedAssumptionsFormProps) {
   return (
-    <CollapsibleSection summary="⋯ Advanced assumptions">
-      <form aria-label="Advanced assumptions">
+    <CollapsibleSection summary="▸ Advanced assumptions">
+      <form aria-label="Advanced assumptions" className={styles.form}>
         {FIELDS.map((field) => (
           <NumberField
             key={field.key}

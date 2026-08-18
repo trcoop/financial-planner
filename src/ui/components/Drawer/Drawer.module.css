@@ -1,20 +1,31 @@
 .drawer {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  border-right: 1px solid var(--color-border-subtle);
+  background: var(--color-bg);
+  padding: var(--space-5);
+  gap: var(--space-4);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
 }
 
 .toggle {
-  align-self: flex-start;
   cursor: pointer;
   border: none;
   background: transparent;
   color: var(--color-primary);
   font-family: var(--font-family);
-  font-size: var(--font-size-base);
-  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  padding: 0;
 }
 
 .toggle:hover {
@@ -29,21 +40,24 @@
 .content {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: 0 var(--space-3) var(--space-3);
+  gap: var(--space-4);
 }
 
-/* Mobile (< 960px): accordion above content, matches CollapsibleSection. */
+/* Mobile (< 960px): accordion above content, matches CollapsibleSection. Divider
+   moves from the right edge (desktop, push-content) to the bottom edge (mobile,
+   stacked above content) since there's no sibling content to its side. */
 @media (max-width: 959px) {
   .drawer {
     width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border-subtle);
   }
 }
 
 /* Desktop (>= 960px): push-content layout alongside sibling content. */
 @media (min-width: 960px) {
   .drawer {
-    width: 320px;
+    width: 280px;
     flex-shrink: 0;
   }
 

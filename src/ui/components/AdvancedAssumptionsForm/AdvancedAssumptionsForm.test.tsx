@@ -21,8 +21,8 @@ describe('AdvancedAssumptionsForm', () => {
 
   it('renders inside a collapsible section labeled "Advanced assumptions", collapsed by default', () => {
     render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    expect(screen.getByText('⋯ Advanced assumptions')).toBeInTheDocument()
-    const details = screen.getByText('⋯ Advanced assumptions').closest('details')
+    expect(screen.getByText('▸ Advanced assumptions')).toBeInTheDocument()
+    const details = screen.getByText('▸ Advanced assumptions').closest('details')
     expect(details).not.toHaveAttribute('open')
   })
 
@@ -30,7 +30,7 @@ describe('AdvancedAssumptionsForm', () => {
     const user = userEvent.setup()
     render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
 
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
     expect(screen.getByLabelText('Expected annual raise')).toBeInTheDocument()
     expect(screen.getByLabelText('Investment return assumption')).toBeInTheDocument()
@@ -41,18 +41,18 @@ describe('AdvancedAssumptionsForm', () => {
   it('pre-fills the FIN-10 default values', async () => {
     const user = userEvent.setup()
     render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
-    expect(screen.getByLabelText('Expected annual raise')).toHaveValue(3)
-    expect(screen.getByLabelText('Investment return assumption')).toHaveValue(7)
-    expect(screen.getByLabelText('Inflation rate')).toHaveValue(2.5)
-    expect(screen.getByLabelText('Withdrawal rate in retirement')).toHaveValue(4)
+    expect(screen.getByLabelText('Expected annual raise')).toHaveValue('3%')
+    expect(screen.getByLabelText('Investment return assumption')).toHaveValue('7%')
+    expect(screen.getByLabelText('Inflation rate')).toHaveValue('2.5%')
+    expect(screen.getByLabelText('Withdrawal rate in retirement')).toHaveValue('4%')
   })
 
   it('enforces the FIN-10 ranges via min/max, including negative bounds for return and inflation', async () => {
     const user = userEvent.setup()
     render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
     expect(screen.getByLabelText('Expected annual raise')).toHaveAttribute('min', '0')
     expect(screen.getByLabelText('Expected annual raise')).toHaveAttribute('max', '100')
@@ -67,19 +67,19 @@ describe('AdvancedAssumptionsForm', () => {
   it('shows a validation error when a value is entered out of range', async () => {
     const user = userEvent.setup()
     render(<ControlledForm />)
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
     const returnField = screen.getByLabelText('Investment return assumption')
     fireEvent.change(returnField, { target: { value: '-60' } })
 
-    expect(returnField).toHaveValue(-60)
+    expect(returnField).toHaveValue('-60%')
     expect(screen.getByRole('alert')).toHaveTextContent(/between -50 and 100/i)
   })
 
   it('clears the validation error once the value is back in range', async () => {
     const user = userEvent.setup()
     render(<ControlledForm />)
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
     const returnField = screen.getByLabelText('Investment return assumption')
     fireEvent.change(returnField, { target: { value: '-60' } })
@@ -93,7 +93,7 @@ describe('AdvancedAssumptionsForm', () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
     render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={onChange} />)
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
     const raise = screen.getByLabelText('Expected annual raise')
     fireEvent.change(raise, { target: { value: '5' } })
@@ -104,25 +104,28 @@ describe('AdvancedAssumptionsForm', () => {
   it('preserves entered values across collapse/expand', async () => {
     const user = userEvent.setup()
     render(<ControlledForm />)
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
     const raise = screen.getByLabelText('Expected annual raise')
     fireEvent.change(raise, { target: { value: '5' } })
-    expect(raise).toHaveValue(5)
+    expect(raise).toHaveValue('5%')
 
     // collapse
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
     // expand again
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
-    expect(screen.getByLabelText('Expected annual raise')).toHaveValue(5)
+    expect(screen.getByLabelText('Expected annual raise')).toHaveValue('5%')
   })
 
   it('formats all 4 fields with a % suffix', async () => {
     const user = userEvent.setup()
     render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
+    await user.click(screen.getByText('▸ Advanced assumptions'))
 
-    expect(screen.getAllByText('%')).toHaveLength(4)
+    expect(screen.getByLabelText('Expected annual raise')).toHaveValue('3%')
+    expect(screen.getByLabelText('Investment return assumption')).toHaveValue('7%')
+    expect(screen.getByLabelText('Inflation rate')).toHaveValue('2.5%')
+    expect(screen.getByLabelText('Withdrawal rate in retirement')).toHaveValue('4%')
   })
 })
