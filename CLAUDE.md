@@ -13,6 +13,16 @@ Planner - MVP, team: FIN) — this repo doesn't duplicate them.
 - `npm run build` — typecheck + production build
 - `npm run lint` — lint (oxlint)
 
+## CI
+
+GitHub Actions run on every PR and push to `main` (`.github/workflows/ci.yml`):
+`lint`, `test`, and `build` as separate required checks. `auto-merge.yml`
+enables auto-merge once a PR is approved, and it merges as soon as CI is
+green. `deploy.yml` deploys `main` after merge. Branch protection requires
+these checks to pass and the branch to be up to date with `main` before
+merging — don't assume "tests passed earlier" is still true if `main` has
+moved; nudge the PR's branch update if CI shows it as behind.
+
 ## Stack
 
 React + TypeScript + Vite. No backend. No external state management library.
