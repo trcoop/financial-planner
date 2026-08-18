@@ -24,7 +24,9 @@
   font-style: italic;
 }
 
-@media (max-width: 960px) {
+/* Matches the single responsive breakpoint used across the app shell
+   (Drawer's DESKTOP_QUERY is `min-width: 960px`; see FIN-32). */
+@media (max-width: 959px) {
   .value {
     font-size: 1.25rem;
   }

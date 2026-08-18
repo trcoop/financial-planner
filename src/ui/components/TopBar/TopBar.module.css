@@ -25,7 +25,9 @@
   white-space: nowrap;
 }
 
-@media (max-width: 960px) {
+/* Matches the single responsive breakpoint used across the app shell
+   (Drawer's DESKTOP_QUERY is `min-width: 960px`; see FIN-32). */
+@media (max-width: 959px) {
   .topBar {
     height: 52px;
     padding: 0 var(--space-4);
