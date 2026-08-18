@@ -32,6 +32,8 @@
   font-weight: 600;
 }
 
+/* Matches the single responsive breakpoint used across the app shell
+   (Drawer's DESKTOP_QUERY is `min-width: 960px`; see FIN-32). */
 @media (max-width: 959px) {
   .tabBar {
     border-bottom: none;

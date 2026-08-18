@@ -23,32 +23,32 @@ export function YearDetailPanel({ row }: YearDetailPanelProps) {
     <Card className={styles.card}>
       <section aria-label="Year detail" className={styles.section}>
         {row ? (
-          <dl className={styles.list}>
-            <div className={styles.row}>
-              <dt>Year</dt>
-              <dd>{row.year + 1}</dd>
+          <>
+            <div className={styles.headline}>
+              <p className={styles.headlineLabel}>
+                Age {row.age} · Year {row.year + 1}
+              </p>
+              <p className={styles.headlineValue}>{currency.format(row.endingBalance)}</p>
             </div>
-            <div className={styles.row}>
-              <dt>Age</dt>
-              <dd>{row.age}</dd>
-            </div>
-            <div className={styles.row}>
-              <dt>Balance start</dt>
-              <dd>{currency.format(row.beginningBalance)}</dd>
-            </div>
-            <div className={styles.row}>
-              <dt>Contribution</dt>
-              <dd>{currency.format(row.annualContribution)}</dd>
-            </div>
-            <div className={styles.row}>
-              <dt>Investment return</dt>
-              <dd>{currency.format(row.investmentReturn)}</dd>
-            </div>
-            <div className={styles.row}>
-              <dt>Balance end</dt>
-              <dd>{currency.format(row.endingBalance)}</dd>
-            </div>
-          </dl>
+            <dl className={styles.list}>
+              <div className={styles.row}>
+                <dt>Balance start</dt>
+                <dd>{currency.format(row.beginningBalance)}</dd>
+              </div>
+              <div className={styles.row}>
+                <dt>Contribution</dt>
+                <dd>{currency.format(row.annualContribution)}</dd>
+              </div>
+              <div className={styles.row}>
+                <dt>Investment return</dt>
+                <dd>{currency.format(row.investmentReturn)}</dd>
+              </div>
+              <div className={styles.row}>
+                <dt>Balance end</dt>
+                <dd>{currency.format(row.endingBalance)}</dd>
+              </div>
+            </dl>
+          </>
         ) : (
           <p className={styles.placeholder}>Select a year in the chart to see its detail.</p>
         )}

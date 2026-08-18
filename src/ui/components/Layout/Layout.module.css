@@ -5,7 +5,9 @@
   padding: var(--space-6);
 }
 
-@media (max-width: 900px) {
+/* Matches the single responsive breakpoint used across the app shell
+   (Drawer's DESKTOP_QUERY is `min-width: 960px`; see FIN-32). */
+@media (max-width: 959px) {
   .layout {
     grid-template-columns: 1fr;
   }
