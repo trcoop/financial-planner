@@ -8,14 +8,19 @@ import { Button } from '../Button/Button'
 import styles from './StressTestSection.module.css'
 
 /**
- * FIN-14/FIN-8: 70% stocks / 30% bonds, hardcoded for the MVP — neither ticket makes
- * allocation user-configurable yet.
+ * FIN-14/FIN-8's original 70/30 default, still used as the fallback when no `allocation` prop
+ * is supplied. FIN-56 makes allocation user-configurable (`AdvancedAssumptionsForm`'s new
+ * "Stock allocation" field, threaded down via `App.tsx`) — this constant now only covers
+ * callers (and tests) that don't pass one.
  */
 const DEFAULT_ALLOCATION: PortfolioAllocation = { stocksPercent: 70, bondsPercent: 30 }
 
 interface StressTestSectionProps {
   /** The plan inputs to stress-test. Changing this cancels any in-flight run (FIN-14 AC). */
   assumptions: PlanAssumptions
+  /** The stock/bond mix to stress-test against (FIN-56). Defaults to {@link DEFAULT_ALLOCATION}
+   * (70/30) when omitted. */
+  allocation?: PortfolioAllocation
   /**
    * Test-only seam: substitute a fake `MonteCarloOrchestrator` instead of the real
    * Worker-backed one, mirroring the `runPeriodFn`/`WorkerFactory` injection seams elsewhere
@@ -40,6 +45,7 @@ interface StressTestSectionProps {
 
 export function StressTestSection({
   assumptions,
+  allocation = DEFAULT_ALLOCATION,
   orchestrator: injectedOrchestrator,
   onSuccessRateChange,
   onPercentilesChange,
@@ -89,7 +95,7 @@ export function StressTestSection({
   }, [assumptions])
 
   const handleRunClick = () => {
-    orchestrator.run(assumptions, DEFAULT_ALLOCATION, DEFAULT_VOLATILITY_ASSUMPTIONS).catch(() => {
+    orchestrator.run(assumptions, allocation, DEFAULT_VOLATILITY_ASSUMPTIONS).catch(() => {
       // Intentionally ignored: the orchestrator's `subscribe` callback already syncs `state`
       // to `cancelled`/`error` for both rejection paths (cancellation and worker failure).
       // This catch exists solely to prevent an unhandled promise rejection.

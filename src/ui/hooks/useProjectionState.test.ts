@@ -16,6 +16,7 @@ const ADVANCED: AdvancedAssumptionValues = {
   annualReturnPercent: 7,
   inflationPercent: 2.5,
   withdrawalRatePercent: 4,
+  stocksAllocationPercent: 70,
 }
 
 const DEBOUNCE_MS = 300

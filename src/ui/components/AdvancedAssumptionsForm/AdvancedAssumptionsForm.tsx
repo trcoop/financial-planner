@@ -9,6 +9,12 @@ export interface AdvancedAssumptionValues {
   annualReturnPercent: number
   inflationPercent: number
   withdrawalRatePercent: number
+  /** Stress-test-only (FIN-56): the stock/bond mix `runMonteCarloTrials` blends its separate
+   * stock/bond draws by. Bonds = `100 - stocksAllocationPercent`, so this one field fully
+   * determines the `PortfolioAllocation` passed to Monte Carlo — see `App.tsx`. Does not
+   * affect the Tier 1 base projection, which still uses the single blended
+   * `annualReturnPercent`. */
+  stocksAllocationPercent: number
 }
 
 interface FieldSpec {
@@ -24,6 +30,7 @@ const LABELS: Record<keyof AdvancedAssumptionValues, string> = {
   annualReturnPercent: 'Investment return assumption',
   inflationPercent: 'Inflation rate',
   withdrawalRatePercent: 'Withdrawal rate in retirement',
+  stocksAllocationPercent: 'Stock allocation (vs. bonds)',
 }
 
 const FIELDS: FieldSpec[] = ADVANCED_FIELD_RANGES.map((range) => ({
@@ -46,6 +53,7 @@ export const DEFAULT_ADVANCED_VALUES: AdvancedAssumptionValues = {
   annualReturnPercent: 7,
   inflationPercent: 2.5,
   withdrawalRatePercent: 4,
+  stocksAllocationPercent: 70,
 }
 
 export function AdvancedAssumptionsForm({ values, onChange }: AdvancedAssumptionsFormProps) {

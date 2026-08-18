@@ -70,6 +70,18 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     expect(loadAssumptions()).toEqual({ core, advanced })
   })
 
+  it('round-trips the FIN-56 stock/bond allocation field', () => {
+    const fake = createFakeStorage()
+    vi.stubGlobal('localStorage', fake)
+
+    const core = DEFAULT_CORE_VALUES
+    const advanced = { ...DEFAULT_ADVANCED_VALUES, stocksAllocationPercent: 85 }
+    saveAssumptions(core, advanced)
+
+    expect(loadAssumptions()).toEqual({ core, advanced })
+    expect(loadAssumptions()?.advanced.stocksAllocationPercent).toBe(85)
+  })
+
   it('writes under the versioned STORAGE_KEY', () => {
     const fake = createFakeStorage()
     vi.stubGlobal('localStorage', fake)

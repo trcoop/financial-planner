@@ -36,21 +36,27 @@ function createFakeStorage(): Storage {
 let lastOrchestrator: {
   getState: () => { status: string }
   subscribe: (listener: (state: unknown) => void) => () => void
-  run: () => Promise<never>
+  run: (...args: unknown[]) => Promise<never>
   cancel: () => void
   emitComplete: () => void
+  runCalls: unknown[][]
 }
 
 vi.mock('./workers', () => ({
   createMonteCarloOrchestrator: () => {
     const listeners = new Set<(state: unknown) => void>()
+    const runCalls: unknown[][] = []
     const orchestrator = {
       getState: () => ({ status: 'idle' }),
       subscribe: (listener: (state: unknown) => void) => {
         listeners.add(listener)
         return () => listeners.delete(listener)
       },
-      run: () => new Promise<never>(() => {}),
+      run: (...args: unknown[]) => {
+        runCalls.push(args)
+        return new Promise<never>(() => {})
+      },
+      runCalls,
       cancel: () => {},
       emitComplete: () => {
         const result = {
@@ -326,6 +332,40 @@ describe('App persistence (FIN-43)', () => {
       expect(screen.getByLabelText('Current age')).toHaveValue('35')
       expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull()
       confirmSpy.mockRestore()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('App stock/bond allocation wiring (FIN-56)', () => {
+  beforeEach(() => mockMatchMedia(true))
+  afterEach(() => cleanup())
+
+  it('passes the 70/30 default allocation to the stress test on mount', () => {
+    render(<App />)
+
+    const [, allocationArg] = lastOrchestrator.runCalls[0]
+    expect(allocationArg).toEqual({ stocksPercent: 70, bondsPercent: 30 })
+  })
+
+  it('re-runs the stress test with the updated allocation after editing the Advanced assumptions field', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<App />)
+      await user.click(screen.getByText('▸ Advanced assumptions'))
+
+      const allocationInput = screen.getByLabelText('Stock allocation (vs. bonds)')
+      await user.clear(allocationInput)
+      await user.type(allocationInput, '80')
+      await vi.advanceTimersByTimeAsync(350)
+
+      await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
+      await user.click(screen.getByRole('button', { name: /run stress test/i }))
+
+      const lastCall = lastOrchestrator.runCalls.at(-1)
+      expect(lastCall?.[1]).toEqual({ stocksPercent: 80, bondsPercent: 20 })
     } finally {
       vi.useRealTimers()
     }
