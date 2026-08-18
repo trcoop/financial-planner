@@ -152,9 +152,12 @@ Run this for every ticket, in order:
    no production code without a failing test first.
 4. **Peer review loop** — see below. Author persona and a cold reviewer
    persona, bounded rounds, until `READY` or the cap.
-5. **Verify locally, every time.** This repo has **no CI** — `gh pr checks`
-   reports nothing. `npm test && npm run build && npm run lint` is the entire
-   gate, and you are it. Never merge on "the tests passed earlier."
+5. **Verify locally, every time.** This repo has CI (`ci.yml` runs lint/test/
+   build as required checks; `auto-merge.yml` merges once a PR is approved
+   and CI is green) — but also run `npm test && npm run build && npm run
+   lint` locally before merging. Never merge on "the tests passed earlier";
+   `main` moves between PRs in a wave, so a green run from before a sibling
+   ticket merged doesn't prove anything about the branch now.
 6. **Squash-merge** — `gh pr merge <n> --squash`. One commit per ticket on
    `main`. Delete the branch, local and remote.
 7. **Linear → Done**, tick the acceptance criteria, and comment the outcome
@@ -259,6 +262,6 @@ where the next implementer will read it.
 At the end of a run — or at each checkpoint, if that's the agreed autonomy
 level — report: what merged (ticket, commit, one line on what it does), what
 the reviews found that mattered, what's now unblocked, what needs the user,
-and anything you noticed but didn't act on. That last category is where "this
-repo has no CI" belongs: flag it, name why it matters now, don't
-unilaterally add it to the scope of the run.
+and anything you noticed but didn't act on. That last category is where a
+stale assumption about repo tooling belongs: flag it, name why it matters
+now, don't unilaterally add it to the scope of the run.
