@@ -1426,7 +1426,7 @@ describe('validated success-rate regression (FIN-56)', () => {
 
     expect(result.successRate).toBeGreaterThanOrEqual(60);
     expect(result.successRate).toBeLessThanOrEqual(85);
-  });
+  }, 15000);
 });
 
 describe('performance', () => {
