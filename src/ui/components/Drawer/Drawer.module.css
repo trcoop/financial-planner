@@ -1,67 +1,134 @@
 .drawer {
   display: flex;
-  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  /* Flex items stack by z-index (not DOM order) once one has a non-auto value, so this
+   * keeps .drawer — and .tab, the persistent reopen affordance below — painted above
+   * the sibling .main pane instead of being covered by its opaque cards. */
+  position: relative;
+  z-index: 1;
+}
+
+/* Always-visible strip, never part of .panel's slide animation below — the one thing
+ * that stays put (and clickable) regardless of open/closed state. */
+.tab {
+  cursor: pointer;
+  border: none;
   border-right: 1px solid var(--color-border-subtle);
   background: var(--color-bg);
-  padding: var(--space-5);
-  gap: var(--space-4);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.tab:hover {
+  color: var(--color-primary-hover);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.icon {
+  transition: transform 0.2s ease;
+}
+
+/* Chevron points "inward" (collapse direction) when open, flips to point "outward"
+ * (expand direction) once collapsed — same glyph, no separate open/closed markup. */
+.drawer[data-open='false'] .icon {
+  transform: rotate(180deg);
+}
+
+/* The sliding pane itself. Width is a fixed constant — never animated — so its
+ * contents never visibly compress/reflow during the transition (that was the bug
+ * with the previous width: 280px -> 0 approach). Instead margin-left carries the
+ * pane fully off-canvas as a solid unit; because flex accounts for margin in an
+ * item's outer size, this simultaneously collapses the space it occupied in .body's
+ * layout, so no separate width/overlay bookkeeping is needed to avoid a gap. */
+.panel {
+  width: 280px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-right: 1px solid var(--color-border-subtle);
+  background: var(--color-bg);
+  transition: margin-left 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.drawer[data-open='false'] .panel {
+  /* Needs to clear more than .panel's own 280px: .tab's 28px it sits behind, plus
+   * .body's --space-6 (32px) left padding .drawer itself sits inset by — otherwise
+   * the right edge lands inside that padding gutter, still on-screen, and a sliver
+   * of .content peeks out. The total (340px) overshoots what .body's flex layout
+   * needs to reclaim the space (280px), but flex clamps an item's negative outer
+   * size to 0, so the extra distance only affects .panel's own paint position, not
+   * how far .main shifts over. */
+  margin-left: -340px;
+  border-right: none;
 }
 
 .header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  padding: var(--space-5) var(--space-5) 0;
+  flex-shrink: 0;
 }
 
 .title {
   font-size: var(--font-size-sm);
   font-weight: 600;
-}
-
-.toggle {
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  color: var(--color-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-sm);
-  padding: 0;
-}
-
-.toggle:hover {
-  color: var(--color-primary-hover);
-}
-
-.toggle:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+  white-space: nowrap;
 }
 
 .content {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
-/* Mobile (< 960px): accordion above content, matches CollapsibleSection. Divider
-   moves from the right edge (desktop, push-content) to the bottom edge (mobile,
-   stacked above content) since there's no sibling content to its side. */
+/* Mobile (< 960px): accordion above content, matches CollapsibleSection. The pane is
+   already full-width and stacked above the main content, so it slides off-canvas
+   upward-adjacent (its own full width) the same way, just sized to 100% instead of
+   the fixed desktop column width. */
 @media (max-width: 959px) {
   .drawer {
     width: 100%;
+  }
+
+  .panel {
+    /* flex: 1 (not width: 100%) so .panel fills what's left of .drawer's row after
+     * .tab's 28px, instead of overflowing it by 28px. */
+    flex: 1;
+    min-width: 0;
     border-right: none;
     border-bottom: 1px solid var(--color-border-subtle);
+  }
+
+  .drawer[data-open='false'] .panel {
+    /* Percentage margins resolve against the containing block's (.drawer's) width,
+     * not .panel's own — so -100% here shifts by .drawer's full width, clearing
+     * .tab's 28px the same way -340px's extra 60px does for the fixed-width desktop
+     * case above. Still need to separately clear .body's --space-4 (16px) left
+     * padding on mobile so the right edge doesn't land in that on-screen gutter. */
+    margin-left: calc(-100% - 16px);
+    border-bottom: none;
   }
 }
 
 /* Desktop (>= 960px): push-content layout alongside sibling content. */
 @media (min-width: 960px) {
   .drawer {
-    width: 280px;
     flex-shrink: 0;
-  }
-
-  .drawer[data-open='false'] {
-    width: auto;
   }
 }
