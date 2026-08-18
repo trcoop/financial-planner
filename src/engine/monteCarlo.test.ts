@@ -254,15 +254,15 @@ describe('gbmPeriodReturn', () => {
   });
 
   /**
-   * Pins the OPEN DECISION documented on `gbmPeriodReturn`: `annualReturnRate` is fed in as
-   * GBM log-drift, so the *expected* return it produces is `exp(rate) - 1`, not `rate`. A
-   * plan that says 7% therefore has a 7.2508% expected return, and Story 1's deterministic
-   * tier — which applies the same field as a plain arithmetic rate — sits below it.
-   *
-   * This test exists to make the convention explicit and to force any switch to
-   * `mu = ln(1 + rate)` to be a deliberate edit here rather than a silent change in results.
+   * `gbmPeriodReturn` itself always takes `meanReturn` as GBM log-drift `mu` and produces an
+   * expected return of `exp(mu) - 1` — that part of the formula is correct GBM and unchanged.
+   * The mean-return convention fix (FIN-17, resolved 2026-08-18) lives at the call site in
+   * `runMonteCarloTrial`, which now converts the plan's arithmetic `annualReturnRate` into
+   * this function's `mu` via `ln(1 + rate)` before calling it. This test pins that this
+   * function's own contract stays log-drift-in, so that conversion stays visible at the call
+   * site rather than getting silently duplicated or dropped here.
    */
-  it('treats annualReturnRate as GBM log-drift, so the expected return is exp(rate) - 1', () => {
+  it('takes meanReturn as GBM log-drift, so the expected return is exp(mu) - 1', () => {
     const expectedReturn = gbmPeriodReturn(0.07, 0, 0);
 
     expect(expectedReturn).toBeCloseTo(Math.exp(0.07) - 1, 12);
@@ -1054,8 +1054,13 @@ describe('accuracy against deterministic reference figures', () => {
   const DRAWDOWN_PATHS = 32_000;
   const ACCURACY_TOLERANCE = 0.02;
 
-  /** The arithmetic mean per-period return implied by a 7% GBM drift. */
-  const meanPeriodReturn = (plan: PlanAssumptions): number => Math.exp(plan.annualReturnRate) - 1;
+  /**
+   * The arithmetic mean per-period return the simulation should produce. `runMonteCarloTrial`
+   * converts `annualReturnRate` to log-drift via `ln(1 + rate)` before feeding it to
+   * `gbmPeriodReturn`, so `E[R]` comes back out to exactly `annualReturnRate` (FIN-17 mean
+   * convention, resolved 2026-08-18).
+   */
+  const meanPeriodReturn = (plan: PlanAssumptions): number => plan.annualReturnRate;
 
   const periodCount = (plan: PlanAssumptions): number =>
     plan.planningHorizonEndAge - plan.currentAge + 1;
