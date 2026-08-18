@@ -150,8 +150,16 @@ Run this for every ticket, in order:
    GitHub integration auto-links).
 3. **Implement under TDD** — the `test-driven-development` skill's Iron Law:
    no production code without a failing test first.
-4. **Peer review loop** — see below. Author persona and a cold reviewer
-   persona, bounded rounds, until `READY` or the cap.
+4. **Peer review loop** — see below. **Actually invoke the `peer-review-loop`
+   skill; don't approximate it.** A single ad-hoc read-through of the diff
+   with a review comment attached is not this step, even if it feels
+   equivalent — the rubric, the genuinely cold reviewer persona, and the
+   mutation checks are what make a review catch things a green suite and an
+   eyeball pass miss. Author persona and a cold reviewer persona, bounded
+   rounds, until `READY` or the cap. Only once the loop reaches `READY`
+   should the bot review be submitted — and that approval must reflect what
+   the loop actually found (rubric checks, mutation results), not a rubber
+   stamp.
 5. **Verify locally, every time.** This repo has CI (`ci.yml` runs lint/test/
    build as required checks; `auto-merge.yml` merges once a PR is approved
    and CI is green) — but also run `npm test && npm run build && npm run
