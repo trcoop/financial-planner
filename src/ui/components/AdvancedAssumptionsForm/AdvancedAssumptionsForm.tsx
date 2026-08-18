@@ -39,6 +39,15 @@ interface AdvancedAssumptionsFormProps {
   onChange: (values: AdvancedAssumptionValues) => void
 }
 
+/** Advanced-assumption defaults per FIN-10's spec. Planning horizon is a call-site default
+ * per FIN-19 — not user input for the MVP. */
+export const DEFAULT_ADVANCED_VALUES: AdvancedAssumptionValues = {
+  annualRaisePercent: 3,
+  annualReturnPercent: 7,
+  inflationPercent: 2.5,
+  withdrawalRatePercent: 4,
+}
+
 export function AdvancedAssumptionsForm({ values, onChange }: AdvancedAssumptionsFormProps) {
   return (
     <CollapsibleSection summary="▸ Advanced assumptions">

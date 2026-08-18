@@ -3,10 +3,10 @@ import {
   AdvancedAssumptionsForm,
   Card,
   CoreInputsForm,
+  DEFAULT_ADVANCED_VALUES,
+  DEFAULT_CORE_VALUES,
   StatTile,
   StressTestSection,
-  type AdvancedAssumptionValues,
-  type CoreInputValues,
 } from './ui/components'
 import { TopBar } from './ui/components/TopBar/TopBar'
 import { TabBar, type TabBarTab } from './ui/components/TabBar/TabBar'
@@ -17,23 +17,6 @@ import { YearDetailPanel } from './ui/components/YearDetailPanel/YearDetailPanel
 import { useProjectionState } from './ui/hooks/useProjectionState'
 import { formatCurrency, formatPercent } from './ui/utils/format'
 import './App.css'
-
-const DEFAULT_CORE_VALUES: CoreInputValues = {
-  currentAge: 35,
-  retirementAge: 67,
-  initialBalance: 250000,
-  currentAnnualIncome: 85000,
-  annualContributionRatePercent: 15,
-}
-
-/** Advanced-assumption defaults per FIN-10's spec. Planning horizon is a call-site default
- * per FIN-19 — not user input for the MVP. */
-const DEFAULT_ADVANCED_VALUES: AdvancedAssumptionValues = {
-  annualRaisePercent: 3,
-  annualReturnPercent: 7,
-  inflationPercent: 2.5,
-  withdrawalRatePercent: 4,
-}
 
 /** Per FIN-9's notes: form updates are debounced ~300ms before triggering recalculation. */
 const RECALCULATION_DEBOUNCE_MS = 300
