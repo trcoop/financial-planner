@@ -106,4 +106,16 @@ describe('Drawer', () => {
     const region = screen.getByRole('region', { name: 'Plan inputs' })
     expect(region).toHaveTextContent('Investment return')
   })
+
+  it('wires the toggle to the content region via aria-controls', () => {
+    mockMatchMedia(true)
+    render(
+      <Drawer label="Plan inputs">
+        <p>Investment return</p>
+      </Drawer>,
+    )
+    const toggle = screen.getByRole('button', { name: /collapse/i })
+    const region = screen.getByRole('region', { name: 'Plan inputs' })
+    expect(toggle).toHaveAttribute('aria-controls', region.id)
+  })
 })
