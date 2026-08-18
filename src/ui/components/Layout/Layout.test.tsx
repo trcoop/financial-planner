@@ -1,15 +1,9 @@
 // This file reads sibling source files with Node's fs to check breakpoint
 // consistency across components — see the describe block below. @types/node
-// isn't in this browser-app's tsconfig (`types: ["vite/client"]` only, per
-// CLAUDE.md's "zero network calls" browser-only stack), so the Node builtins
-// below are untyped here; each import is suppressed individually rather than
-// disabling type-checking for the whole file (which would also cover the
-// render tests above).
-// @ts-expect-error -- no @types/node in this browser app's tsconfig; see note above
+// is available project-wide (see tsconfig.app.json's "types"), so the Node
+// builtins below type-check normally.
 import { readFileSync } from 'node:fs'
-// @ts-expect-error -- no @types/node in this browser app's tsconfig; see note above
 import { dirname, join } from 'node:path'
-// @ts-expect-error -- no @types/node in this browser app's tsconfig; see note above
 import { fileURLToPath } from 'node:url'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
