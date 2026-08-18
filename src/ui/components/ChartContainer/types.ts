@@ -21,3 +21,15 @@ export interface ChartRow {
   /** Balance at the end of the year. */
   endingBalance: number
 }
+
+/** One year's Monte Carlo 10th/90th percentile band, keyed by the same `year` a `ChartRow`
+ * uses. A parallel structure rather than fields bolted onto `ChartRow`, because band data is
+ * optional and arrives later (after a stress test completes) than `rows` does — keeping it
+ * separate avoids threading `p10`/`p90: number | undefined` through every `ChartRow` consumer
+ * that has nothing to do with Monte Carlo (e.g. `YearDetailPanel`). No `p50` field — see ERD
+ * §2.1: this story does not plot a median line. */
+export interface ChartBandRow {
+  year: number
+  p10: number
+  p90: number
+}
