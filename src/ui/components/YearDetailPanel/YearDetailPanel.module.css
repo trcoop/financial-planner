@@ -33,6 +33,12 @@
   color: var(--color-text);
 }
 
+@media (max-width: 960px) {
+  .headlineValue {
+    font-size: 1.25rem;
+  }
+}
+
 .list {
   margin: 0;
   display: flex;
