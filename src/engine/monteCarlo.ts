@@ -402,7 +402,7 @@ export const runMonteCarloTrial = (
 export const DEFAULT_VOLATILITY_ASSUMPTIONS: VolatilityAssumptions = { stocks: 0.15, bonds: 0.06 };
 
 /** Paths per run. Industry standard, and enough resolution for 10th/50th/90th percentiles. */
-export const DEFAULT_SIMULATION_COUNT = 1000;
+export const DEFAULT_SIMULATION_COUNT = 5000;
 
 /** Knobs that are not part of the product contract: test seams and the reproducibility seed. */
 export interface MonteCarloOptions {
