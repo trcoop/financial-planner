@@ -1,7 +1,15 @@
-// @ts-nocheck -- uses Node's fs to read source files for a cross-file breakpoint
-// consistency check; @types/node isn't included in this browser-app's tsconfig.
+// This file reads sibling source files with Node's fs to check breakpoint
+// consistency across components — see the describe block below. @types/node
+// isn't in this browser-app's tsconfig (`types: ["vite/client"]` only, per
+// CLAUDE.md's "zero network calls" browser-only stack), so the Node builtins
+// below are untyped here; each import is suppressed individually rather than
+// disabling type-checking for the whole file (which would also cover the
+// render tests above).
+// @ts-expect-error -- no @types/node in this browser app's tsconfig; see note above
 import { readFileSync } from 'node:fs'
+// @ts-expect-error -- no @types/node in this browser app's tsconfig; see note above
 import { dirname, join } from 'node:path'
+// @ts-expect-error -- no @types/node in this browser app's tsconfig; see note above
 import { fileURLToPath } from 'node:url'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -24,40 +32,48 @@ describe('Layout', () => {
 })
 
 describe('responsive breakpoint consistency (FIN-32)', () => {
-  // Layout, TabBar, and Drawer each switch to their mobile layout via a separate
-  // media query. Before FIN-32 these disagreed (900px / 959px / 960px), leaving an
-  // untested 901-959px zone where the page was single-column (mobile Layout) but
-  // TabBar and Drawer still behaved as if desktop. Assert all three agree on a
-  // single 960px breakpoint, with no gap across the previously-inconsistent range.
-  it('switches Layout and TabBar to mobile at the same width Drawer treats as desktop (960px)', () => {
+  // Layout, TabBar, TopBar, StatTile, and Drawer each switch to their mobile/
+  // compact layout via a separate media query. Before FIN-32 these disagreed
+  // (Layout at 900px; TopBar and StatTile at 960px, which as a max-width
+  // overlaps Drawer's min-width:960px desktop query at exactly 960px; TabBar
+  // already correct at 959px), leaving an untested 901-959px zone where the
+  // page was single-column (mobile Layout) but other components still
+  // behaved as if desktop. Assert all four CSS breakpoints agree with
+  // Drawer's canonical 960px, with no gap or overlap.
+  it('switches Layout, TabBar, TopBar, and StatTile to mobile at the same width Drawer treats as desktop (960px)', () => {
     const dir = dirname(fileURLToPath(import.meta.url))
     const layoutCss = readFileSync(join(dir, 'Layout.module.css'), 'utf-8')
     const tabBarCss = readFileSync(join(dir, '../TabBar/TabBar.module.css'), 'utf-8')
+    const topBarCss = readFileSync(join(dir, '../TopBar/TopBar.module.css'), 'utf-8')
+    const statTileCss = readFileSync(join(dir, '../StatTile/StatTile.module.css'), 'utf-8')
     const drawerTsx = readFileSync(join(dir, '../Drawer/Drawer.tsx'), 'utf-8')
 
-    const layoutMatch = layoutCss.match(/max-width:\s*(\d+)px/)
-    const tabBarMatch = tabBarCss.match(/max-width:\s*(\d+)px/)
+    const mobileMaxQueries = {
+      Layout: layoutCss.match(/max-width:\s*(\d+)px/),
+      TabBar: tabBarCss.match(/max-width:\s*(\d+)px/),
+      TopBar: topBarCss.match(/max-width:\s*(\d+)px/),
+      StatTile: statTileCss.match(/max-width:\s*(\d+)px/),
+    }
     const drawerMatch = drawerTsx.match(/min-width:\s*(\d+)px/)
-
-    expect(layoutMatch, 'Layout.module.css should have a max-width media query').not.toBeNull()
-    expect(tabBarMatch, 'TabBar.module.css should have a max-width media query').not.toBeNull()
     expect(drawerMatch, "Drawer.tsx's DESKTOP_QUERY should have a min-width media query").not.toBeNull()
-
-    const layoutMobileMax = Number(layoutMatch![1])
-    const tabBarMobileMax = Number(tabBarMatch![1])
     const drawerDesktopMin = Number(drawerMatch![1])
-
     expect(drawerDesktopMin).toBe(960)
-    // The mobile max-width query must be exactly one pixel below the desktop
-    // min-width query, so every width maps to exactly one regime with no gap.
-    expect(layoutMobileMax).toBe(drawerDesktopMin - 1)
-    expect(tabBarMobileMax).toBe(drawerDesktopMin - 1)
+
+    for (const [name, match] of Object.entries(mobileMaxQueries)) {
+      expect(match, `${name}'s stylesheet should have a max-width media query`).not.toBeNull()
+      // The mobile max-width query must be exactly one pixel below the desktop
+      // min-width query, so every width maps to exactly one regime with no gap.
+      expect(Number(match![1]), `${name}'s max-width should be one below Drawer's min-width`).toBe(
+        drawerDesktopMin - 1,
+      )
+    }
 
     // Pin the specific 901-959px zone that was previously inconsistent: every
-    // width in it must be mobile for Layout and TabBar, and sub-desktop for Drawer.
+    // width in it must be mobile in all four stylesheets, and sub-desktop for Drawer.
     for (const width of [901, 930, 959]) {
-      expect(width).toBeLessThanOrEqual(layoutMobileMax)
-      expect(width).toBeLessThanOrEqual(tabBarMobileMax)
+      for (const [name, match] of Object.entries(mobileMaxQueries)) {
+        expect(width, `${name} should treat ${width}px as mobile`).toBeLessThanOrEqual(Number(match![1]))
+      }
       expect(width).toBeLessThan(drawerDesktopMin)
     }
   })
