@@ -1,4 +1,4 @@
-import { CardStub as Card } from '../ChartContainer/CardStub'
+import { Card } from '../Card/Card'
 import type { ChartRow } from '../ChartContainer/types'
 import styles from './YearDetailPanel.module.css'
 

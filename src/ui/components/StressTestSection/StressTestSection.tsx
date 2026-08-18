@@ -22,9 +22,20 @@ interface StressTestSectionProps {
    * in this codebase. Defaults to a fresh real orchestrator per mounted component.
    */
   orchestrator?: MonteCarloOrchestrator
+  /**
+   * FIN-26 integration seam: called whenever the computed success rate changes (including
+   * back to `null`, e.g. on a fresh orchestrator), so a parent (`App.tsx`) can surface it in
+   * a `StatTile` without this component needing to know anything about tabs/layout. Optional
+   * and additive — omitting it changes nothing about StressTestSection's own rendering.
+   */
+  onSuccessRateChange?: (successRate: number | null) => void
 }
 
-export function StressTestSection({ assumptions, orchestrator: injectedOrchestrator }: StressTestSectionProps) {
+export function StressTestSection({
+  assumptions,
+  orchestrator: injectedOrchestrator,
+  onSuccessRateChange,
+}: StressTestSectionProps) {
   const orchestrator = useMemo(() => injectedOrchestrator ?? createMonteCarloOrchestrator(), [injectedOrchestrator])
   const [state, setState] = useState<StressTestState>(() => orchestrator.getState())
   const [successRate, setSuccessRate] = useState<number | null>(null)
@@ -40,6 +51,11 @@ export function StressTestSection({ assumptions, orchestrator: injectedOrchestra
       setSuccessRate(state.result.successRate)
     }
   }, [state])
+
+  useEffect(() => {
+    onSuccessRateChange?.(successRate)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [successRate])
 
   // Cancel-on-input-change (FIN-14 AC): keyed on `assumptions` changing, but must not fire on
   // the initial mount — there is nothing in flight to cancel yet.

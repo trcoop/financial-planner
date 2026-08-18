@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CardStub as Card } from './CardStub'
+import { Card } from '../Card/Card'
 import styles from './ChartContainer.module.css'
 import type { ChartRow } from './types'
 
