@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_VOLATILITY_ASSUMPTIONS } from '../../../engine'
-import type { PlanAssumptions, PortfolioAllocation } from '../../../engine'
+import type { PercentilePaths, PlanAssumptions, PortfolioAllocation } from '../../../engine'
 import { createMonteCarloOrchestrator } from '../../../workers'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
 import { formatPercent } from '../../utils/format'
@@ -29,16 +29,25 @@ interface StressTestSectionProps {
    * and additive — omitting it changes nothing about StressTestSection's own rendering.
    */
   onSuccessRateChange?: (successRate: number | null) => void
+  /**
+   * FIN-44 integration seam: called whenever the computed Monte Carlo percentile fan changes
+   * (including back to `null`, e.g. on a fresh orchestrator), mirroring `onSuccessRateChange`
+   * exactly — same two-effect pattern, same null-only-at-init behavior. A parent (`App.tsx`)
+   * maps this into `ChartContainer`'s `band` prop. Optional and additive.
+   */
+  onPercentilesChange?: (percentiles: PercentilePaths | null) => void
 }
 
 export function StressTestSection({
   assumptions,
   orchestrator: injectedOrchestrator,
   onSuccessRateChange,
+  onPercentilesChange,
 }: StressTestSectionProps) {
   const orchestrator = useMemo(() => injectedOrchestrator ?? createMonteCarloOrchestrator(), [injectedOrchestrator])
   const [state, setState] = useState<StressTestState>(() => orchestrator.getState())
   const [successRate, setSuccessRate] = useState<number | null>(null)
+  const [percentiles, setPercentiles] = useState<PercentilePaths | null>(null)
   // Tracks the last `assumptions` the cancel effect has seen, so it can tell "assumptions
   // actually changed" from "this effect ran again" (e.g. StrictMode's dev-only double-invoke
   // of effects on mount). A boolean "is this the first run" ref breaks under double-invoke: it
@@ -54,6 +63,7 @@ export function StressTestSection({
   useEffect(() => {
     if (state.status === 'complete') {
       setSuccessRate(state.result.successRate)
+      setPercentiles(state.result.percentiles)
     }
   }, [state])
 
@@ -61,6 +71,11 @@ export function StressTestSection({
     onSuccessRateChange?.(successRate)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [successRate])
+
+  useEffect(() => {
+    onPercentilesChange?.(percentiles)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [percentiles])
 
   // Cancel-on-input-change (FIN-14 AC): keyed on `assumptions` changing, but must not fire on
   // the initial mount — there is nothing in flight to cancel yet.
