@@ -1,0 +1,69 @@
+.card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  flex: 1 1 480px;
+}
+
+.figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  /* Fixed aspect ratio, per the design spec — 21:9 keeps the plot readable without
+     ballooning height on wide desktop viewports. */
+  aspect-ratio: 21 / 9;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.plot {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-1);
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.bar,
+.barSelected {
+  flex: 1 1 0;
+  min-width: 2px;
+  border: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* Derived from --color-primary rather than a new hardcoded hex, per the design spec's
+   "translated to theme.css tokens" instruction — same color as the selected bar, at the
+   mockup's ~0.22 alpha for the unselected state. */
+.bar {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.bar:hover {
+  background: color-mix(in srgb, var(--color-primary) 34%, transparent);
+}
+
+.barSelected {
+  background: var(--color-primary);
+}
+
+.bar:focus-visible,
+.barSelected:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
