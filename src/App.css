@@ -1,43 +1,24 @@
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
 }
 
+/* Flex (not grid) so the Drawer's column can animate its own width down to 0 for
+ * the off-canvas collapse (FIN-46) — a grid track can't be transitioned per-child.
+ * .body is capped to the remaining viewport height (flex: 1 inside a 100vh .shell)
+ * so a tall Drawer scrolls internally instead of growing the whole page. */
 .body {
-  display: grid;
-  grid-template-columns: minmax(240px, 280px) 1fr;
+  display: flex;
+  flex: 1;
+  min-height: 0;
   gap: var(--space-6);
   padding: var(--space-6);
-  align-items: start;
-}
-
-/* Desktop: stretch both grid columns to match the taller one's height, then let the
- * chart row (not the stat tiles) grow to absorb the extra space — this is what brings
- * the chart/year-detail row's bottom edge down to meet the Drawer's bottom edge. */
-@media (min-width: 960px) {
-  .body {
-    align-items: stretch;
-  }
-
-  .main {
-    height: 100%;
-  }
-
-  .tabPanel {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .chartRow {
-    flex: 1;
-    min-height: 0;
-  }
 }
 
 @media (max-width: 959px) {
   .body {
-    grid-template-columns: 1fr;
+    flex-direction: column;
     padding: var(--space-4);
   }
 }
@@ -47,6 +28,21 @@
   flex-direction: column;
   gap: var(--space-5);
   min-width: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (min-width: 960px) {
+  .tabPanel {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chartRow {
+    flex: 1;
+    min-height: 0;
+  }
 }
 
 /* Each tab's panel is the actual flex child stacking statTiles/chartRow — .main's own

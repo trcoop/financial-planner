@@ -30,6 +30,9 @@ export function Drawer({ label, children }: DrawerProps) {
     <div className={styles.drawer} data-open={isOpen}>
       <div className={styles.header}>
         {isOpen && <span className={styles.title}>{label}</span>}
+        {/* Stays outside the width-animated box (see .drawer[data-open='false'] in the
+         * CSS module) so it remains visible as a persistent tab once the pane has
+         * slid off-canvas — it's the only way back in. */}
         <button
           type="button"
           className={styles.toggle}
@@ -37,7 +40,7 @@ export function Drawer({ label, children }: DrawerProps) {
           aria-controls={contentId}
           onClick={() => setIsOpen((open) => !open)}
         >
-          {isOpen ? 'Collapse ◂' : 'Expand ▾'}
+          {isOpen ? 'Collapse ◂' : 'Expand ▸'}
         </button>
       </div>
       <section

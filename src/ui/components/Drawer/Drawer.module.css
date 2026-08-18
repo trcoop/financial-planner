@@ -5,12 +5,26 @@
   background: var(--color-bg);
   padding: var(--space-5);
   gap: var(--space-4);
+  min-height: 0;
+  /* Flex items stack by z-index (not DOM order) once one has a non-auto value, so this
+   * keeps .drawer — and the toggle button overflowing its collapsed width: 0 box, see
+   * .header below — painted above the sibling .main pane instead of being covered by
+   * its opaque cards once .main's content starts at the same x-position. */
+  position: relative;
+  z-index: 1;
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-2);
+  /* Deliberately not clipped by .drawer's animated width (no overflow: hidden here) —
+   * when the pane collapses to width: 0 below, the title disappears (unmounted) but
+   * this row's remaining child, the toggle button, keeps its own intrinsic width and
+   * stays rendered past the collapsed box's edge as the persistent reopen affordance. */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .title {
@@ -26,6 +40,7 @@
   font-family: var(--font-family);
   font-size: var(--font-size-sm);
   padding: 0;
+  flex-shrink: 0;
 }
 
 .toggle:hover {
@@ -41,11 +56,16 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* Mobile (< 960px): accordion above content, matches CollapsibleSection. Divider
    moves from the right edge (desktop, push-content) to the bottom edge (mobile,
-   stacked above content) since there's no sibling content to its side. */
+   stacked above content) since there's no sibling content to its side. No
+   off-canvas slide here — the pane is already full-width and stacked above the
+   main content, so a horizontal collapse wouldn't read as "off-canvas". */
 @media (max-width: 959px) {
   .drawer {
     width: 100%;
@@ -54,14 +74,23 @@
   }
 }
 
-/* Desktop (>= 960px): push-content layout alongside sibling content. */
+/* Desktop (>= 960px): push-content layout alongside sibling content, with the
+ * collapsed state sliding the whole pane off-canvas (to width: 0) rather than
+ * shrinking to a thin rail — .header's toggle button is what stays visible as
+ * the way back in (see .header above). */
 @media (min-width: 960px) {
   .drawer {
     width: 280px;
     flex-shrink: 0;
+    /* No overflow: hidden — .header's toggle button (the only header child left once
+     * .title unmounts on collapse) must keep rendering past the box's shrunk edge
+     * rather than being clipped with it; see .header's comment above. */
+    transition: width 0.2s ease, padding 0.2s ease;
   }
 
   .drawer[data-open='false'] {
-    width: auto;
+    width: 0;
+    padding-left: 0;
+    padding-right: 0;
   }
 }
