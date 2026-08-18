@@ -77,29 +77,22 @@ const PERIOD_YEARS = 1;
  * (`PlanAssumptions.annualReturnRate`) — Story 2 does not split mean return by asset class,
  * only volatility.
  *
- * **OPEN DECISION (FIN-17 review, 2026-08-16) — is `annualReturnRate` the log-drift or the
- * expected return?** This implementation follows ERD §5's formula literally: the user's rate
- * goes into the exponent as `mu`. But under GBM `E[R] = exp(mu) - 1`, so a plan that says
- * "7% return" actually has an expected return of 7.2508%, and ERD §5 simultaneously calls
- * `mu` "the single blended mean return" — which it is not. Two consequences:
+ * **RESOLVED (2026-08-18, Travis) — `annualReturnRate` is the expected (arithmetic) return,
+ * not the GBM log-drift.** ERD §5's formula used the user's rate directly as `mu` in the
+ * exponent, but under GBM `E[R] = exp(mu) - 1`, so a plan that says "7% return" actually had
+ * an expected return of 7.2508% — diverging further from Story 1's plain-arithmetic Tier 1
+ * line at longer horizons (~7.3% at 30 years, ~16.7% at 66, lump-sum case).
  *
- * 1. Story 1's deterministic projection applies `annualReturnRate` as a plain arithmetic
- *    rate (ERD §5, `investmentReturn = beginningBalance x annualReturnRate`), so the Monte
- *    Carlo *mean* sits ~7.3% above the Tier 1 line at 30 years and ~16.7% at 66 years,
- *    purely from this interpretation. Story 3 plots both on one chart. (Those are growth
- *    factor ratios, `(exp(0.07) / 1.07)^n - 1`, i.e. the lump-sum case; a plan with
- *    contributions and withdrawals diverges by a different amount — 4.3% over the 25-year
- *    accumulation scenario, 21.9% over a 66-year full lifecycle.)
- * 2. An external calculator asked for "7%" produces the 7% projection, which is ~6.0% away
- *    from this engine's mean over a 25-year horizon — outside the ticket's own 2% band.
+ * This function itself still takes `meanReturn` as the log-drift `mu` — that is the correct
+ * GBM formula and stays as-is. The conversion happens at the call site
+ * (`runMonteCarloTrial`'s `drawPortfolioReturn(Math.log(1 + plan.annualReturnRate), ...)`),
+ * which turns the plan's arithmetic-mean input into the log-drift this function expects, so
+ * `E[R]` over one period comes back out to exactly `plan.annualReturnRate`.
  *
- * The one-line alternative is `mu = Math.log(1 + annualReturnRate)`, which makes `E[R]`
- * exactly the user's 7% and reconciles both tiers. That is a product decision about what the
- * "Investment return" input means, not an implementation detail, so it is deliberately left
- * as the ERD specifies rather than changed unilaterally here. Needs Travis's call before
- * FIN-19 draws Tier 1 and Tier 2 together. The test
- * `treats annualReturnRate as GBM log-drift, so the expected return is exp(rate) - 1` pins
- * the current convention, so switching is a deliberate edit rather than a silent drift.
+ * Rationale: this matches standard Monte Carlo retirement-planning practice — feed the
+ * simulation the arithmetic mean return so the simulation's own randomness produces the
+ * volatility drag, rather than pre-baking a geometric mean into the input and double-counting
+ * that drag (see Kitces, "Volatility Drag: How Variance Drains Investment Returns").
  */
 export const gbmPeriodReturn = (meanReturn: number, volatility: number, deviate: number): number =>
   Math.exp(
@@ -325,8 +318,10 @@ export const runMonteCarloTrial = (
     state = step(state, {
       events,
       assumptions: plan,
+      // Convert the plan's arithmetic mean return into GBM log-drift so E[R] matches the
+      // user's input exactly (see the resolved OPEN DECISION on `gbmPeriodReturn` above).
       returnForPeriod: drawPortfolioReturn(
-        plan.annualReturnRate,
+        Math.log(1 + plan.annualReturnRate),
         config.allocation,
         config.volatility,
         draw,
