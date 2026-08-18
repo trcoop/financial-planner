@@ -1,6 +1,6 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlanAssumptions } from '../../../engine'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
 import { StressTestSection } from './StressTestSection'
@@ -165,5 +165,58 @@ describe('StressTestSection', () => {
 
     await user.click(screen.getByRole('button', { name: 'Run stress test' }))
     expect(orchestrator.runCalls).toHaveLength(2)
+  })
+
+  it('calls onPercentilesChange with null before any run completes', () => {
+    const orchestrator = new FakeOrchestrator()
+    const onPercentilesChange = vi.fn()
+    render(
+      <StressTestSection
+        assumptions={baseAssumptions}
+        orchestrator={orchestrator}
+        onPercentilesChange={onPercentilesChange}
+      />,
+    )
+
+    expect(onPercentilesChange).toHaveBeenCalledWith(null)
+  })
+
+  it('calls onPercentilesChange with the completed run\'s percentiles', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const onPercentilesChange = vi.fn()
+    render(
+      <StressTestSection
+        assumptions={baseAssumptions}
+        orchestrator={orchestrator}
+        onPercentilesChange={onPercentilesChange}
+      />,
+    )
+
+    act(() => orchestrator.resolveRun())
+
+    await waitFor(() => expect(onPercentilesChange).toHaveBeenLastCalledWith(fakeResult.percentiles))
+  })
+
+  it('does not clear percentiles when a subsequent run is cancelled', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const onPercentilesChange = vi.fn()
+    render(
+      <StressTestSection
+        assumptions={baseAssumptions}
+        orchestrator={orchestrator}
+        onPercentilesChange={onPercentilesChange}
+      />,
+    )
+
+    act(() => orchestrator.resolveRun())
+    await waitFor(() => expect(onPercentilesChange).toHaveBeenLastCalledWith(fakeResult.percentiles))
+
+    onPercentilesChange.mockClear()
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Run stress test' }))
+    act(() => orchestrator.cancel())
+
+    await waitFor(() => expect(screen.getByText(/cancelled.*click to re-run/i)).toBeInTheDocument())
+    expect(onPercentilesChange).not.toHaveBeenCalled()
   })
 })
