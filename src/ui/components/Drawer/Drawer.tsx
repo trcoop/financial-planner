@@ -28,29 +28,50 @@ export function Drawer({ label, children }: DrawerProps) {
 
   return (
     <div className={styles.drawer} data-open={isOpen}>
-      <div className={styles.header}>
-        {isOpen && <span className={styles.title}>{label}</span>}
-        {/* Stays outside the width-animated box (see .drawer[data-open='false'] in the
-         * CSS module) so it remains visible as a persistent tab once the pane has
-         * slid off-canvas — it's the only way back in. */}
-        <button
-          type="button"
-          className={styles.toggle}
-          aria-expanded={isOpen}
-          aria-controls={contentId}
-          onClick={() => setIsOpen((open) => !open)}
-        >
-          {isOpen ? 'Collapse ◂' : 'Expand ▸'}
-        </button>
-      </div>
-      <section
-        id={contentId}
-        aria-label={label}
-        className={styles.content}
-        hidden={!isOpen}
+      {/* Sits outside .panel (see CSS module) so it never moves with the pane's
+       * off-canvas slide — a persistent tab that's always the way back in. Icon-only
+       * per product feedback (a text label read as inconsistent chrome); the chevron
+       * itself flips via CSS based on data-open, so this markup doesn't branch on
+       * isOpen at all. */}
+      <button
+        type="button"
+        className={styles.tab}
+        aria-expanded={isOpen}
+        aria-controls={contentId}
+        aria-label={isOpen ? `Collapse ${label}` : `Expand ${label}`}
+        onClick={() => setIsOpen((open) => !open)}
       >
-        {children}
-      </section>
+        <svg
+          className={styles.icon}
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M10 3L5 8L10 13"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      <div className={styles.panel}>
+        <div className={styles.header}>
+          <span className={styles.title}>{label}</span>
+        </div>
+        <section
+          id={contentId}
+          aria-label={label}
+          className={styles.content}
+          hidden={!isOpen}
+        >
+          {children}
+        </section>
+      </div>
     </div>
   )
 }

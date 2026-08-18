@@ -2,12 +2,18 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  /* Drawer's collapse slides its pane off-canvas via a negative margin (see
+   * Drawer.module.css) rather than shrinking its width, so the pane briefly sits
+   * outside .body's box during the transition — clip it here rather than let it
+   * force a horizontal scrollbar on the page. */
+  overflow-x: hidden;
 }
 
-/* Flex (not grid) so the Drawer's column can animate its own width down to 0 for
- * the off-canvas collapse (FIN-46) — a grid track can't be transitioned per-child.
- * .body is capped to the remaining viewport height (flex: 1 inside a 100vh .shell)
- * so a tall Drawer scrolls internally instead of growing the whole page. */
+/* Flex (not grid) so the Drawer's pane can slide fully off-canvas for the collapse
+ * (FIN-46) — a grid track can't be transitioned per-child the way a flex item's
+ * margin can. .body is capped to the remaining viewport height (flex: 1 inside a
+ * 100vh .shell) so a tall Drawer scrolls internally instead of growing the whole
+ * page. */
 .body {
   display: flex;
   flex: 1;
