@@ -1,0 +1,71 @@
+import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
+import { afterEach, describe, expect, it } from 'vitest'
+import { ChartContainer } from '../ChartContainer/ChartContainer'
+import type { ChartRow } from '../ChartContainer/types'
+import { YearDetailPanel } from './YearDetailPanel'
+
+const rows: ChartRow[] = [
+  {
+    age: 35,
+    year: 0,
+    beginningBalance: 100_000,
+    annualContribution: 15_000,
+    investmentReturn: 7_000,
+    endingBalance: 122_000,
+  },
+  {
+    age: 36,
+    year: 1,
+    beginningBalance: 122_000,
+    annualContribution: 15_450,
+    investmentReturn: 8_540,
+    endingBalance: 145_990,
+  },
+]
+
+function ConnectedView({ initialRows }: { initialRows: ChartRow[] }) {
+  const [selected, setSelected] = useState<ChartRow | undefined>(initialRows.at(-1))
+  return (
+    <>
+      <ChartContainer rows={initialRows} title="Year-by-year balance" onSelectRow={setSelected} />
+      <YearDetailPanel row={selected} />
+    </>
+  )
+}
+
+describe('YearDetailPanel', () => {
+  afterEach(() => cleanup())
+
+  it('shows the selected row age, year, balance start, contribution, investment return, and balance end', () => {
+    render(<YearDetailPanel row={rows[0]} />)
+    const panel = screen.getByRole('region', { name: 'Year detail' })
+    expect(panel).toHaveTextContent('35')
+    expect(panel).toHaveTextContent('$100,000')
+    expect(panel).toHaveTextContent('$15,000')
+    expect(panel).toHaveTextContent('$7,000')
+    expect(panel).toHaveTextContent('$122,000')
+  })
+
+  it('renders a placeholder when no row is selected', () => {
+    render(<YearDetailPanel row={undefined} />)
+    const panel = screen.getByRole('region', { name: 'Year detail' })
+    expect(panel).toHaveTextContent(/select a year/i)
+  })
+
+  it("updates its content when a bar in ChartContainer is selected", async () => {
+    const user = userEvent.setup()
+    render(<ConnectedView initialRows={rows} />)
+
+    const panel = screen.getByRole('region', { name: 'Year detail' })
+    // Defaults to the last row (year 1 / age 36).
+    expect(panel).toHaveTextContent('$145,990')
+
+    const firstBar = screen.getByRole('button', { name: 'Year 1, age 35' })
+    await user.click(firstBar)
+
+    expect(panel).toHaveTextContent('$122,000')
+    expect(panel).not.toHaveTextContent('$145,990')
+  })
+})
