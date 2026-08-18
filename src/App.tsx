@@ -14,6 +14,7 @@ import { TabBar, type TabBarTab } from './ui/components/TabBar/TabBar'
 import { Drawer } from './ui/components/Drawer/Drawer'
 import { ChartContainer } from './ui/components/ChartContainer/ChartContainer'
 import type { ChartBandRow, ChartRow } from './ui/components/ChartContainer/types'
+import { DEFAULT_RETURN_ASSUMPTIONS } from './engine'
 import type { PercentilePaths } from './engine'
 import { YearDetailPanel } from './ui/components/YearDetailPanel/YearDetailPanel'
 import { useProjectionState } from './ui/hooks/useProjectionState'
@@ -144,6 +145,10 @@ function App() {
                     allocation={{
                       stocksPercent: debouncedAdvanced.stocksAllocationPercent,
                       bondsPercent: 100 - debouncedAdvanced.stocksAllocationPercent,
+                    }}
+                    returnAssumptions={{
+                      stocks: DEFAULT_RETURN_ASSUMPTIONS.stocks,
+                      bonds: debouncedAdvanced.bondReturnPercent / 100,
                     }}
                     onSuccessRateChange={setSuccessRate}
                     onPercentilesChange={setPercentiles}

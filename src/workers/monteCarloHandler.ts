@@ -18,6 +18,7 @@ export const handleMonteCarloRequest = (request: MonteCarloWorkerRequest): Monte
       request.allocation,
       request.volatilityAssumptions,
       request.events,
+      { returnAssumptions: request.returnAssumptions },
     );
     return { type: 'success', result };
   } catch (error) {

@@ -12,6 +12,7 @@ import type {
   PlanEvent,
   PortfolioAllocation,
   ProjectionErrorCode,
+  ReturnAssumptions,
   VolatilityAssumptions,
 } from '../engine';
 
@@ -28,6 +29,9 @@ export interface MonteCarloWorkerRequest {
   allocation: PortfolioAllocation;
   volatilityAssumptions: VolatilityAssumptions;
   events: PlanEvent[];
+  /** Per-asset-class expected return (FIN-57) — see `ReturnAssumptions`/
+   * `DEFAULT_RETURN_ASSUMPTIONS`. Carried explicitly, same rationale as `volatilityAssumptions`. */
+  returnAssumptions: ReturnAssumptions;
 }
 
 /**

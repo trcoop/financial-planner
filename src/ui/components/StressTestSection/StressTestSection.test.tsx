@@ -111,6 +111,27 @@ describe('StressTestSection', () => {
     expect(allocationArg).toEqual({ stocksPercent: 85, bondsPercent: 15 })
   })
 
+  it('defaults to a 7%/4.5% return assumption, and runs against a caller-supplied one instead (FIN-57)', () => {
+    const orchestrator = new FakeOrchestrator()
+    const { unmount } = render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+
+    const [, , , , returnAssumptionsArg] = orchestrator.runCalls[0]
+    expect(returnAssumptionsArg).toEqual({ stocks: 0.07, bonds: 0.045 })
+    unmount()
+
+    const orchestrator2 = new FakeOrchestrator()
+    render(
+      <StressTestSection
+        assumptions={baseAssumptions}
+        orchestrator={orchestrator2}
+        returnAssumptions={{ stocks: 0.07, bonds: 0.06 }}
+      />,
+    )
+
+    const [, , , , returnAssumptionsArg2] = orchestrator2.runCalls[0]
+    expect(returnAssumptionsArg2).toEqual({ stocks: 0.07, bonds: 0.06 })
+  })
+
   it('shows a running/disabled button immediately, since the initial run starts on mount', () => {
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
