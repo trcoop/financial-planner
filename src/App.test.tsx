@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
@@ -54,28 +54,28 @@ describe('App shell', () => {
 
   it('renders the core inputs form pre-filled with defaults, inside the Drawer', () => {
     render(<App />)
-    expect(screen.getByLabelText('Current age')).toHaveValue(35)
-    expect(screen.getByLabelText('Retirement age')).toHaveValue(67)
-    expect(screen.getByLabelText('Current investment balance')).toHaveValue(250000)
-    expect(screen.getByLabelText('Current annual income')).toHaveValue(85000)
-    expect(screen.getByLabelText('Annual savings percentage')).toHaveValue(15)
+    expect(screen.getByLabelText('Current age')).toHaveValue('35')
+    expect(screen.getByLabelText('Retirement age')).toHaveValue('67')
+    expect(within(screen.getByRole('region', { name: 'Plan inputs' })).getByLabelText('Current investment balance')).toHaveValue('$250,000')
+    expect(screen.getByLabelText('Current annual income')).toHaveValue('$85,000')
+    expect(screen.getByLabelText('Annual savings percentage')).toHaveValue('15%')
   })
 
   it('defaults to the Projection tab, showing StatTiles and the chart, not the ProjectionTable', () => {
     render(<App />)
     expect(screen.getByRole('tab', { name: 'Projection' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText('Current balance')).toBeInTheDocument()
-    expect(screen.getByText('Projected balance at retirement')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Current investment balance' })).toBeInTheDocument()
+    expect(screen.getByText('Projected balance at 67')).toBeInTheDocument()
     expect(screen.getByText('Chance of success')).toBeInTheDocument()
     expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
-    expect(screen.getByRole('figure', { name: 'Year-by-year projection' })).toBeInTheDocument()
+    expect(screen.getByRole('figure', { name: 'Investment balance by year' })).toBeInTheDocument()
     // ProjectionTable is removed from the render tree (FIN-26) — no <table> should render.
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 
   it('shows the current investment balance StatTile from the core inputs', () => {
     render(<App />)
-    const tile = screen.getByText('Current balance').closest('section')
+    const tile = screen.getByRole('region', { name: 'Current investment balance' })
     expect(tile).toHaveTextContent('$250,000')
   })
 
@@ -90,10 +90,10 @@ describe('App shell', () => {
   it('keeps the projection chart and stress test panel both mounted across tab switches (no recompute on switch)', async () => {
     const user = userEvent.setup()
     render(<App />)
-    const figureBefore = screen.getByRole('figure', { name: 'Year-by-year projection' })
+    const figureBefore = screen.getByRole('figure', { name: 'Investment balance by year' })
     await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
-    const figureAfter = screen.getByRole('figure', { name: 'Year-by-year projection' })
+    const figureAfter = screen.getByRole('figure', { name: 'Investment balance by year' })
     expect(figureAfter).toBe(figureBefore)
   })
 

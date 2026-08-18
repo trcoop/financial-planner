@@ -1,5 +1,6 @@
 import { NumberField } from '../NumberField/NumberField'
 import { CORE_FIELD_RANGES, rangeError } from './validation'
+import styles from './CoreInputsForm.module.css'
 
 export interface CoreInputValues {
   currentAge: number
@@ -48,7 +49,7 @@ interface CoreInputsFormProps {
 
 export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
   return (
-    <form aria-label="Core financial details">
+    <form aria-label="Core financial details" className={styles.form}>
       {FIELDS.map((field) => (
         <NumberField
           key={field.key}

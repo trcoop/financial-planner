@@ -28,15 +28,18 @@ export function Drawer({ label, children }: DrawerProps) {
 
   return (
     <div className={styles.drawer} data-open={isOpen}>
-      <button
-        type="button"
-        className={styles.toggle}
-        aria-expanded={isOpen}
-        aria-controls={contentId}
-        onClick={() => setIsOpen((open) => !open)}
-      >
-        {isOpen ? 'Collapse ◂' : 'Expand ▾'}
-      </button>
+      <div className={styles.header}>
+        {isOpen && <span className={styles.title}>{label}</span>}
+        <button
+          type="button"
+          className={styles.toggle}
+          aria-expanded={isOpen}
+          aria-controls={contentId}
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          {isOpen ? 'Collapse ◂' : 'Expand ▾'}
+        </button>
+      </div>
       <section
         id={contentId}
         aria-label={label}

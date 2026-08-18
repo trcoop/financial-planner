@@ -11,8 +11,13 @@
      get the rest of the "soft" lift from --radius-lg/--radius-md and the
      new diffuse --shadow-sm/--shadow-md below. */
   --color-bg: #ffffff;
+  --color-page-bg: #f4f6f9;
   --color-surface: #f8fafc;
   --color-border: #8c929c;
+  /* Decorative-only hairline (cards, dividers) — not a control boundary, so
+     it isn't held to the 3:1 non-text-UI floor above; matches the mockup's
+     near-invisible card edge and lets --shadow-sm carry the definition. */
+  --color-border-subtle: rgba(16, 24, 40, 0.08);
   --color-surface-hover: #e5e7eb;
   --color-text: #1a1f26;
   --color-text-muted: #57606a;
@@ -67,7 +72,7 @@ body {
   font-family: var(--font-family);
   font-size: var(--font-size-base);
   color: var(--color-text);
-  background: var(--color-bg);
+  background: var(--color-page-bg);
 }
 
 table {

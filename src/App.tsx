@@ -63,7 +63,7 @@ function App() {
   )
 
   const successRateValue =
-    successRate === null ? 'Run a stress test to see this' : formatPercent(successRate * 100)
+    successRate === null ? 'Run a stress test to see this' : formatPercent(successRate)
 
   return (
     <div className="shell">
@@ -85,11 +85,12 @@ function App() {
                 id="tabpanel-projection"
                 aria-labelledby="tab-projection"
                 hidden={activeTab !== 'projection'}
+                className="tabPanel"
               >
                 <div className="statTiles">
-                  <StatTile label="Current balance" value={formatCurrency(coreValues.initialBalance)} />
+                  <StatTile label="Current investment balance" value={formatCurrency(coreValues.initialBalance)} />
                   <StatTile
-                    label="Projected balance at retirement"
+                    label={`Projected balance at ${coreValues.retirementAge}`}
                     value={projectedBalanceAtRetirement !== undefined ? formatCurrency(projectedBalanceAtRetirement) : '—'}
                   />
                   <StatTile
@@ -100,7 +101,7 @@ function App() {
                 </div>
 
                 <div className="chartRow">
-                  <ChartContainer rows={rows} title="Year-by-year projection" onSelectRow={setSelectedRow} />
+                  <ChartContainer rows={rows} title="Investment balance by year" onSelectRow={setSelectedRow} />
                   <YearDetailPanel row={selectedRow ?? rows.at(-1)} />
                 </div>
               </section>

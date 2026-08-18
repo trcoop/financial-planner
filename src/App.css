@@ -6,10 +6,33 @@
 
 .body {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) 1fr;
+  grid-template-columns: minmax(240px, 280px) 1fr;
   gap: var(--space-6);
   padding: var(--space-6);
   align-items: start;
+}
+
+/* Desktop: stretch both grid columns to match the taller one's height, then let the
+ * chart row (not the stat tiles) grow to absorb the extra space — this is what brings
+ * the chart/year-detail row's bottom edge down to meet the Drawer's bottom edge. */
+@media (min-width: 960px) {
+  .body {
+    align-items: stretch;
+  }
+
+  .main {
+    height: 100%;
+  }
+
+  .tabPanel {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .chartRow {
+    flex: 1;
+    min-height: 0;
+  }
 }
 
 @media (max-width: 959px) {
@@ -22,8 +45,17 @@
 .main {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-width: 0;
+}
+
+/* Each tab's panel is the actual flex child stacking statTiles/chartRow — .main's own
+ * gap only spaces its direct children (the tabpanels themselves), so this rule is what
+ * puts space between the content stacked inside a given tabpanel. */
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
 }
 
 .statTiles {
@@ -43,7 +75,7 @@
 
 .chartRow {
   display: grid;
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 1fr auto;
   gap: var(--space-4);
 }
 

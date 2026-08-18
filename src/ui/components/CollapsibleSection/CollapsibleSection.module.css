@@ -1,12 +1,18 @@
 .details {
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-3);
 }
 
 .summary {
   cursor: pointer;
-  font-size: var(--font-size-base);
-  padding: var(--space-2) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  padding: 0;
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
 }
 
 .summary:focus-visible {

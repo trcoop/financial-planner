@@ -36,7 +36,7 @@ export function YearDetailPanel({ row }: YearDetailPanelProps) {
                 <dd>{currency.format(row.beginningBalance)}</dd>
               </div>
               <div className={styles.row}>
-                <dt>Contribution</dt>
+                <dt>Annual contribution</dt>
                 <dd>{currency.format(row.annualContribution)}</dd>
               </div>
               <div className={styles.row}>
