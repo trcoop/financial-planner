@@ -87,20 +87,9 @@ class FakeOrchestrator implements MonteCarloOrchestrator {
 describe('StressTestSection', () => {
   afterEach(() => cleanup())
 
-  it('shows the idle placeholder before the first run', () => {
+  it('auto-runs a stress test against the default assumptions on mount', () => {
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
-
-    expect(screen.getByText('Success rate: [Run stress test to see results]')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Run stress test' })).toBeEnabled()
-  })
-
-  it('runs the simulation with the default 70/30 allocation and default volatility on click', async () => {
-    const user = userEvent.setup()
-    const orchestrator = new FakeOrchestrator()
-    render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
-
-    await user.click(screen.getByRole('button', { name: 'Run stress test' }))
 
     expect(orchestrator.runCalls).toHaveLength(1)
     const [assumptionsArg, allocationArg] = orchestrator.runCalls[0]
@@ -108,23 +97,28 @@ describe('StressTestSection', () => {
     expect(allocationArg).toEqual({ stocksPercent: 70, bondsPercent: 30 })
   })
 
-  it('shows a running/disabled state while a test is in flight', async () => {
-    const user = userEvent.setup()
+  it('shows a running/disabled button immediately, since the initial run starts on mount', () => {
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
-
-    await user.click(screen.getByRole('button', { name: 'Run stress test' }))
 
     const button = screen.getByRole('button', { name: /running stress test/i })
     expect(button).toBeDisabled()
+    expect(screen.getByText('Success rate: [Run stress test to see results]')).toBeInTheDocument()
+  })
+
+  it('does not auto-run a second time or cancel on re-render with unchanged assumptions', () => {
+    const orchestrator = new FakeOrchestrator()
+    const { rerender } = render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    rerender(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+
+    expect(orchestrator.runCalls).toHaveLength(1)
+    expect(orchestrator.cancelCalls).toBe(0)
   })
 
   it('shows the success rate once the run completes and returns the button to idle', async () => {
-    const user = userEvent.setup()
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
 
-    await user.click(screen.getByRole('button', { name: 'Run stress test' }))
     act(() => orchestrator.resolveRun())
 
     await waitFor(() => expect(screen.getByText('Success rate: 87%')).toBeInTheDocument())
@@ -132,11 +126,9 @@ describe('StressTestSection', () => {
   })
 
   it('cancels the in-flight run and shows a transient cancelled message when assumptions change', async () => {
-    const user = userEvent.setup()
     const orchestrator = new FakeOrchestrator()
     const { rerender } = render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
 
-    await user.click(screen.getByRole('button', { name: 'Run stress test' }))
     expect(orchestrator.cancelCalls).toBe(0)
 
     rerender(
@@ -151,20 +143,10 @@ describe('StressTestSection', () => {
     expect(screen.getByRole('button', { name: 'Run stress test' })).toBeEnabled()
   })
 
-  it('does not cancel on the initial mount, only on a later assumptions change', () => {
-    const orchestrator = new FakeOrchestrator()
-    const { rerender } = render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
-    rerender(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
-
-    expect(orchestrator.cancelCalls).toBe(0)
-  })
-
   it('shows an error banner and resets the button when the run rejects', async () => {
-    const user = userEvent.setup()
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
 
-    await user.click(screen.getByRole('button', { name: 'Run stress test' }))
     act(() => orchestrator.rejectRun(new Error('boom')))
 
     await waitFor(() =>
@@ -173,12 +155,11 @@ describe('StressTestSection', () => {
     expect(screen.getByRole('button', { name: 'Run stress test' })).toBeEnabled()
   })
 
-  it('allows running multiple stress tests in sequence', async () => {
+  it('allows running additional stress tests manually after the initial auto-run completes', async () => {
     const user = userEvent.setup()
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
 
-    await user.click(screen.getByRole('button', { name: 'Run stress test' }))
     act(() => orchestrator.resolveRun())
     await waitFor(() => expect(screen.getByText('Success rate: 87%')).toBeInTheDocument())
 

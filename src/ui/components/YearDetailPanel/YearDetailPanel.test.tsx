@@ -57,10 +57,18 @@ describe('YearDetailPanel', () => {
     }
   })
 
-  it('renders a placeholder when no row is selected', () => {
+  it('renders only the instructional caption when no row is selected', () => {
     render(<YearDetailPanel row={undefined} />)
     const panel = screen.getByRole('region', { name: 'Year detail' })
-    expect(panel).toHaveTextContent(/select a year/i)
+    expect(panel).toHaveTextContent(/click any bar/i)
+    expect(panel.querySelector('dl')).not.toBeInTheDocument()
+  })
+
+  it('keeps the instructional caption visible alongside the detail rows once a row is selected', () => {
+    render(<YearDetailPanel row={rows[0]} />)
+    const panel = screen.getByRole('region', { name: 'Year detail' })
+    expect(panel).toHaveTextContent(/click any bar/i)
+    expect(panel.querySelector('dl')).toBeInTheDocument()
   })
 
   it("updates its content when a bar in ChartContainer is selected", async () => {

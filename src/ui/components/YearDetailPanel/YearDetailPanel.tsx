@@ -22,7 +22,7 @@ export function YearDetailPanel({ row }: YearDetailPanelProps) {
   return (
     <Card className={styles.card}>
       <section aria-label="Year detail" className={styles.section}>
-        {row ? (
+        {row && (
           <>
             <div className={styles.headline}>
               <p className={styles.headlineLabel}>
@@ -49,9 +49,10 @@ export function YearDetailPanel({ row }: YearDetailPanelProps) {
               </div>
             </dl>
           </>
-        ) : (
-          <p className={styles.placeholder}>Select a year in the chart to see its detail.</p>
         )}
+        {/* Per the design mockup: a persistent instructional line, not a state that
+           disappears once a bar's been clicked — the chart stays interactive throughout. */}
+        <p className={styles.placeholder}>Click any bar to see that year's detail.</p>
       </section>
     </Card>
   )

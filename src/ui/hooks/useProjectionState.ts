@@ -72,7 +72,14 @@ export function useProjectionState(
   const retirementRow = rows.find((row) => row.age >= debouncedCoreValues.retirementAge)
   const projectedBalanceAtRetirement = retirementRow?.endingBalance ?? rows.at(-1)?.endingBalance
 
-  const assumptions = toAssumptions(debouncedCoreValues, debouncedAdvancedValues)
+  // Memoized so the reference only changes when the settled values it's derived from do — a
+  // fresh object on every render would trip StressTestSection's cancel-on-input-change effect
+  // (keyed on this reference) even when nothing the user entered actually changed, e.g. on an
+  // unrelated App re-render like selecting a different chart bar.
+  const assumptions = useMemo(
+    () => toAssumptions(debouncedCoreValues, debouncedAdvancedValues),
+    [debouncedCoreValues, debouncedAdvancedValues],
+  )
 
   return { rows, error, projectedBalanceAtRetirement, assumptions }
 }
