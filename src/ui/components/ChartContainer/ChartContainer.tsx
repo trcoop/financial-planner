@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Card } from '../Card/Card'
 import styles from './ChartContainer.module.css'
-import type { ChartRow } from './types'
+import type { ChartBandRow, ChartRow } from './types'
 
 /** Show an age label every this-many bars (plus always the last), so a long horizon doesn't
  * cram one label per hairline-thin bar. */
@@ -27,22 +27,52 @@ export interface ChartContainerProps {
    * selection state) — falls back to `rows.at(-1)?.year` when omitted or when no row matches.
    */
   defaultSelectedYear?: number
+  /** Monte Carlo band, one entry per year, `undefined` until a stress test has completed at
+   * least once. Matches `StressTestState`'s `'complete'` case's `result.percentiles`, mapped
+   * to this narrower per-year shape at the `App.tsx` call site — `ChartContainer` does not
+   * import from `src/engine`, same rule as `ChartRow` today. */
+  band?: ChartBandRow[]
+  /** Age at which the retirement-year marker renders (PRD Goal #3). Renders nothing if the
+   * age isn't present in `rows`. */
+  retirementAge?: number
+}
+
+/** One bar's measured position relative to `.plot`, read via `getBoundingClientRect` in a
+ * layout effect (see ERD §6.4) rather than recreated from the flex/gap CSS in JS, so it can
+ * never drift from the real rendered layout. */
+interface BarLayout {
+  left: number
+  width: number
 }
 
 /**
  * A `Card`-based bar chart: one bar per year, height proportional to `endingBalance`.
  * Clicking/tapping a bar selects that year (default: `defaultSelectedYear`, or the last year
  * in `rows` if omitted) and reports the selection via `onSelectRow`.
+ *
+ * Optionally overlays a shaded Monte Carlo p10-p90 band behind the bars and a retirement-year
+ * marker, when `band`/`retirementAge` are supplied (FIN-42). Both are purely additive: with
+ * neither prop, rendering is unchanged from before this feature existed.
  */
-export function ChartContainer({ rows, title, onSelectRow, defaultSelectedYear }: ChartContainerProps) {
+export function ChartContainer({
+  rows,
+  title,
+  onSelectRow,
+  defaultSelectedYear,
+  band,
+  retirementAge,
+}: ChartContainerProps) {
   const [selectedYear, setSelectedYear] = useState<number | undefined>(() => {
     const hasMatch = defaultSelectedYear !== undefined && rows.some((row) => row.year === defaultSelectedYear)
     return hasMatch ? defaultSelectedYear : rows.at(-1)?.year
   })
   const trackRef = useRef<HTMLDivElement>(null)
   const selectedBarRef = useRef<HTMLButtonElement>(null)
+  const plotRef = useRef<HTMLDivElement>(null)
+  const barRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const [barLayout, setBarLayout] = useState<BarLayout[]>([])
 
-  const maxBalance = Math.max(1, ...rows.map((row) => row.endingBalance))
+  const maxBalance = Math.max(1, ...rows.map((row) => row.endingBalance), ...(band?.map((b) => b.p90) ?? []))
 
   const handleSelect = (row: ChartRow) => {
     setSelectedYear(row.year)
@@ -60,6 +90,38 @@ export function ChartContainer({ rows, title, onSelectRow, defaultSelectedYear }
     selectedBarRef.current?.scrollIntoView({ block: 'nearest', inline: 'center' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Band/retirement-marker overlay positioning (FIN-42, ERD §6.4). Rather than recreating the
+  // `.plot` flex/gap layout arithmetically in JS (which would silently drift if that CSS ever
+  // changes), this measures the real rendered bar rects via `getBoundingClientRect` and stores
+  // each bar's position relative to `.plot`, for absolutely-positioned overlay divs to consume.
+  // Runs even when band/retirementAge are both absent — cheap at MVP's row counts (≤65 bars)
+  // and keeps the measuring logic in one place rather than conditionally skipping it.
+  useLayoutEffect(() => {
+    const plotEl = plotRef.current
+    if (!plotEl) return
+
+    const measure = () => {
+      const plotRect = plotEl.getBoundingClientRect()
+      const layout = barRefs.current.map((bar): BarLayout => {
+        if (!bar) return { left: 0, width: 0 }
+        const barRect = bar.getBoundingClientRect()
+        return { left: barRect.left - plotRect.left, width: barRect.width }
+      })
+      setBarLayout(layout)
+    }
+
+    measure()
+
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => measure())
+    observer.observe(plotEl)
+    return () => observer.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, band])
+
+  const bandByYear = new Map((band ?? []).map((row) => [row.year, row]))
+  const retirementIndex = retirementAge === undefined ? -1 : rows.findIndex((row) => row.age === retirementAge)
 
   return (
     <Card className={styles.card}>
@@ -80,14 +142,53 @@ export function ChartContainer({ rows, title, onSelectRow, defaultSelectedYear }
           )}
         </div>
         <div className={styles.track} ref={trackRef}>
-          <div className={styles.plot}>
-            {rows.map((row) => {
+          <div className={styles.plot} ref={plotRef}>
+            {/* Band divs render before the bars in DOM order so bars stay visually on top
+                (ERD §2.1/§2.2) — a shaded backdrop, not a replacement. */}
+            {band &&
+              rows.map((row, index) => {
+                const bandRow = bandByYear.get(row.year)
+                if (!bandRow) return null
+                const layout = barLayout[index]
+                if (!layout) return null
+                const bottomPercent = (bandRow.p10 / maxBalance) * 100
+                const heightPercent = ((bandRow.p90 - bandRow.p10) / maxBalance) * 100
+                return (
+                  <div
+                    key={row.year}
+                    data-testid={`chart-band-${row.year}`}
+                    className={styles.band}
+                    style={{
+                      left: `${layout.left}px`,
+                      width: `${layout.width}px`,
+                      bottom: `${bottomPercent}%`,
+                      height: `${heightPercent}%`,
+                      pointerEvents: 'none',
+                    }}
+                  />
+                )
+              })}
+            {retirementIndex >= 0 && barLayout[retirementIndex] && (
+              <div
+                data-testid="chart-retirement-marker"
+                className={styles.retirementMarker}
+                style={{
+                  left: `${barLayout[retirementIndex].left}px`,
+                  width: `${barLayout[retirementIndex].width}px`,
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
+            {rows.map((row, index) => {
               const heightPercent = (row.endingBalance / maxBalance) * 100
               const isSelected = row.year === selectedYear
               return (
                 <button
                   key={row.year}
-                  ref={isSelected ? selectedBarRef : undefined}
+                  ref={(el) => {
+                    barRefs.current[index] = el
+                    if (isSelected) selectedBarRef.current = el
+                  }}
                   type="button"
                   className={isSelected ? styles.barSelected : styles.bar}
                   style={{ height: `${heightPercent}%` }}
