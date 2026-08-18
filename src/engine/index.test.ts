@@ -86,6 +86,9 @@ describe('public surface', () => {
     'runMonteCarloTrials',
     'DEFAULT_SIMULATION_COUNT',
     'DEFAULT_VOLATILITY_ASSUMPTIONS',
+    'correlatedNormals',
+    'DEFAULT_CORRELATION',
+    'DEFAULT_RETURN_ASSUMPTIONS',
   ];
 
   it.each(runtimeExports)('re-exports %s', (name) => {

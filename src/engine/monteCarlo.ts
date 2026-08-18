@@ -100,6 +100,22 @@ export const gbmPeriodReturn = (meanReturn: number, volatility: number, deviate:
       volatility * Math.sqrt(PERIOD_YEARS) * deviate,
   ) - 1;
 
+/**
+ * Two correlated standard normal deviates `[stockZ, bondZ]`, via a 2x2 Cholesky decomposition:
+ * `bondZ = correlation * stockZ + sqrt(1 - correlation^2) * independentZ`.
+ *
+ * `correlation` in `[-1, 1]`. At `0` this degenerates to two independent deviates (the
+ * pre-FIN-56 behavior); at `-1`/`1` `bondZ` becomes an exact mirror/copy of `stockZ`.
+ * Consumes two calls to {@link standardNormal} (four uniform draws total).
+ */
+export const correlatedNormals = (draw: RandomSource, correlation: number): [number, number] => {
+  const stockZ = standardNormal(draw);
+  const independentZ = standardNormal(draw);
+  const bondZ = correlation * stockZ + Math.sqrt(1 - correlation * correlation) * independentZ;
+
+  return [stockZ, bondZ];
+};
+
 /** A portfolio split between stocks and bonds, on a 0-100 percent scale summing to 100. */
 export interface PortfolioAllocation {
   stocksPercent: number;
@@ -228,24 +244,62 @@ export interface VolatilityAssumptions {
   bonds: number;
 }
 
+/** Expected (arithmetic) annual return per asset class, as decimals — the counterpart to
+ * {@link VolatilityAssumptions} (ERD §5, FIN-56). */
+export interface ReturnAssumptions {
+  stocks: number;
+  bonds: number;
+}
+
 /**
- * One period's portfolio return: an independent GBM draw per asset class, blended by
- * allocation weight. Consumes four uniform draws — two per Box-Muller deviate.
+ * Historically-calibrated expected-return defaults (FIN-56).
  *
- * Stocks and bonds are drawn independently; modelling their historical correlation is
- * explicitly P1 (Story 2 PRD, R10), not P0.
+ * Stocks ~7% and bonds ~4.5% arithmetic mean annual return: the ~2.5 point gap is the
+ * historical equity risk premium — long-run U.S. large-cap equities have returned roughly
+ * 6-10% nominal, versus roughly 3-5% for intermediate/aggregate bonds (standard textbook
+ * Monte Carlo retirement-planning ranges; see e.g. Kitces on sequence-of-returns modeling,
+ * or any standard capital-market-assumptions table). Before FIN-56 both asset classes used
+ * the same blended ~7% mean and differed only in volatility, which understated bonds'
+ * ballast role in a portfolio and inflated simulated downside risk.
+ */
+export const DEFAULT_RETURN_ASSUMPTIONS: ReturnAssumptions = { stocks: 0.07, bonds: 0.045 };
+
+/**
+ * Fixed stock/bond correlation (FIN-56): mild negative, the standard "flight to quality"
+ * effect where bonds tend to hold up (or rally) when stocks fall, and vice versa. -0.2 sits
+ * in the commonly-cited -0.1 to -0.3 range for long-run US stock/bond correlation and is
+ * deliberately not user-configurable — like volatility, it is a modeling assumption rather
+ * than a plan input. Before FIN-56 the two assets were drawn fully independently (correlation
+ * 0), which understated how often a bad stock year and a bad bond year coincide less than
+ * they empirically do — the two assets moved as if in separate, unrelated worlds.
+ */
+export const DEFAULT_CORRELATION = -0.2;
+
+/**
+ * One period's portfolio return: a correlated GBM draw per asset class (via
+ * {@link correlatedNormals}, fixed correlation `correlation`), blended by allocation weight.
+ * Consumes four uniform draws — two per Box-Muller deviate.
+ *
+ * Each asset class gets its own expected return in `returnAssumptions`, converted from
+ * arithmetic mean to GBM log-drift (`ln(1 + rate)`) the same way the single blended rate used
+ * to be converted at the call site — see the resolved OPEN DECISION comment on
+ * {@link gbmPeriodReturn}.
  */
 export const drawPortfolioReturn = (
-  meanReturn: number,
+  returnAssumptions: ReturnAssumptions,
   allocation: PortfolioAllocation,
   volatility: VolatilityAssumptions,
+  correlation: number,
   draw: RandomSource,
-): number =>
-  blendedPortfolioReturn(
+): number => {
+  const [stockZ, bondZ] = correlatedNormals(draw, correlation);
+
+  return blendedPortfolioReturn(
     allocation,
-    gbmPeriodReturn(meanReturn, volatility.stocks, standardNormal(draw)),
-    gbmPeriodReturn(meanReturn, volatility.bonds, standardNormal(draw)),
+    gbmPeriodReturn(Math.log(1 + returnAssumptions.stocks), volatility.stocks, stockZ),
+    gbmPeriodReturn(Math.log(1 + returnAssumptions.bonds), volatility.bonds, bondZ),
   );
+};
 
 /**
  * The state a fold starts from, at `currentAge` in year 0 holding `initialBalance`.
@@ -274,6 +328,10 @@ export const createInitialPeriodState = (plan: PlanAssumptions): PeriodState => 
 export interface TrialConfig {
   allocation: PortfolioAllocation;
   volatility: VolatilityAssumptions;
+  /** Per-asset-class expected return and the fixed stock/bond correlation (FIN-56) — see
+   * {@link DEFAULT_RETURN_ASSUMPTIONS} and {@link DEFAULT_CORRELATION}. */
+  returnAssumptions: ReturnAssumptions;
+  correlation: number;
   /**
    * The per-period step function. Defaults to the engine's own {@link runPeriod}, which is
    * the point of the design: Monte Carlo varies `returnForPeriod` and reuses the projection
@@ -318,12 +376,13 @@ export const runMonteCarloTrial = (
     state = step(state, {
       events,
       assumptions: plan,
-      // Convert the plan's arithmetic mean return into GBM log-drift so E[R] matches the
-      // user's input exactly (see the resolved OPEN DECISION on `gbmPeriodReturn` above).
+      // Per-asset-class expected return/correlation (FIN-56) rather than the plan's single
+      // blended `annualReturnRate` — see `drawPortfolioReturn`'s doc comment.
       returnForPeriod: drawPortfolioReturn(
-        Math.log(1 + plan.annualReturnRate),
+        config.returnAssumptions,
         config.allocation,
         config.volatility,
+        config.correlation,
         draw,
       ),
       withdrawalStrategy,
@@ -355,6 +414,11 @@ export interface MonteCarloOptions {
   seed?: number;
   /** Paths to simulate. Defaults to {@link DEFAULT_SIMULATION_COUNT}; lowered by tests. */
   simulationCount?: number;
+  /** Expected return per asset class. Defaults to {@link DEFAULT_RETURN_ASSUMPTIONS}. */
+  returnAssumptions?: ReturnAssumptions;
+  /** Stock/bond correlation. Defaults to {@link DEFAULT_CORRELATION}; a test seam only —
+   * production code should rely on the default (FIN-56: not a user-facing plan input). */
+  correlation?: number;
   /**
    * See {@link TrialConfig.runPeriodFn}.
    *
@@ -436,6 +500,8 @@ export const runMonteCarloTrials = (
   const config: TrialConfig = {
     allocation,
     volatility: volatilityAssumptions,
+    returnAssumptions: options.returnAssumptions ?? DEFAULT_RETURN_ASSUMPTIONS,
+    correlation: options.correlation ?? DEFAULT_CORRELATION,
     runPeriodFn: options.runPeriodFn,
     withdrawalStrategy: options.withdrawalStrategy,
     taxCalculator: options.taxCalculator,
