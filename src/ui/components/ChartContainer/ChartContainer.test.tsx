@@ -41,6 +41,28 @@ describe('ChartContainer', () => {
     expect(screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })).toHaveLength(3)
   })
 
+  it("renders each row's age as a label", () => {
+    render(<ChartContainer rows={rows} title="Year-by-year balance" />)
+    expect(screen.getByText('35')).toBeInTheDocument()
+    expect(screen.getByText('36')).toBeInTheDocument()
+    expect(screen.getByText('37')).toBeInTheDocument()
+  })
+
+  it('renders a range subtitle spanning the first and last row ages', () => {
+    render(<ChartContainer rows={rows} title="Year-by-year balance" />)
+    expect(screen.getByText('Age 35 → 37')).toBeInTheDocument()
+  })
+
+  it('renders a single-year range subtitle when there is only one row', () => {
+    render(<ChartContainer rows={[rows[0]]} title="Year-by-year balance" />)
+    expect(screen.getByText('Age 35 → 35')).toBeInTheDocument()
+  })
+
+  it('renders no range subtitle and no age labels when rows is empty', () => {
+    render(<ChartContainer rows={[]} title="Year-by-year balance" />)
+    expect(screen.queryByText(/^Age /)).not.toBeInTheDocument()
+  })
+
   it('defaults the last year in the data as selected', () => {
     render(<ChartContainer rows={rows} title="Year-by-year balance" />)
     const bars = screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })
