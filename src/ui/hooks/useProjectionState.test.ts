@@ -39,6 +39,29 @@ describe('useProjectionState', () => {
     expect(result.current.projectedBalanceAtRetirement).toBe(retirementRow!.endingBalance)
   })
 
+  it('exposes the debounced core/advanced values used for the projection, settled to the initial values on first render', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+
+    expect(result.current.debouncedCore).toEqual(CORE)
+    expect(result.current.debouncedAdvanced).toEqual(ADVANCED)
+  })
+
+  it('debouncedCore/debouncedAdvanced only update after the debounce delay elapses, mirroring rows', () => {
+    const { result, rerender } = renderHook(
+      ({ core }) => useProjectionState(core, ADVANCED, DEBOUNCE_MS),
+      { initialProps: { core: CORE } },
+    )
+    const changedCore = { ...CORE, currentAge: 60 }
+
+    rerender({ core: changedCore })
+    expect(result.current.debouncedCore).toEqual(CORE)
+
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+    expect(result.current.debouncedCore).toEqual(changedCore)
+  })
+
   it('does not recompute before the debounce delay elapses', () => {
     const { result, rerender } = renderHook(
       ({ core }) => useProjectionState(core, ADVANCED, DEBOUNCE_MS),

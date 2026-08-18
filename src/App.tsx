@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AdvancedAssumptionsForm,
+  Button,
   Card,
   CoreInputsForm,
   DEFAULT_ADVANCED_VALUES,
@@ -17,6 +18,7 @@ import type { PercentilePaths } from './engine'
 import { YearDetailPanel } from './ui/components/YearDetailPanel/YearDetailPanel'
 import { useProjectionState } from './ui/hooks/useProjectionState'
 import { formatCurrency, formatPercent } from './ui/utils/format'
+import { clearAssumptions, loadAssumptions, saveAssumptions } from './storage'
 import './App.css'
 
 /** Per FIN-9's notes: form updates are debounced ~300ms before triggering recalculation. */
@@ -28,8 +30,10 @@ const TABS: TabBarTab[] = [
 ]
 
 function App() {
-  const [coreValues, setCoreValues] = useState(DEFAULT_CORE_VALUES)
-  const [advancedValues, setAdvancedValues] = useState(DEFAULT_ADVANCED_VALUES)
+  const [coreValues, setCoreValues] = useState(() => loadAssumptions()?.core ?? DEFAULT_CORE_VALUES)
+  const [advancedValues, setAdvancedValues] = useState(
+    () => loadAssumptions()?.advanced ?? DEFAULT_ADVANCED_VALUES,
+  )
   const [activeTab, setActiveTab] = useState<string>(TABS[0].id)
   const [selectedRow, setSelectedRow] = useState<ChartRow | undefined>(undefined)
   // Lifted out of StressTestSection (via its `onSuccessRateChange` seam) purely so the
@@ -45,11 +49,23 @@ function App() {
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
   // result — while a field is out of range. See useProjectionState for the full behavior.
-  const { rows, error, projectedBalanceAtRetirement, assumptions } = useProjectionState(
-    coreValues,
-    advancedValues,
-    RECALCULATION_DEBOUNCE_MS,
-  )
+  const { rows, error, projectedBalanceAtRetirement, assumptions, debouncedCore, debouncedAdvanced } =
+    useProjectionState(coreValues, advancedValues, RECALCULATION_DEBOUNCE_MS)
+
+  // Persists once per settled (debounced) change, riding useProjectionState's existing ~300ms
+  // debounce rather than introducing a second one (ERD §6.1). Fires once on mount too (the
+  // debounced values equal the just-loaded initial state) — a harmless redundant first write,
+  // not worth guarding against.
+  useEffect(() => {
+    saveAssumptions(debouncedCore, debouncedAdvanced)
+  }, [debouncedCore, debouncedAdvanced])
+
+  const handleReset = () => {
+    if (!window.confirm('Clear your saved plan and reset to defaults?')) return
+    clearAssumptions()
+    setCoreValues(DEFAULT_CORE_VALUES)
+    setAdvancedValues(DEFAULT_ADVANCED_VALUES)
+  }
 
   const successRateValue =
     successRate === null ? 'Run a stress test to see this' : formatPercent(successRate)
@@ -73,6 +89,9 @@ function App() {
         <Drawer label="Plan inputs">
           <CoreInputsForm values={coreValues} onChange={setCoreValues} />
           <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
+          <Button variant="secondary" onClick={handleReset}>
+            Reset to defaults
+          </Button>
         </Drawer>
 
         <div className="main">

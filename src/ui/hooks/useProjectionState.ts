@@ -29,6 +29,11 @@ export type ProjectionState = ProjectionResult & {
   /** Assumptions built from the debounced (not raw) input values, for consumers like
    * StressTestSection that should run against the same settled values the projection used. */
   assumptions: PlanAssumptions
+  /** The debounced (settled) core/advanced values this projection was computed from. Exposed
+   * so callers (App.tsx's persistence effect, FIN-43) can key off the same ~300ms settle point
+   * the projection itself uses, rather than introducing a second debounce mechanism. */
+  debouncedCore: CoreInputValues
+  debouncedAdvanced: AdvancedAssumptionValues
 }
 
 /**
@@ -81,5 +86,12 @@ export function useProjectionState(
     [debouncedCoreValues, debouncedAdvancedValues],
   )
 
-  return { rows, error, projectedBalanceAtRetirement, assumptions }
+  return {
+    rows,
+    error,
+    projectedBalanceAtRetirement,
+    assumptions,
+    debouncedCore: debouncedCoreValues,
+    debouncedAdvanced: debouncedAdvancedValues,
+  }
 }
