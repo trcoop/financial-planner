@@ -16,6 +16,8 @@ export interface ChartRow {
   annualContribution: number
   /** Dollars earned from investment returns this year. */
   investmentReturn: number
+  /** Dollars withdrawn this year. Zero pre-retirement. */
+  annualWithdrawal: number
   /** Balance at the end of the year. */
   endingBalance: number
 }

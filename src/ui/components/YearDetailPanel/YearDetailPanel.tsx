@@ -44,6 +44,10 @@ export function YearDetailPanel({ row }: YearDetailPanelProps) {
                 <dd>{currency.format(row.investmentReturn)}</dd>
               </div>
               <div className={styles.row}>
+                <dt>Annual withdrawal</dt>
+                <dd>{currency.format(row.annualWithdrawal)}</dd>
+              </div>
+              <div className={styles.row}>
                 <dt>Balance end</dt>
                 <dd>{currency.format(row.endingBalance)}</dd>
               </div>
