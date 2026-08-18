@@ -141,6 +141,10 @@ function App() {
                 <Card>
                   <StressTestSection
                     assumptions={assumptions}
+                    allocation={{
+                      stocksPercent: debouncedAdvanced.stocksAllocationPercent,
+                      bondsPercent: 100 - debouncedAdvanced.stocksAllocationPercent,
+                    }}
                     onSuccessRateChange={setSuccessRate}
                     onPercentilesChange={setPercentiles}
                   />

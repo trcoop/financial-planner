@@ -97,6 +97,20 @@ describe('StressTestSection', () => {
     expect(allocationArg).toEqual({ stocksPercent: 70, bondsPercent: 30 })
   })
 
+  it('runs against a caller-supplied allocation instead of the 70/30 default (FIN-56)', () => {
+    const orchestrator = new FakeOrchestrator()
+    render(
+      <StressTestSection
+        assumptions={baseAssumptions}
+        orchestrator={orchestrator}
+        allocation={{ stocksPercent: 85, bondsPercent: 15 }}
+      />,
+    )
+
+    const [, allocationArg] = orchestrator.runCalls[0]
+    expect(allocationArg).toEqual({ stocksPercent: 85, bondsPercent: 15 })
+  })
+
   it('shows a running/disabled button immediately, since the initial run starts on mount', () => {
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)

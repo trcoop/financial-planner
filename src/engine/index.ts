@@ -48,11 +48,14 @@ export type {
 } from './types';
 
 export {
+  correlatedNormals,
   createRandomSeed,
   createSeededRandom,
   runMonteCarloTrial,
   runMonteCarloTrials,
   validateAllocation,
+  DEFAULT_CORRELATION,
+  DEFAULT_RETURN_ASSUMPTIONS,
   DEFAULT_SIMULATION_COUNT,
   DEFAULT_VOLATILITY_ASSUMPTIONS,
 } from './monteCarlo';
@@ -64,6 +67,7 @@ export type {
   PercentilePaths,
   PortfolioAllocation,
   RandomSource,
+  ReturnAssumptions,
   TrialConfig,
   VolatilityAssumptions,
 } from './monteCarlo';
