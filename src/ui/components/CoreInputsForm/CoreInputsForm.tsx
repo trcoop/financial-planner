@@ -47,6 +47,14 @@ interface CoreInputsFormProps {
   onChange: (values: CoreInputValues) => void
 }
 
+export const DEFAULT_CORE_VALUES: CoreInputValues = {
+  currentAge: 35,
+  retirementAge: 67,
+  initialBalance: 250000,
+  currentAnnualIncome: 85000,
+  annualContributionRatePercent: 15,
+}
+
 export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
   return (
     <form aria-label="Core financial details" className={styles.form}>
