@@ -1,0 +1,79 @@
+import type { KeyboardEvent } from 'react'
+import { useRef } from 'react'
+import styles from './TabBar.module.css'
+
+export interface TabBarTab {
+  id: string
+  label: string
+}
+
+interface TabBarProps {
+  tabs: TabBarTab[]
+  activeTab: string
+  onTabChange: (tabId: string) => void
+}
+
+export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+
+  function focusTabAt(index: number) {
+    const wrapped = (index + tabs.length) % tabs.length
+    const tab = tabs[wrapped]
+    tabRefs.current[tab.id]?.focus()
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    switch (event.key) {
+      case 'ArrowRight':
+        event.preventDefault()
+        focusTabAt(index + 1)
+        break
+      case 'ArrowLeft':
+        event.preventDefault()
+        focusTabAt(index - 1)
+        break
+      case 'Home':
+        event.preventDefault()
+        focusTabAt(0)
+        break
+      case 'End':
+        event.preventDefault()
+        focusTabAt(tabs.length - 1)
+        break
+      case 'Enter':
+      case ' ':
+        event.preventDefault()
+        onTabChange(tabs[index].id)
+        break
+      default:
+        break
+    }
+  }
+
+  return (
+    <div className={styles.tabBar} role="tablist" aria-label="Views">
+      {tabs.map((tab, index) => {
+        const isActive = tab.id === activeTab
+        return (
+          <button
+            key={tab.id}
+            ref={(el) => {
+              tabRefs.current[tab.id] = el
+            }}
+            type="button"
+            role="tab"
+            id={`tab-${tab.id}`}
+            aria-selected={isActive}
+            aria-controls={`tabpanel-${tab.id}`}
+            tabIndex={isActive ? 0 : -1}
+            className={isActive ? `${styles.tab} ${styles.tabActive}` : styles.tab}
+            onClick={() => onTabChange(tab.id)}
+            onKeyDown={(event) => handleKeyDown(event, index)}
+          >
+            {tab.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
