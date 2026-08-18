@@ -33,6 +33,9 @@ export function ChartContainer({ rows, title, onSelectRow }: ChartContainerProps
     onSelectRow?.(row)
   }
 
+  const firstAge = rows.at(0)?.age
+  const lastAge = rows.at(-1)?.age
+
   return (
     <Card className={styles.card}>
       <figure
@@ -43,7 +46,14 @@ export function ChartContainer({ rows, title, onSelectRow }: ChartContainerProps
         // directly assertable in jsdom, which doesn't apply CSS module rules.
         style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}
       >
-        <figcaption className={styles.title}>{title}</figcaption>
+        <div className={styles.titleRow}>
+          <figcaption className={styles.title}>{title}</figcaption>
+          {firstAge !== undefined && lastAge !== undefined && (
+            <div className={styles.subtitle}>
+              Age {firstAge} → {lastAge}
+            </div>
+          )}
+        </div>
         <div className={styles.plot}>
           {rows.map((row) => {
             const heightPercent = (row.endingBalance / maxBalance) * 100
@@ -60,6 +70,13 @@ export function ChartContainer({ rows, title, onSelectRow }: ChartContainerProps
               />
             )
           })}
+        </div>
+        <div className={styles.labels} aria-hidden="true">
+          {rows.map((row) => (
+            <div key={row.year} className={styles.label}>
+              {row.age}
+            </div>
+          ))}
         </div>
       </figure>
     </Card>

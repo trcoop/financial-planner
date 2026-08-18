@@ -1,8 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import { runProjection } from './engine'
 
 // jsdom has no real Worker; App's StressTestSection creates a real orchestrator by default,
 // which would throw on mount. These tests don't exercise the Monte Carlo run itself, so a
@@ -35,6 +34,11 @@ function mockMatchMedia(isDesktop: boolean) {
   })) as unknown as typeof window.matchMedia
 }
 
+// Debounced recalculation, the "pause on invalid input, keep last valid result" behavior,
+// and retirement-row/projected-balance derivation are covered by
+// src/ui/hooks/useProjectionState.test.ts (FIN-33) without needing to render App at all.
+// This file only covers what's actually App's job: composing components and wiring props/state
+// between them (tab switching, Drawer responsiveness, StatTile inputs).
 describe('App shell', () => {
   beforeEach(() => mockMatchMedia(true))
   afterEach(() => cleanup())
@@ -102,76 +106,6 @@ describe('App shell', () => {
     await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
     const runButtonAfter = screen.getByRole('button', { name: 'Run stress test' })
     expect(runButtonAfter).toBe(runButtonBefore)
-  })
-
-  it('recalculates the projection when a core input changes, debounced ~300ms', async () => {
-    render(<App />)
-    const balanceBefore = screen.getByText('Projected balance at retirement').closest('section')?.textContent
-    const age = screen.getByLabelText('Current age')
-    fireEvent.change(age, { target: { value: '60' } })
-
-    // Immediately after the change, recalculation must not have fired yet — it's debounced.
-    expect(screen.getByText('Projected balance at retirement').closest('section')?.textContent).toBe(balanceBefore)
-
-    await waitFor(() => {
-      expect(screen.getByText('Projected balance at retirement').closest('section')?.textContent).not.toBe(
-        balanceBefore,
-      )
-    })
-  })
-
-  it('pauses recalculation while a core field is out of range, showing the error state', async () => {
-    render(<App />)
-    const income = screen.getByLabelText('Current annual income')
-    fireEvent.change(income, { target: { value: '9000000' } })
-
-    expect(screen.getByRole('alert')).toBeInTheDocument()
-    await new Promise((resolve) => setTimeout(resolve, 350))
-    expect(screen.getByRole('alert')).toBeInTheDocument()
-  })
-
-  it('resumes normal rendering once the out-of-range field is corrected', async () => {
-    render(<App />)
-    const income = screen.getByLabelText('Current annual income')
-    fireEvent.change(income, { target: { value: '9000000' } })
-    fireEvent.change(income, { target: { value: '200000' } })
-
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-
-    await waitFor(() => {
-      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-      expect(screen.getByText('Current balance')).toBeInTheDocument()
-    })
-  })
-
-  it('converts advanced assumption percentages to fractions correctly (FIN-10 defaults)', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-    await user.click(screen.getByText('⋯ Advanced assumptions'))
-    expect(screen.getByLabelText('Investment return assumption')).toHaveValue(7)
-
-    const expectedRows = runProjection({
-      currentAge: 35,
-      retirementAge: 67,
-      initialBalance: 250000,
-      currentAnnualIncome: 85000,
-      annualContributionRate: 0.15,
-      planningHorizonEndAge: 100,
-      annualRaiseRate: 0.03,
-      annualReturnRate: 0.07,
-      inflationRate: 0.025,
-      withdrawalRateInRetirement: 0.04,
-    })
-    const retirementRow = expectedRows.find((row) => row.age >= 67)
-    expect(retirementRow).toBeDefined()
-
-    const tile = screen.getByText('Projected balance at retirement').closest('section')
-    const expectedText = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(retirementRow!.endingBalance)
-    expect(tile).toHaveTextContent(expectedText)
   })
 
   it('surfaces the stress test success rate on the Projection tab StatTile once available', async () => {

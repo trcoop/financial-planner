@@ -38,14 +38,23 @@ function ConnectedView({ initialRows }: { initialRows: ChartRow[] }) {
 describe('YearDetailPanel', () => {
   afterEach(() => cleanup())
 
-  it('shows the selected row age, year, balance start, contribution, investment return, and balance end', () => {
+  it('shows a headline with age and year, the ending balance, and the remaining detail rows', () => {
     render(<YearDetailPanel row={rows[0]} />)
     const panel = screen.getByRole('region', { name: 'Year detail' })
-    expect(panel).toHaveTextContent('35')
+    expect(panel).toHaveTextContent('Age 35 · Year 1')
     expect(panel).toHaveTextContent('$100,000')
     expect(panel).toHaveTextContent('$15,000')
     expect(panel).toHaveTextContent('$7,000')
     expect(panel).toHaveTextContent('$122,000')
+  })
+
+  it('does not render Year or Age as separate dl rows now that they are in the headline', () => {
+    render(<YearDetailPanel row={rows[0]} />)
+    const panel = screen.getByRole('region', { name: 'Year detail' })
+    for (const dt of panel.querySelectorAll('dt')) {
+      expect(dt.textContent).not.toBe('Year')
+      expect(dt.textContent).not.toBe('Age')
+    }
   })
 
   it('renders a placeholder when no row is selected', () => {
