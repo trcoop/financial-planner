@@ -12,7 +12,7 @@
   align-items: start;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 959px) {
   .body {
     grid-template-columns: 1fr;
     padding: var(--space-4);
@@ -32,13 +32,22 @@
   gap: var(--space-4);
 }
 
+/* Mobile (< 960px): 2-up grid — two tiles per row, third tile wraps to its own row —
+ * instead of stacking full-width, per FIN-30's mockup. Uses the app's unified
+ * breakpoint (FIN-32). */
+@media (max-width: 959px) {
+  .statTiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .chartRow {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: var(--space-4);
 }
 
-@media (max-width: 960px) {
+@media (max-width: 959px) {
   .chartRow {
     grid-template-columns: 1fr;
   }
