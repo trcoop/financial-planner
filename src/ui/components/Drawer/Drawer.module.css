@@ -1,0 +1,53 @@
+.drawer {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+
+.toggle {
+  align-self: flex-start;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  padding: var(--space-2) var(--space-3);
+}
+
+.toggle:hover {
+  color: var(--color-primary-hover);
+}
+
+.toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+/* Mobile (< 960px): accordion above content, matches CollapsibleSection. */
+@media (max-width: 959px) {
+  .drawer {
+    width: 100%;
+  }
+}
+
+/* Desktop (>= 960px): push-content layout alongside sibling content. */
+@media (min-width: 960px) {
+  .drawer {
+    width: 320px;
+    flex-shrink: 0;
+  }
+
+  .drawer[data-open='false'] {
+    width: auto;
+  }
+}
