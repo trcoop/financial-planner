@@ -306,7 +306,14 @@ describe('StressTestSection', () => {
   it('calls onStaleChange with false once the initial auto-run completes', async () => {
     const orchestrator = new FakeOrchestrator()
     const onStaleChange = vi.fn()
-    render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />)
+    render(
+      <StressTestSection
+        assumptions={baseAssumptions}
+        rows={baseRows}
+        orchestrator={orchestrator}
+        onStaleChange={onStaleChange}
+      />,
+    )
 
     act(() => orchestrator.resolveRun())
 
@@ -317,7 +324,12 @@ describe('StressTestSection', () => {
     const orchestrator = new FakeOrchestrator()
     const onStaleChange = vi.fn()
     const { rerender } = render(
-      <StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />,
+      <StressTestSection
+        assumptions={baseAssumptions}
+        rows={baseRows}
+        orchestrator={orchestrator}
+        onStaleChange={onStaleChange}
+      />,
     )
 
     act(() => orchestrator.resolveRun())
@@ -326,6 +338,7 @@ describe('StressTestSection', () => {
     rerender(
       <StressTestSection
         assumptions={{ ...baseAssumptions, currentAnnualIncome: 90_000 }}
+        rows={baseRows}
         orchestrator={orchestrator}
         onStaleChange={onStaleChange}
       />,
@@ -338,10 +351,10 @@ describe('StressTestSection', () => {
     const orchestrator = new FakeOrchestrator()
     const onStaleChange = vi.fn()
     const { rerender } = render(
-      <StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />,
+      <StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} onStaleChange={onStaleChange} />,
     )
     onStaleChange.mockClear()
-    rerender(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />)
+    rerender(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} onStaleChange={onStaleChange} />)
 
     expect(onStaleChange).not.toHaveBeenCalled()
   })
@@ -350,7 +363,12 @@ describe('StressTestSection', () => {
     const orchestrator = new FakeOrchestrator()
     const onStaleChange = vi.fn()
     const { rerender } = render(
-      <StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />,
+      <StressTestSection
+        assumptions={baseAssumptions}
+        rows={baseRows}
+        orchestrator={orchestrator}
+        onStaleChange={onStaleChange}
+      />,
     )
 
     act(() => orchestrator.resolveRun())
@@ -359,6 +377,7 @@ describe('StressTestSection', () => {
     rerender(
       <StressTestSection
         assumptions={{ ...baseAssumptions, currentAnnualIncome: 90_000 }}
+        rows={baseRows}
         orchestrator={orchestrator}
         onStaleChange={onStaleChange}
       />,
@@ -375,7 +394,7 @@ describe('StressTestSection', () => {
   it('exposes an imperative runStressTest handle so a parent can trigger a re-run without switching tabs', async () => {
     const orchestrator = new FakeOrchestrator()
     const ref = { current: null as { runStressTest: () => void } | null }
-    render(<StressTestSection ref={ref} assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    render(<StressTestSection ref={ref} assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
 
     orchestrator.runCalls.length = 0
     act(() => ref.current?.runStressTest())
