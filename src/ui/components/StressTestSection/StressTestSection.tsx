@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { DEFAULT_RETURN_ASSUMPTIONS, DEFAULT_VOLATILITY_ASSUMPTIONS } from '../../../engine'
 import type { PercentilePaths, PlanAssumptions, PortfolioAllocation, ReturnAssumptions } from '../../../engine'
 import { createMonteCarloOrchestrator } from '../../../workers'
@@ -44,20 +44,43 @@ interface StressTestSectionProps {
    * maps this into `ChartContainer`'s `band` prop. Optional and additive.
    */
   onPercentilesChange?: (percentiles: PercentilePaths | null) => void
+  /**
+   * FIN-48 integration seam: called whenever "inputs have changed since the last completed
+   * run" flips, mirroring `onSuccessRateChange`/`onPercentilesChange`'s pattern. `true` from
+   * the moment `assumptions` changes after a completed run, back to `false` once a run
+   * completes. A parent (`App.tsx`) uses this to swap the "chance of success" `StatTile`
+   * for a "Re-run stress test" CTA. Optional and additive.
+   */
+  onStaleChange?: (isStale: boolean) => void
 }
 
-export function StressTestSection({
-  assumptions,
-  allocation = DEFAULT_ALLOCATION,
-  returnAssumptions = DEFAULT_RETURN_ASSUMPTIONS,
-  orchestrator: injectedOrchestrator,
-  onSuccessRateChange,
-  onPercentilesChange,
-}: StressTestSectionProps) {
+/** Imperative handle (FIN-48): lets a parent (`App.tsx`) trigger a re-run — e.g. from the
+ * Plan tab's stale "chance of success" `StatTile` — without needing to switch to the Stress
+ * Test tab. `StressTestSection` stays mounted across tabs (only its parent `<section>` is
+ * hidden), so the orchestrator instance this calls into is the same one already in flight. */
+export interface StressTestSectionHandle {
+  runStressTest: () => void
+}
+
+export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestSectionProps>(function StressTestSection(
+  {
+    assumptions,
+    allocation = DEFAULT_ALLOCATION,
+    returnAssumptions = DEFAULT_RETURN_ASSUMPTIONS,
+    orchestrator: injectedOrchestrator,
+    onSuccessRateChange,
+    onPercentilesChange,
+    onStaleChange,
+  },
+  ref,
+) {
   const orchestrator = useMemo(() => injectedOrchestrator ?? createMonteCarloOrchestrator(), [injectedOrchestrator])
   const [state, setState] = useState<StressTestState>(() => orchestrator.getState())
   const [successRate, setSuccessRate] = useState<number | null>(null)
   const [percentiles, setPercentiles] = useState<PercentilePaths | null>(null)
+  // FIN-48: "inputs changed since last completed run". Set true alongside the existing
+  // cancel-on-input-change effect below, set false whenever a run completes.
+  const [isStale, setIsStale] = useState(false)
   // Tracks the last `assumptions` the cancel effect has seen, so it can tell "assumptions
   // actually changed" from "this effect ran again" (e.g. StrictMode's dev-only double-invoke
   // of effects on mount). A boolean "is this the first run" ref breaks under double-invoke: it
@@ -74,6 +97,7 @@ export function StressTestSection({
     if (state.status === 'complete') {
       setSuccessRate(state.result.successRate)
       setPercentiles(state.result.percentiles)
+      setIsStale(false)
     }
   }, [state])
 
@@ -87,14 +111,22 @@ export function StressTestSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [percentiles])
 
+  useEffect(() => {
+    onStaleChange?.(isStale)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStale])
+
   // Cancel-on-input-change (FIN-14 AC): keyed on `assumptions` changing, but must not fire on
-  // the initial mount — there is nothing in flight to cancel yet.
+  // the initial mount — there is nothing in flight to cancel yet. Also the trigger for FIN-48's
+  // staleness signal: the same "assumptions actually changed" check that invalidates an
+  // in-flight run also invalidates the last completed result.
   useEffect(() => {
     if (previousAssumptions.current === assumptions) {
       return
     }
     previousAssumptions.current = assumptions
     orchestrator.cancel()
+    setIsStale(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assumptions])
 
@@ -105,6 +137,8 @@ export function StressTestSection({
       // This catch exists solely to prevent an unhandled promise rejection.
     })
   }
+
+  useImperativeHandle(ref, () => ({ runStressTest: handleRunClick }))
 
   // Kick off one stress test against the default assumptions on load, since the projection
   // tab already shows other default-seeded values (chart, stat tiles) — an unrun "[Run
@@ -142,4 +176,4 @@ export function StressTestSection({
       </p>
     </section>
   )
-}
+})
