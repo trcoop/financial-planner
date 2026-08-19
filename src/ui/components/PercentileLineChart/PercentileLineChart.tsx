@@ -44,6 +44,30 @@ const toPoints = (rows: PercentileChartRow[], key: 'p10' | 'p50' | 'p90', maxVal
     .join(' ')
 }
 
+/** Values at/above this show as an abbreviated "$X.XM"; below it (but still $1M+) show as a full
+ * number rounded to the nearest $100k instead — right at the 7-figure boundary, "$1.2M" reads as
+ * terser than it needs to be, while a number like "$5.2M" is comfortably abbreviated (FIN-47
+ * round 6). */
+const ABBREVIATE_THRESHOLD = 2_000_000
+const NEAR_MILLION_ROUNDING = 100_000
+const SUB_MILLION_ROUNDING = 10_000
+
+/** Rounds a y-axis gridline value and formats it — never to dollar-and-cent precision, and
+ * increasingly coarse as the value grows, so the axis reads as "sense of scale" rather than an
+ * exact figure (which the hover tooltip already provides) (FIN-47 round 6). */
+const formatAxisValue = (value: number): string => {
+  const sign = value < 0 ? '-' : ''
+  const abs = Math.abs(value)
+
+  if (abs >= ABBREVIATE_THRESHOLD) {
+    return `${sign}$${(abs / 1_000_000).toFixed(1)}M`
+  }
+  if (abs >= 1_000_000) {
+    return `${sign}${formatCurrency(Math.round(abs / NEAR_MILLION_ROUNDING) * NEAR_MILLION_ROUNDING)}`
+  }
+  return `${sign}${formatCurrency(Math.round(abs / SUB_MILLION_ROUNDING) * SUB_MILLION_ROUNDING)}`
+}
+
 const hoverLabel = (row: PercentileChartRow): string =>
   `Age ${row.age}: 10th percentile ${formatCurrency(row.p10)}, median ${formatCurrency(row.p50)}, ` +
   `90th percentile ${formatCurrency(row.p90)}`
@@ -198,7 +222,7 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
                     className={styles.yAxisLabel}
                     style={{ top: `${(1 - fraction) * 100}%` }}
                   >
-                    {formatCurrency(fraction * maxValue)}
+                    {formatAxisValue(fraction * maxValue)}
                   </div>
                 ))}
               </div>

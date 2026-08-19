@@ -107,4 +107,23 @@ describe('PercentileLineChart', () => {
       expect(label).toHaveTextContent(/^\$[\d,]+$/)
     }
   })
+
+  it('rounds a just-over-$1M y-axis label to the nearest $100k as a full number, not an abbreviation (FIN-47)', () => {
+    const highRows: PercentileChartRow[] = [
+      { age: 60, year: 0, p10: 900_000, p50: 1_050_000, p90: 1_180_000 },
+    ]
+    render(<PercentileLineChart rows={highRows} title="Monte Carlo outcomes" />)
+    const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
+    // top gridline == maxValue == 1,180,000, rounds to nearest 100k => $1,200,000
+    expect(labels[0]).toHaveTextContent('$1,200,000')
+  })
+
+  it('abbreviates a comfortably-multi-million y-axis label to one decimal of millions (FIN-47)', () => {
+    const highRows: PercentileChartRow[] = [
+      { age: 60, year: 0, p10: 3_000_000, p50: 4_500_000, p90: 5_186_787 },
+    ]
+    render(<PercentileLineChart rows={highRows} title="Monte Carlo outcomes" />)
+    const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
+    expect(labels[0]).toHaveTextContent('$5.2M')
+  })
 })
