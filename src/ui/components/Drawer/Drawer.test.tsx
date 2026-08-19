@@ -39,6 +39,9 @@ function mockMatchMedia(isDesktop: boolean) {
         changeListeners.forEach((listener) => listener(event))
       })
     },
+    listenerCount() {
+      return changeListeners.size
+    },
   }
 }
 
@@ -191,6 +194,39 @@ describe('Drawer', () => {
       simulateChange(true)
 
       expect(screen.getByRole('button', { name: /expand/i })).toBeInTheDocument()
+    })
+
+    it('removes its matchMedia change listener on unmount', () => {
+      const { listenerCount, simulateChange } = mockMatchMedia(true)
+      const { unmount } = render(
+        <Drawer label="Plan inputs">
+          <p>Investment return</p>
+        </Drawer>,
+      )
+      expect(listenerCount()).toBe(1)
+
+      unmount()
+
+      expect(listenerCount()).toBe(0)
+      // A change firing after unmount must not throw or warn about updating
+      // an unmounted component — there's no listener left to receive it.
+      expect(() => simulateChange(false)).not.toThrow()
+    })
+
+    it('does not tear down and resubscribe its matchMedia listener on toggle', async () => {
+      const { listenerCount } = mockMatchMedia(true)
+      const user = userEvent.setup()
+      render(
+        <Drawer label="Plan inputs">
+          <p>Investment return</p>
+        </Drawer>,
+      )
+      expect(listenerCount()).toBe(1)
+
+      await user.click(screen.getByRole('button', { name: /collapse/i }))
+      await user.click(screen.getByRole('button', { name: /expand/i }))
+
+      expect(listenerCount()).toBe(1)
     })
   })
 })

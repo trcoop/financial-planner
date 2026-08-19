@@ -12,7 +12,9 @@ const DESKTOP_QUERY = '(min-width: 960px)'
 
 /**
  * Drawer defaults open (push-content) at desktop widths and collapsed
- * (accordion) at mobile widths. This is read once at mount, mirroring the
+ * (accordion) at mobile widths. Read once at mount for the initial render;
+ * kept in sync after that by the matchMedia 'change' listener below (until
+ * the user manually toggles, see `userToggled`), unlike the fully
  * uncontrolled, non-persisted state pattern used by CollapsibleSection.
  */
 function getDefaultOpen(): boolean {
@@ -26,9 +28,11 @@ export function Drawer({ label, children }: DrawerProps) {
   const [isOpen, setIsOpen] = useState(getDefaultOpen)
   const contentId = useId()
   // Once the user explicitly toggles the drawer, their choice wins over the
-  // responsive default for the rest of this mount — the listener below only
-  // re-applies the breakpoint default until then, so a rotate/resize before
-  // any manual interaction picks up the correct default retroactively.
+  // responsive default for the rest of this mount — permanently, until the
+  // component remounts — rather than being overridden by the next viewport
+  // change. The listener below only re-applies the breakpoint default until
+  // then, so a rotate/resize before any manual interaction picks up the
+  // correct default retroactively.
   const userToggled = useRef(false)
 
   useEffect(() => {
