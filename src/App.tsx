@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AdvancedAssumptionsForm,
   Button,
   Card,
+  ConfirmDialog,
   CoreInputsForm,
   DEFAULT_ADVANCED_VALUES,
   DEFAULT_CORE_VALUES,
   StatTile,
   StressTestSection,
 } from './ui/components'
+import type { StressTestSectionHandle } from './ui/components'
 import { TopBar } from './ui/components/TopBar/TopBar'
 import { TabBar, type TabBarTab } from './ui/components/TabBar/TabBar'
 import { Drawer } from './ui/components/Drawer/Drawer'
@@ -40,6 +42,14 @@ function App() {
   // Projection tab's "chance of success" StatTile can show it — StressTestSection itself
   // still owns all Monte Carlo state/logic.
   const [successRate, setSuccessRate] = useState<number | null>(null)
+  // FIN-48: "inputs changed since the last completed stress test run", lifted out of
+  // StressTestSection via its `onStaleChange` seam so the Plan tab's "chance of success"
+  // StatTile can swap to a "Re-run stress test" CTA — same lift-up pattern as successRate.
+  const [isStressTestStale, setIsStressTestStale] = useState(false)
+  // Imperative handle onto the (always-mounted) StressTestSection, so the CTA above can
+  // trigger a re-run from the Plan tab without switching to the Stress Test tab.
+  const stressTestRef = useRef<StressTestSectionHandle>(null)
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
 
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
@@ -56,10 +66,18 @@ function App() {
   }, [debouncedCore, debouncedAdvanced])
 
   const handleReset = () => {
-    if (!window.confirm('Clear your saved plan and reset to defaults?')) return
+    setIsResetConfirmOpen(true)
+  }
+
+  const handleConfirmReset = () => {
+    setIsResetConfirmOpen(false)
     clearAssumptions()
     setCoreValues(DEFAULT_CORE_VALUES)
     setAdvancedValues(DEFAULT_ADVANCED_VALUES)
+  }
+
+  const handleCancelReset = () => {
+    setIsResetConfirmOpen(false)
   }
 
   const successRateValue =
@@ -105,6 +123,13 @@ function App() {
                     label="Chance of success"
                     value={successRateValue}
                     isPlaceholder={successRate === null}
+                    action={
+                      isStressTestStale && successRate !== null ? (
+                        <Button variant="secondary" onClick={() => stressTestRef.current?.runStressTest()}>
+                          Re-run stress test
+                        </Button>
+                      ) : undefined
+                    }
                   />
                 </div>
 
@@ -135,6 +160,7 @@ function App() {
                     the Card wrapper to StressTestSection's own fill-to-height chain. */}
                 <Card className="stressTestCard">
                   <StressTestSection
+                    ref={stressTestRef}
                     assumptions={assumptions}
                     rows={rows}
                     allocation={{
@@ -146,6 +172,7 @@ function App() {
                       bonds: debouncedAdvanced.bondReturnPercent / 100,
                     }}
                     onSuccessRateChange={setSuccessRate}
+                    onStaleChange={setIsStressTestStale}
                   />
                 </Card>
               </section>
@@ -153,6 +180,16 @@ function App() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={isResetConfirmOpen}
+        title="Reset to defaults?"
+        message="Clear your saved plan and reset to defaults?"
+        confirmLabel="Reset"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmReset}
+        onCancel={handleCancelReset}
+      />
     </div>
   )
 }

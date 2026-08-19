@@ -32,7 +32,7 @@ interface FieldSpec {
 
 const LABELS: Record<keyof AdvancedAssumptionValues, string> = {
   annualRaisePercent: 'Expected annual raise',
-  annualReturnPercent: 'Investment return assumption',
+  annualReturnPercent: 'Stock return assumption',
   inflationPercent: 'Inflation rate',
   withdrawalRatePercent: 'Withdrawal rate in retirement',
   stocksAllocationPercent: 'Stock allocation (vs. bonds)',

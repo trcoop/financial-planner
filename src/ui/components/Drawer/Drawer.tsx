@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import styles from './Drawer.module.css'
 
 interface DrawerProps {
@@ -12,7 +12,9 @@ const DESKTOP_QUERY = '(min-width: 960px)'
 
 /**
  * Drawer defaults open (push-content) at desktop widths and collapsed
- * (accordion) at mobile widths. This is read once at mount, mirroring the
+ * (accordion) at mobile widths. Read once at mount for the initial render;
+ * kept in sync after that by the matchMedia 'change' listener below (until
+ * the user manually toggles, see `userToggled`), unlike the fully
  * uncontrolled, non-persisted state pattern used by CollapsibleSection.
  */
 function getDefaultOpen(): boolean {
@@ -25,6 +27,27 @@ function getDefaultOpen(): boolean {
 export function Drawer({ label, children }: DrawerProps) {
   const [isOpen, setIsOpen] = useState(getDefaultOpen)
   const contentId = useId()
+  // Once the user explicitly toggles the drawer, their choice wins over the
+  // responsive default for the rest of this mount — permanently, until the
+  // component remounts — rather than being overridden by the next viewport
+  // change. The listener below only re-applies the breakpoint default until
+  // then, so a rotate/resize before any manual interaction picks up the
+  // correct default retroactively.
+  const userToggled = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
+    const mediaQueryList = window.matchMedia(DESKTOP_QUERY)
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (!userToggled.current) {
+        setIsOpen(event.matches)
+      }
+    }
+    mediaQueryList.addEventListener('change', handleChange)
+    return () => mediaQueryList.removeEventListener('change', handleChange)
+  }, [])
 
   return (
     <div className={styles.drawer} data-open={isOpen}>
@@ -39,7 +62,10 @@ export function Drawer({ label, children }: DrawerProps) {
         aria-expanded={isOpen}
         aria-controls={contentId}
         aria-label={isOpen ? `Collapse ${label}` : `Expand ${label}`}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          userToggled.current = true
+          setIsOpen((open) => !open)
+        }}
       >
         <svg
           className={styles.icon}
