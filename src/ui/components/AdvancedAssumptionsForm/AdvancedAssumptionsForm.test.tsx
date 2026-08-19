@@ -39,11 +39,25 @@ describe('AdvancedAssumptionsForm', () => {
     await user.click(screen.getByText('▸ Advanced assumptions'))
 
     expect(screen.getByLabelText('Expected annual raise')).toBeInTheDocument()
-    expect(screen.getByLabelText('Investment return assumption')).toBeInTheDocument()
+    expect(screen.getByLabelText('Stock return assumption')).toBeInTheDocument()
     expect(screen.getByLabelText('Inflation rate')).toBeInTheDocument()
     expect(screen.getByLabelText('Withdrawal rate in retirement')).toBeInTheDocument()
     expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toBeInTheDocument()
     expect(screen.getByLabelText('Bond return assumption')).toBeInTheDocument()
+  })
+
+  it('renders Bond return assumption immediately after Stock return assumption (FIN-58)', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
+
+    await user.click(screen.getByText('▸ Advanced assumptions'))
+
+    const labels = Array.from(container.querySelectorAll('label')).map((el) => el.textContent)
+    const stockIndex = labels.indexOf('Stock return assumption')
+    const bondIndex = labels.indexOf('Bond return assumption')
+
+    expect(stockIndex).toBeGreaterThanOrEqual(0)
+    expect(bondIndex).toBe(stockIndex + 1)
   })
 
   it('pre-fills the FIN-10 default values, the FIN-56 default 70/30 stock/bond split, and the FIN-57 default 4.5% bond return', async () => {
@@ -52,7 +66,7 @@ describe('AdvancedAssumptionsForm', () => {
     await user.click(screen.getByText('▸ Advanced assumptions'))
 
     expect(screen.getByLabelText('Expected annual raise')).toHaveValue('3%')
-    expect(screen.getByLabelText('Investment return assumption')).toHaveValue('7%')
+    expect(screen.getByLabelText('Stock return assumption')).toHaveValue('7%')
     expect(screen.getByLabelText('Inflation rate')).toHaveValue('2.5%')
     expect(screen.getByLabelText('Withdrawal rate in retirement')).toHaveValue('4%')
     expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toHaveValue('70%')
@@ -114,8 +128,8 @@ describe('AdvancedAssumptionsForm', () => {
 
     expect(screen.getByLabelText('Expected annual raise')).toHaveAttribute('min', '0')
     expect(screen.getByLabelText('Expected annual raise')).toHaveAttribute('max', '100')
-    expect(screen.getByLabelText('Investment return assumption')).toHaveAttribute('min', '-50')
-    expect(screen.getByLabelText('Investment return assumption')).toHaveAttribute('max', '100')
+    expect(screen.getByLabelText('Stock return assumption')).toHaveAttribute('min', '-50')
+    expect(screen.getByLabelText('Stock return assumption')).toHaveAttribute('max', '100')
     expect(screen.getByLabelText('Inflation rate')).toHaveAttribute('min', '-50')
     expect(screen.getByLabelText('Inflation rate')).toHaveAttribute('max', '100')
     expect(screen.getByLabelText('Withdrawal rate in retirement')).toHaveAttribute('min', '0')
@@ -127,7 +141,7 @@ describe('AdvancedAssumptionsForm', () => {
     render(<ControlledForm />)
     await user.click(screen.getByText('▸ Advanced assumptions'))
 
-    const returnField = screen.getByLabelText('Investment return assumption')
+    const returnField = screen.getByLabelText('Stock return assumption')
     fireEvent.change(returnField, { target: { value: '-60' } })
 
     expect(returnField).toHaveValue('-60%')
@@ -139,7 +153,7 @@ describe('AdvancedAssumptionsForm', () => {
     render(<ControlledForm />)
     await user.click(screen.getByText('▸ Advanced assumptions'))
 
-    const returnField = screen.getByLabelText('Investment return assumption')
+    const returnField = screen.getByLabelText('Stock return assumption')
     fireEvent.change(returnField, { target: { value: '-60' } })
     expect(screen.getByRole('alert')).toBeInTheDocument()
 
@@ -182,7 +196,7 @@ describe('AdvancedAssumptionsForm', () => {
     await user.click(screen.getByText('▸ Advanced assumptions'))
 
     expect(screen.getByLabelText('Expected annual raise')).toHaveValue('3%')
-    expect(screen.getByLabelText('Investment return assumption')).toHaveValue('7%')
+    expect(screen.getByLabelText('Stock return assumption')).toHaveValue('7%')
     expect(screen.getByLabelText('Inflation rate')).toHaveValue('2.5%')
     expect(screen.getByLabelText('Withdrawal rate in retirement')).toHaveValue('4%')
     expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toHaveValue('70%')
