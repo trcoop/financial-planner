@@ -97,3 +97,22 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Wraps StressTestSection on the Stress Test tab (App.tsx). `.tabPanel` on that tab's own
+ * <section> gives it the same height budget the Projection tabpanel gets from `.main` (and thus
+ * matches the Drawer's stretched height — FIN-47 round 4); this class passes that height on down
+ * through the Card to StressTestSection's own fill-to-height chain (its `.section` already flexes
+ * to fill whatever height its parent gives it, same as ChartContainer's card does on the Plan
+ * tab). Without `min-height: 0` this would hit the exact same overflow bug `.card`'s FIN-47
+ * round-1 fix addressed. */
+.stressTestCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (min-width: 960px) {
+  .stressTestCard {
+    flex: 1;
+  }
+}

@@ -125,8 +125,15 @@ function App() {
                 id="tabpanel-stress-test"
                 aria-labelledby="tab-stress-test"
                 hidden={activeTab !== 'stress-test'}
+                className="tabPanel"
               >
-                <Card>
+                {/* `tabPanel` (shared with the Projection tabpanel) is what gives this section a
+                    height budget from `.main` in the first place — matching `.main`'s other flex
+                    child, the Drawer, which stretches to the same height by default (FIN-47 round
+                    4: without this, the chart didn't line up with the left input pane the way it
+                    does on the Plan tab). `stressTestCard` then passes that height on down through
+                    the Card wrapper to StressTestSection's own fill-to-height chain. */}
+                <Card className="stressTestCard">
                   <StressTestSection
                     assumptions={assumptions}
                     rows={rows}
