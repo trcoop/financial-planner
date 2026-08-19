@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlanAssumptions } from '../../../engine'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
+import type { ChartRow } from '../ChartContainer/types'
 import { StressTestSection } from './StressTestSection'
 
 const baseAssumptions: PlanAssumptions = {
@@ -17,6 +18,20 @@ const baseAssumptions: PlanAssumptions = {
   withdrawalRateInRetirement: 0.04,
   planningHorizonEndAge: 100,
 }
+
+/** Single-row projection standing in for `App.tsx`'s real `rows`, index-aligned with
+ * `fakeResult.percentiles`' single-entry arrays below (FIN-47). */
+const baseRows: ChartRow[] = [
+  {
+    age: 35,
+    year: 0,
+    beginningBalance: 100_000,
+    annualContribution: 15_000,
+    investmentReturn: 7_000,
+    annualWithdrawal: 0,
+    endingBalance: 122_000,
+  },
+]
 
 const fakeResult = {
   successRate: 87,
@@ -89,7 +104,8 @@ describe('StressTestSection', () => {
 
   it('auto-runs a stress test against the default assumptions on mount', () => {
     const orchestrator = new FakeOrchestrator()
-    render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    render(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
 
     expect(orchestrator.runCalls).toHaveLength(1)
     const [assumptionsArg, allocationArg] = orchestrator.runCalls[0]
@@ -102,6 +118,7 @@ describe('StressTestSection', () => {
     render(
       <StressTestSection
         assumptions={baseAssumptions}
+        rows={baseRows}
         orchestrator={orchestrator}
         allocation={{ stocksPercent: 85, bondsPercent: 15 }}
       />,
@@ -113,7 +130,8 @@ describe('StressTestSection', () => {
 
   it('defaults to a 7%/4.5% return assumption, and runs against a caller-supplied one instead (FIN-57)', () => {
     const orchestrator = new FakeOrchestrator()
-    const { unmount } = render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    const { unmount } = render(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
 
     const [, , , , returnAssumptionsArg] = orchestrator.runCalls[0]
     expect(returnAssumptionsArg).toEqual({ stocks: 0.07, bonds: 0.045 })
@@ -123,6 +141,7 @@ describe('StressTestSection', () => {
     render(
       <StressTestSection
         assumptions={baseAssumptions}
+        rows={baseRows}
         orchestrator={orchestrator2}
         returnAssumptions={{ stocks: 0.07, bonds: 0.06 }}
       />,
@@ -134,7 +153,8 @@ describe('StressTestSection', () => {
 
   it('shows a running/disabled button immediately, since the initial run starts on mount', () => {
     const orchestrator = new FakeOrchestrator()
-    render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    render(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
 
     const button = screen.getByRole('button', { name: /running stress test/i })
     expect(button).toBeDisabled()
@@ -143,8 +163,10 @@ describe('StressTestSection', () => {
 
   it('does not auto-run a second time or cancel on re-render with unchanged assumptions', () => {
     const orchestrator = new FakeOrchestrator()
-    const { rerender } = render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
-    rerender(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    const { rerender } = render(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
+    rerender(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
 
     expect(orchestrator.runCalls).toHaveLength(1)
     expect(orchestrator.cancelCalls).toBe(0)
@@ -152,7 +174,8 @@ describe('StressTestSection', () => {
 
   it('shows the success rate once the run completes and returns the button to idle', async () => {
     const orchestrator = new FakeOrchestrator()
-    render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    render(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
 
     act(() => orchestrator.resolveRun())
 
@@ -160,15 +183,35 @@ describe('StressTestSection', () => {
     expect(screen.getByRole('button', { name: 'Run stress test' })).toBeEnabled()
   })
 
+  it('renders no percentile line chart before any run completes (FIN-47)', () => {
+    const orchestrator = new FakeOrchestrator()
+    render(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
+
+    expect(screen.queryByRole('figure')).not.toBeInTheDocument()
+  })
+
+  it('renders a percentile line chart, including the p50 median, once the run completes (FIN-47)', async () => {
+    const orchestrator = new FakeOrchestrator()
+    render(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
+
+    act(() => orchestrator.resolveRun())
+
+    const chart = await screen.findByRole('figure')
+    expect(chart).toBeInTheDocument()
+    expect(screen.getByText(/median.*50th percentile/i)).toBeInTheDocument()
+  })
+
   it('cancels the in-flight run and shows a transient cancelled message when assumptions change', async () => {
     const orchestrator = new FakeOrchestrator()
-    const { rerender } = render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    const { rerender } = render(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
 
     expect(orchestrator.cancelCalls).toBe(0)
 
     rerender(
       <StressTestSection
         assumptions={{ ...baseAssumptions, currentAnnualIncome: 90_000 }}
+        rows={baseRows}
         orchestrator={orchestrator}
       />,
     )
@@ -180,7 +223,8 @@ describe('StressTestSection', () => {
 
   it('shows an error banner and resets the button when the run rejects', async () => {
     const orchestrator = new FakeOrchestrator()
-    render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    render(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
 
     act(() => orchestrator.rejectRun(new Error('boom')))
 
@@ -193,7 +237,8 @@ describe('StressTestSection', () => {
   it('allows running additional stress tests manually after the initial auto-run completes', async () => {
     const user = userEvent.setup()
     const orchestrator = new FakeOrchestrator()
-    render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} />)
+    render(<StressTestSection assumptions={baseAssumptions}
+        rows={baseRows} orchestrator={orchestrator} />)
 
     act(() => orchestrator.resolveRun())
     await waitFor(() => expect(screen.getByText('Success rate: 87%')).toBeInTheDocument())
@@ -208,6 +253,7 @@ describe('StressTestSection', () => {
     render(
       <StressTestSection
         assumptions={baseAssumptions}
+        rows={baseRows}
         orchestrator={orchestrator}
         onPercentilesChange={onPercentilesChange}
       />,
@@ -222,6 +268,7 @@ describe('StressTestSection', () => {
     render(
       <StressTestSection
         assumptions={baseAssumptions}
+        rows={baseRows}
         orchestrator={orchestrator}
         onPercentilesChange={onPercentilesChange}
       />,
@@ -238,6 +285,7 @@ describe('StressTestSection', () => {
     render(
       <StressTestSection
         assumptions={baseAssumptions}
+        rows={baseRows}
         orchestrator={orchestrator}
         onPercentilesChange={onPercentilesChange}
       />,

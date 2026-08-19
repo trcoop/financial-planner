@@ -1,0 +1,109 @@
+.card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  flex: 1 1 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
+}
+
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Fixed aspect ratio so the plot has a sensible height regardless of container width; the
+   viewBox/preserveAspectRatio on the <svg> itself keeps the drawn lines matching this box. */
+.plot {
+  width: 100%;
+  aspect-ratio: 21 / 9;
+  min-height: 0;
+}
+
+.p10Line,
+.p50Line,
+.p90Line {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Median line is the primary "expected balance" signal here, so it's the most visually
+   prominent — solid and thicker, using the same primary color the Plan tab's bars use. */
+.p50Line {
+  stroke: var(--color-primary);
+  stroke-width: 2.5;
+}
+
+/* p10/p90 are the outer bounds, secondary to the median — thinner, dashed, and muted so the
+   median line reads first. */
+.p10Line,
+.p90Line {
+  stroke: var(--color-text-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.p50Swatch {
+  border-top-color: var(--color-primary);
+  border-top-width: 2.5px;
+}
+
+.p10Swatch,
+.p90Swatch {
+  border-top-color: var(--color-text-muted);
+  border-top-style: dashed;
+}

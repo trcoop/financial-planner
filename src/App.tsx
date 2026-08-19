@@ -13,9 +13,8 @@ import { TopBar } from './ui/components/TopBar/TopBar'
 import { TabBar, type TabBarTab } from './ui/components/TabBar/TabBar'
 import { Drawer } from './ui/components/Drawer/Drawer'
 import { ChartContainer } from './ui/components/ChartContainer/ChartContainer'
-import type { ChartBandRow, ChartRow } from './ui/components/ChartContainer/types'
+import type { ChartRow } from './ui/components/ChartContainer/types'
 import { DEFAULT_RETURN_ASSUMPTIONS } from './engine'
-import type { PercentilePaths } from './engine'
 import { YearDetailPanel } from './ui/components/YearDetailPanel/YearDetailPanel'
 import { useProjectionState } from './ui/hooks/useProjectionState'
 import { formatCurrency, formatPercent } from './ui/utils/format'
@@ -41,11 +40,6 @@ function App() {
   // Projection tab's "chance of success" StatTile can show it — StressTestSection itself
   // still owns all Monte Carlo state/logic.
   const [successRate, setSuccessRate] = useState<number | null>(null)
-  // Lifted out of StressTestSection (via its `onPercentilesChange` seam) purely so the
-  // Projection tab's chart can overlay a Monte Carlo confidence band — StressTestSection
-  // itself still owns all Monte Carlo state/logic. Never cleared on cancellation, mirroring
-  // successRate's behavior (ERD §7): the last completed band stays visible.
-  const [percentiles, setPercentiles] = useState<PercentilePaths | null>(null)
 
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
@@ -75,12 +69,6 @@ function App() {
   // full horizon — that's the year people care about most on load. Falls back to the last row
   // if, for some reason, no row's age matches (e.g. retirement age outside the horizon).
   const retirementRow = rows.find((row) => row.age === coreValues.retirementAge) ?? rows.at(-1)
-
-  // Index-aligned mapping (ERD §6.3): percentiles.p10[i]/p90[i] correspond 1:1 with rows[i],
-  // both keyed 0..horizon by construction.
-  const band: ChartBandRow[] | undefined = percentiles
-    ? rows.map((row, i) => ({ year: row.year, p10: percentiles.p10[i], p90: percentiles.p90[i] }))
-    : undefined
 
   return (
     <div className="shell">
@@ -126,7 +114,6 @@ function App() {
                     title="Investment balance by year"
                     onSelectRow={setSelectedRow}
                     defaultSelectedYear={retirementRow?.year}
-                    band={band}
                     retirementAge={coreValues.retirementAge}
                   />
                   <YearDetailPanel row={selectedRow ?? retirementRow} />
@@ -142,6 +129,7 @@ function App() {
                 <Card>
                   <StressTestSection
                     assumptions={assumptions}
+                    rows={rows}
                     allocation={{
                       stocksPercent: debouncedAdvanced.stocksAllocationPercent,
                       bondsPercent: 100 - debouncedAdvanced.stocksAllocationPercent,
@@ -151,7 +139,6 @@ function App() {
                       bonds: debouncedAdvanced.bondReturnPercent / 100,
                     }}
                     onSuccessRateChange={setSuccessRate}
-                    onPercentilesChange={setPercentiles}
                   />
                 </Card>
               </section>

@@ -99,16 +99,9 @@
   box-sizing: border-box;
 }
 
-/* Monte Carlo p10-p90 band, one per year, absolutely positioned behind the bars using
-   measured (not recreated-from-CSS) bar rects — see ChartContainer.tsx's layout effect and
-   ERD §6.4. Lower opacity than the bars so bars stay visually primary/on top (ERD §2.1/§2.2). */
-.band {
-  position: absolute;
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-
-/* Vertical rule marking the retirement-year bar. Independent of the band overlay. */
+/* Vertical rule marking the retirement-year bar. Previously drawn alongside a Monte Carlo band
+   overlay (FIN-42); that overlay was removed in FIN-47, but the marker itself is independent
+   and stays. */
 .retirementMarker {
   position: absolute;
   top: 0;

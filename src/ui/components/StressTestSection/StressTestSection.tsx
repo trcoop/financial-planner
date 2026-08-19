@@ -5,6 +5,8 @@ import { createMonteCarloOrchestrator } from '../../../workers'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
 import { formatPercent } from '../../utils/format'
 import { Button } from '../Button/Button'
+import type { ChartRow } from '../ChartContainer/types'
+import { PercentileLineChart, type PercentileChartRow } from '../PercentileLineChart/PercentileLineChart'
 import styles from './StressTestSection.module.css'
 
 /**
@@ -18,6 +20,14 @@ const DEFAULT_ALLOCATION: PortfolioAllocation = { stocksPercent: 70, bondsPercen
 interface StressTestSectionProps {
   /** The plan inputs to stress-test. Changing this cancels any in-flight run (FIN-14 AC). */
   assumptions: PlanAssumptions
+  /**
+   * The same per-year projection rows the Plan tab's chart uses, supplying only the `age` for
+   * each year so the stress-test line chart (`PercentileLineChart`) can label its x-axis the
+   * same way (FIN-47). Percentile arrays from a completed run are index-aligned 1:1 with these
+   * rows (ERD §6.3), same assumption `App.tsx` previously relied on to build the (now removed)
+   * Plan-tab band overlay.
+   */
+  rows: ChartRow[]
   /** The stock/bond mix to stress-test against (FIN-56). Defaults to {@link DEFAULT_ALLOCATION}
    * (70/30) when omitted. */
   allocation?: PortfolioAllocation
@@ -40,14 +50,18 @@ interface StressTestSectionProps {
   /**
    * FIN-44 integration seam: called whenever the computed Monte Carlo percentile fan changes
    * (including back to `null`, e.g. on a fresh orchestrator), mirroring `onSuccessRateChange`
-   * exactly — same two-effect pattern, same null-only-at-init behavior. A parent (`App.tsx`)
-   * maps this into `ChartContainer`'s `band` prop. Optional and additive.
+   * exactly — same two-effect pattern, same null-only-at-init behavior. Originally let a parent
+   * (`App.tsx`) map this into `ChartContainer`'s `band` prop; FIN-47 removed that overlay and
+   * this component now renders its own `PercentileLineChart` directly, so nothing in `App.tsx`
+   * consumes this anymore — kept as an optional, additive seam in case another consumer needs
+   * the raw percentiles later.
    */
   onPercentilesChange?: (percentiles: PercentilePaths | null) => void
 }
 
 export function StressTestSection({
   assumptions,
+  rows,
   allocation = DEFAULT_ALLOCATION,
   returnAssumptions = DEFAULT_RETURN_ASSUMPTIONS,
   orchestrator: injectedOrchestrator,
@@ -121,6 +135,19 @@ export function StressTestSection({
   const isRunning = state.status === 'running'
   const buttonLabel = isRunning ? 'Running stress test...' : 'Run stress test'
 
+  // Index-aligned mapping (ERD §6.3): percentiles.p10[i]/p50[i]/p90[i] correspond 1:1 with
+  // rows[i], both keyed 0..horizon by construction — same assumption `App.tsx` previously used
+  // to build the (now removed) Plan-tab band overlay.
+  const chartRows: PercentileChartRow[] | null = percentiles
+    ? rows.map((row, i) => ({
+        age: row.age,
+        year: row.year,
+        p10: percentiles.p10[i],
+        p50: percentiles.p50[i],
+        p90: percentiles.p90[i],
+      }))
+    : null
+
   return (
     <section className={styles.section}>
       <Button onClick={handleRunClick} disabled={isRunning}>
@@ -140,6 +167,8 @@ export function StressTestSection({
       <p className={styles.successRate}>
         Success rate: {successRate === null ? '[Run stress test to see results]' : formatPercent(successRate)}
       </p>
+
+      {chartRows && <PercentileLineChart rows={chartRows} title="Simulated outcomes by year" />}
     </section>
   )
 }

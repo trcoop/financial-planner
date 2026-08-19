@@ -174,22 +174,27 @@ describe('App shell', () => {
     expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
   })
 
-  it('renders the chart without a Monte Carlo band before any stress test completes', () => {
+  it('renders no Monte Carlo overlay on the Plan tab\'s chart (FIN-47: band overlay removed entirely)', async () => {
     render(<App />)
-    expect(screen.queryByTestId(/^chart-band-/)).not.toBeInTheDocument()
-  })
-
-  it('wires a completed stress test\'s percentiles into the chart as a band (FIN-44)', async () => {
-    render(<App />)
-    // The mocked orchestrator (module-level, shared across StressTestSection's `useMemo`) is
-    // driven directly to `complete`, mirroring how StressTestSection's own tests drive a fake
-    // orchestrator — App's job under test is the band wiring, not re-testing the two-effect
-    // lift-up pattern StressTestSection.test.tsx already covers.
     await act(async () => {
       lastOrchestrator.emitComplete()
     })
+    // Even after a stress test completes, the Projection tab's bar chart shows only the
+    // deterministic plan — no band elements of any kind behind the bars.
+    expect(screen.queryByTestId(/^chart-band-/)).not.toBeInTheDocument()
+  })
 
-    await waitFor(() => expect(screen.queryAllByTestId(/^chart-band-/).length).toBeGreaterThan(0))
+  it('wires a completed stress test\'s percentiles into a dedicated line chart on the Stress Test tab (FIN-47)', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await act(async () => {
+      lastOrchestrator.emitComplete()
+    })
+    await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
+
+    const chart = await screen.findByRole('figure')
+    expect(chart).toBeInTheDocument()
+    expect(within(chart).getByText(/median.*50th percentile/i)).toBeInTheDocument()
   })
 
   it('keeps the chart retirement marker live as the retirement age input changes (FIN-44)', async () => {
