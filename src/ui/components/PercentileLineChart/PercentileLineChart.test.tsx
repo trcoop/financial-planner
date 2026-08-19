@@ -193,6 +193,39 @@ describe('PercentileLineChart', () => {
     expect(onSelectRow).toHaveBeenCalledWith(rows[2])
   })
 
+  it("shapes a non-last series' area polygon bottom edge to follow the next series' line, not a constant chart-bottom value", () => {
+    const { container } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />,
+    )
+    // First polygon is the p90 area (series[0]); its bottom edge should follow p50 (series[1]),
+    // per FIN-60's "shading beneath each line, down to the next line". maxValue across all rows
+    // is 260,000 (p90's last row), and VIEW_HEIGHT is 200 — so if the bottom edge used a
+    // constant chart-bottom value instead (the mutation under test), every bottom y would be
+    // exactly 200 regardless of p50's actual values.
+    const p90Area = container.querySelectorAll('polygon')[0]
+    const points = p90Area.getAttribute('points')?.trim().split(/\s+/) ?? []
+    expect(points).toHaveLength(rows.length * 2)
+
+    // Bottom half is the second half of the points list, in reverse row order (row2, row1, row0).
+    const bottomPoints = points.slice(rows.length)
+    const bottomYs = bottomPoints.map((p) => Number(p.split(',')[1]))
+
+    const maxValue = 260_000
+    const expectedYs = [...rows]
+      .reverse()
+      .map((row) => 200 - (row.values.p50 / maxValue) * 200)
+
+    bottomYs.forEach((y, i) => expect(y).toBeCloseTo(expectedYs[i], 3))
+    // None of these should be the constant chart-bottom value (VIEW_HEIGHT = 200) — confirming
+    // the bottom edge genuinely tracks the next series rather than always sitting at the floor.
+    for (const y of bottomYs) {
+      expect(y).not.toBeCloseTo(200, 3)
+    }
+    // And the bottom edge must actually vary across rows (not just "not 200" but genuinely
+    // following p50's changing values row to row).
+    expect(new Set(bottomYs.map((y) => y.toFixed(3))).size).toBe(rows.length)
+  })
+
   it('renders evenly-spaced y-axis gridline labels showing formatted dollar amounts', () => {
     render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
