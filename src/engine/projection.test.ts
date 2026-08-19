@@ -470,3 +470,130 @@ describe('runProjection input validation', () => {
     expectRejection(assumptions({ planningHorizonEndAge: Number.POSITIVE_INFINITY }), 'NON_FINITE_INPUT');
   });
 });
+
+/**
+ * FIN-55: regression tests formalizing an external formula-validation pass. An independent
+ * hand-rolled re-implementation of the PRD's literal formulas —
+ * `Annual_Contribution = income * contribution_pct * (1 + raise_pct)^years`,
+ * `Investment_Gain = balance * return_pct`, `Withdrawals = balance * withdrawal_pct` after
+ * retirement, inflation adjusting contributions/withdrawals annually — was run as a throwaway
+ * Node script against these two scenarios (not committed; see the FIN-55 PR description for
+ * the script), and its output is pinned here as the expected values. Written independently of
+ * `runProjection`/`pipeline.ts` so a bug shared between the engine and its own test fixtures
+ * cannot hide from this file.
+ */
+describe('FIN-55: external formula validation — deterministic scenario A (30 -> 65 accumulation)', () => {
+  // 30 -> 65, $50k start, $80k income, 15% contribution, 3% raises, 7% returns, 2.5%
+  // inflation, 4% withdrawal in retirement, 100-year horizon.
+  const rows = runProjection(
+    assumptions({
+      currentAge: 30,
+      retirementAge: 65,
+      initialBalance: 50_000,
+      currentAnnualIncome: 80_000,
+      annualContributionRate: 0.15,
+      annualRaiseRate: 0.03,
+      annualReturnRate: 0.07,
+      inflationRate: 0.025,
+      withdrawalRateInRetirement: 0.04,
+      planningHorizonEndAge: 100,
+    }),
+  );
+
+  it('matches the hand-computed ending balance at year 0', () => {
+    // beginningBalance 50,000; gain 50,000*0.07 = 3,500; contribution 80,000*0.15 = 12,000;
+    // ending 50,000 + 3,500 + 12,000 = 65,500.
+    expect(rows[0].endingBalance).toBeCloseTo(65_500, 6);
+  });
+
+  it('matches the hand-computed ending balance at year 1', () => {
+    // income 80,000*1.03 = 82,400; contribution 82,400*0.15 = 12,360; gain 65,500*0.07 =
+    // 4,585; ending 65,500 + 4,585 + 12,360 = 82,445.
+    expect(rows[1].endingBalance).toBeCloseTo(82_445, 6);
+  });
+
+  it('matches the hand-computed ending balance at year 2', () => {
+    // income 82,400*1.03 = 84,872; contribution 84,872*0.15 = 12,730.8; gain 82,445*0.07 =
+    // 5,771.15; ending 82,445 + 5,771.15 + 12,730.8 = 100,946.95.
+    expect(rows[2].endingBalance).toBeCloseTo(100_946.95, 6);
+  });
+
+  it('matches the hand-computed retirement-year withdrawal, at age 65 (year 35)', () => {
+    // First retirement-year withdrawal = beginningBalance-at-retirement * 0.04. The
+    // reconstructed script's year-35 beginningBalance was 2,892,644.783303949, giving a
+    // withdrawal of 115,705.79133215797.
+    const retirementYear = 65 - 30;
+    expect(rows[retirementYear].age).toBe(65);
+    expect(rows[retirementYear].annualWithdrawal).toBeCloseTo(115_705.79133215797, 6);
+    // Cross-checked against the engine's own beginning balance for that year too, so this
+    // assertion cannot pass merely because the hardcoded figure and the engine happen to
+    // agree by coincidence at a different balance.
+    expect(rows[retirementYear].annualWithdrawal).toBeCloseTo(
+      rows[retirementYear].beginningBalance * 0.04,
+      6,
+    );
+  });
+
+  it('matches the hand-computed retirement+1 withdrawal, inflation-adjusted', () => {
+    // 115,705.79133215797 * 1.025 = 118,598.43611546191.
+    const retirementYear = 65 - 30;
+    expect(rows[retirementYear + 1].annualWithdrawal).toBeCloseTo(118_598.43611546191, 6);
+  });
+});
+
+describe('FIN-55: external formula validation — deterministic scenario B (already-retired-adjacent, high withdrawal)', () => {
+  // Age 60, retiring at 62 (already-retired-adjacent), high 20% withdrawal rate driving the
+  // balance negative. Confirms the deterministic engine does NOT clamp a negative balance —
+  // deliberately distinct from the separately-filed chart-rendering clamping bug, which is a
+  // UI display concern and untouched here.
+  const rows = runProjection(
+    assumptions({
+      currentAge: 60,
+      retirementAge: 62,
+      initialBalance: 100_000,
+      currentAnnualIncome: 60_000,
+      annualContributionRate: 0.1,
+      annualRaiseRate: 0.02,
+      annualReturnRate: 0.03,
+      inflationRate: 0.03,
+      withdrawalRateInRetirement: 0.2,
+      planningHorizonEndAge: 90,
+    }),
+  );
+
+  it('matches the hand-computed first-retirement-year withdrawal formula', () => {
+    // Year 2 (age 62): beginningBalance 118,390 * 0.20 = 23,678.
+    const retirementYear = 62 - 60;
+    expect(rows[retirementYear].age).toBe(62);
+    expect(rows[retirementYear].beginningBalance).toBeCloseTo(118_390, 6);
+    expect(rows[retirementYear].annualWithdrawal).toBeCloseTo(23_678, 6);
+    expect(rows[retirementYear].annualWithdrawal).toBeCloseTo(
+      rows[retirementYear].beginningBalance * 0.2,
+      6,
+    );
+  });
+
+  it('drives the balance negative and does NOT clamp it back to zero', () => {
+    const firstNegative = rows.findIndex((row) => row.endingBalance < 0);
+
+    expect(firstNegative).toBeGreaterThan(0);
+    expect(rows[firstNegative].age).toBe(67);
+    expect(rows[firstNegative].endingBalance).toBeCloseTo(-23_331.897801584084, 4);
+  });
+
+  it('keeps every row after the first negative one unclamped and finite, still inflating withdrawals', () => {
+    const firstNegative = rows.findIndex((row) => row.endingBalance < 0);
+
+    rows.slice(firstNegative).forEach((row, index, negativeRows) => {
+      expect(Number.isFinite(row.endingBalance)).toBe(true);
+      expect(row.endingBalance).toBeLessThan(0);
+      if (index > 0) {
+        expect(row.annualWithdrawal).toBeGreaterThan(negativeRows[index - 1].annualWithdrawal);
+      }
+    });
+
+    // Final year matches the independent reconstruction exactly, confirming no clamping
+    // ever kicked in across the remaining 23 years of runaway negative compounding.
+    expect(rows[rows.length - 1].endingBalance).toBeCloseTo(-1_292_039.2034206502, 3);
+  });
+});
