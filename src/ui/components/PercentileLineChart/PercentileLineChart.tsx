@@ -51,10 +51,18 @@ const hoverLabel = (row: PercentileChartRow): string =>
  */
 export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
-  // Cursor position (px, relative to `plotWrapperRef`) while a point is hovered via mouse — kept
-  // separate from `hoveredIndex` because a keyboard `focus` has no cursor position to track, and
-  // falls back to a fixed point-aligned placement instead (see `tooltipStyle` below).
-  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
+  // Cursor position (px, relative to `plotWrapperRef`) while a point is hovered via mouse, plus
+  // which edges it's close enough to that the tooltip should flip instead of running off-screen
+  // (FIN-47 round 3: near the plot's right edge, the default up-and-right offset pushed the
+  // tooltip past the viewport). Kept separate from `hoveredIndex` because a keyboard `focus` has
+  // no cursor position to track, and falls back to a fixed point-aligned placement instead (see
+  // `tooltipStyle` below).
+  const [cursorPos, setCursorPos] = useState<{
+    x: number
+    y: number
+    flipX: boolean
+    flipY: boolean
+  } | null>(null)
   const plotWrapperRef = useRef<HTMLDivElement>(null)
   const firstAge = rows.at(0)?.age
   const lastAge = rows.at(-1)?.age
@@ -64,12 +72,21 @@ export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
 
   // Tracks the mouse across the hover targets so the tooltip can follow the cursor rather than
   // sit at a fixed vertical position (FIN-47 round 2 feedback: a fixed position read as
-  // disconnected from what was being hovered).
+  // disconnected from what was being hovered). `flipX`/`flipY` use the wrapper's own measured
+  // size (rather than a fixed pixel threshold) so this still works across the mobile fixed-aspect
+  // fallback and the desktop fill-height layout alike.
   const handlePointerMove = (index: number, event: MouseEvent) => {
     setHoveredIndex(index)
     const wrapperRect = plotWrapperRef.current?.getBoundingClientRect()
     if (wrapperRect) {
-      setCursorPos({ x: event.clientX - wrapperRect.left, y: event.clientY - wrapperRect.top })
+      const x = event.clientX - wrapperRect.left
+      const y = event.clientY - wrapperRect.top
+      setCursorPos({
+        x,
+        y,
+        flipX: x > wrapperRect.width * 0.75,
+        flipY: y < wrapperRect.height * 0.25,
+      })
     }
   }
 
@@ -79,11 +96,20 @@ export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
   }
 
   // Keyboard focus has no cursor position, so fall back to the hovered point's own x (as a
-  // percentage of the plot width) anchored near the top of the plot.
+  // percentage of the plot width) anchored near the top of the plot, using the default
+  // top-right-offset transform from PercentileLineChart.module.css (no inline `transform` here).
   const tooltipStyle =
     hoveredIndex !== null && cursorPos
-      ? { left: cursorPos.x, top: cursorPos.y }
+      ? {
+          left: cursorPos.x,
+          top: cursorPos.y,
+          transform: `translate(${cursorPos.flipX ? 'calc(-100% - 12px)' : '12px'}, ${
+            cursorPos.flipY ? '12px' : '-100%'
+          })`,
+        }
       : { left: `${(xForIndex(hoveredIndex ?? 0, lastIndex) / VIEW_WIDTH) * 100}%`, top: 0 }
+
+  const hoverLineX = hoveredIndex !== null ? xForIndex(hoveredIndex, lastIndex) : null
 
   return (
     <Card className={styles.card}>
@@ -109,6 +135,19 @@ export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
                 <polyline className={styles.p10Line} points={toPoints(rows, 'p10', maxValue)} />
                 <polyline className={styles.p90Line} points={toPoints(rows, 'p90', maxValue)} />
                 <polyline className={styles.p50Line} points={toPoints(rows, 'p50', maxValue)} />
+                {/* Marks which point along the x-axis the tooltip's values belong to (FIN-47
+                    round 3) — otherwise, with the tooltip now free-floating at the cursor rather
+                    than pinned above a specific bar, there's nothing tying it back to an exact
+                    age on the plot. */}
+                {hoverLineX !== null && (
+                  <line
+                    className={styles.hoverLine}
+                    x1={hoverLineX}
+                    x2={hoverLineX}
+                    y1={0}
+                    y2={VIEW_HEIGHT}
+                  />
+                )}
               </svg>
 
               <div className={styles.hoverTargets}>

@@ -60,6 +60,17 @@
   gap: var(--space-5);
 }
 
+/* `[hidden]` and `.tabPanel` both have (0,1,0) specificity, and this stylesheet loads after the
+ * UA one, so without this override `.tabPanel`'s `display: flex` wins over the browser's default
+ * `[hidden] { display: none }` — the Projection tabpanel (with its stat tiles) never actually
+ * disappears when App.tsx sets `hidden` on it, it just sits at its own content height directly
+ * above the Stress Test tabpanel, reading as "the stat tiles are crowding the Stress Test chart"
+ * (FIN-47 round 3 bug report — this predates FIN-47 but is what's actually eating the chart's
+ * space). Explicit `[hidden]` override wins on specificity (0,2,0) and actually hides it. */
+.tabPanel[hidden] {
+  display: none;
+}
+
 .statTiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

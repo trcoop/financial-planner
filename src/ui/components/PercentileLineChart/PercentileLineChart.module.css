@@ -143,6 +143,15 @@
   vector-effect: non-scaling-stroke;
 }
 
+/* Vertical marker at the hovered point's x position, tying the free-floating cursor-tracking
+   tooltip back to an exact age on the plot (FIN-47 round 3). */
+.hoverLine {
+  stroke: var(--color-text-muted);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
 /* Median line is the primary "expected balance" signal here, so it's the most visually
    prominent — solid and thicker, using the same primary color the Plan tab's bars use. */
 .p50Line {
