@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { PercentileLineChart, type PercentileChartRow } from './PercentileLineChart'
 
@@ -53,5 +54,35 @@ describe('PercentileLineChart', () => {
     const p90Index = polylines.findIndex((el) => el.className.baseVal.includes('p90Line'))
     expect(p50Index).toBeGreaterThan(p10Index)
     expect(p50Index).toBeGreaterThan(p90Index)
+  })
+
+  it('shows no tooltip before any point is hovered', () => {
+    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  it('shows a tooltip with age and p10/p50/p90 values on hovering a point (FIN-47)', async () => {
+    const user = userEvent.setup()
+    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+
+    await user.hover(screen.getByLabelText('Age 36: 10th percentile $90,000, median $130,000, 90th percentile $200,000'))
+
+    const tooltip = screen.getByRole('status')
+    expect(tooltip).toHaveTextContent('Age 36')
+    expect(tooltip).toHaveTextContent('$90,000')
+    expect(tooltip).toHaveTextContent('$130,000')
+    expect(tooltip).toHaveTextContent('$200,000')
+  })
+
+  it('hides the tooltip again after unhovering', async () => {
+    const user = userEvent.setup()
+    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+
+    const target = screen.getByLabelText('Age 36: 10th percentile $90,000, median $130,000, 90th percentile $200,000')
+    await user.hover(target)
+    expect(screen.getByRole('status')).toBeInTheDocument()
+
+    await user.unhover(target)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

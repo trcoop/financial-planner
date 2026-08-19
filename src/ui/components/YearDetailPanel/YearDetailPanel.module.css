@@ -5,6 +5,11 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+  /* Matches ChartContainer's `.card` (FIN-47 layout fix): without this, this grid item's
+     default auto min-height is its content's intrinsic size, which can force `.chartRow`'s row
+     taller than the space actually available on a short viewport instead of just scrolling its
+     own content within the row it's given. */
+  min-height: 0;
   display: flex;
   flex-direction: column;
 }

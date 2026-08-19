@@ -41,12 +41,76 @@
   white-space: nowrap;
 }
 
+/* Wraps the plot SVG, its invisible hover targets, and the hover tooltip so the tooltip can be
+   positioned absolutely against the plot's own box rather than the whole card. */
+.plotWrapper {
+  position: relative;
+  width: 100%;
+}
+
 /* Fixed aspect ratio so the plot has a sensible height regardless of container width; the
    viewBox/preserveAspectRatio on the <svg> itself keeps the drawn lines matching this box. */
 .plot {
   width: 100%;
   aspect-ratio: 21 / 9;
   min-height: 0;
+  display: block;
+}
+
+/* One invisible full-height hover/focus target per data point, evenly spaced across the plot's
+   width — a plain row of equal-width flex children lines up closely enough with each point's x
+   position (index / lastIndex) for a hover tooltip; exact pixel alignment isn't needed since the
+   targets are invisible and just need to be "near" their point. */
+.hoverTargets {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.hoverTarget {
+  flex: 1;
+  height: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.hoverTarget:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+/* Small info box showing the hovered point's age and p10/p50/p90 values. Positioned via inline
+   `left` (percentage of the plot's width, matching the hovered point's x) and clamped back on
+   screen with a transform so it doesn't run off either edge of the card. */
+.tooltip {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  max-width: calc(100% - var(--space-2));
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.tooltipAge {
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
 }
 
 .p10Line,
