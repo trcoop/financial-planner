@@ -7,6 +7,20 @@
   padding-top: var(--space-5);
 }
 
+/* Matches App.css's `.tabPanel`/`.chartRow` desktop rule: without this, `.section` sizes to its
+   own content (button + message + chart at whatever height the chart's own content wants) and
+   simply sits at the top of `.tabPanel`'s box, leaving the Plan-tab's leftover height visible as
+   empty page below it — reading as "the chart doesn't fill the available space" (FIN-47 round 2).
+   `flex: 1` gives it the same height budget `.chartRow` gets on the Projection tab; `min-height:
+   0` (mirroring the FIN-47 round-1 fix) lets it actually shrink to that budget on short
+   viewports instead of overflowing past it. */
+@media (min-width: 960px) {
+  .section {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
 .cancelledMessage {
   margin: 0;
   color: var(--color-warning);

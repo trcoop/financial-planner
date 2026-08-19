@@ -3,6 +3,12 @@
   max-width: 100%;
   box-sizing: border-box;
   min-width: 0;
+  /* `.card`'s `flex: 1` already let it grow; what was missing was `StressTestSection`'s own
+     `.section` having any height budget to grow into in the first place (see
+     StressTestSection.module.css) — with that fixed, `min-height: 0` here (mirroring
+     ChartContainer's round-1 fix) lets this card actually shrink/grow to fill it instead of
+     sizing to its own content. */
+  min-height: 0;
   flex: 1 1 480px;
   display: flex;
   flex-direction: column;
@@ -42,18 +48,34 @@
 }
 
 /* Wraps the plot SVG, its invisible hover targets, and the hover tooltip so the tooltip can be
-   positioned absolutely against the plot's own box rather than the whole card. */
+   positioned absolutely against the plot's own box rather than the whole card. Flexes to fill
+   whatever height `.figure` has (desktop: `.section`'s full flex-assigned height; see
+   StressTestSection.module.css) rather than sizing to a fixed aspect ratio, so the chart actually
+   fills its allotted space instead of leaving empty page below it (FIN-47 round 2). */
 .plotWrapper {
   position: relative;
   width: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
-/* Fixed aspect ratio so the plot has a sensible height regardless of container width; the
-   viewBox/preserveAspectRatio on the <svg> itself keeps the drawn lines matching this box. */
+/* On narrow/mobile layouts `.section` doesn't get a flex-assigned height budget (see
+   StressTestSection.module.css's desktop-only media query) — the card just sits at content
+   height there, so `.plotWrapper`'s `flex: 1` has nothing to grow into and would otherwise
+   collapse to 0. Fall back to a fixed aspect ratio in that case, matching ChartContainer's same
+   mobile fallback. */
+@media (max-width: 959px) {
+  .plotWrapper {
+    flex: none;
+    aspect-ratio: 21 / 9;
+  }
+}
+
+/* Fills `.plotWrapper` (see above) — the viewBox/preserveAspectRatio on the <svg> itself keeps
+   the drawn lines matching whatever box this ends up being. */
 .plot {
   width: 100%;
-  aspect-ratio: 21 / 9;
-  min-height: 0;
+  height: 100%;
   display: block;
 }
 
@@ -82,12 +104,13 @@
 }
 
 /* Small info box showing the hovered point's age and p10/p50/p90 values. Positioned via inline
-   `left` (percentage of the plot's width, matching the hovered point's x) and clamped back on
-   screen with a transform so it doesn't run off either edge of the card. */
+   `left`/`top` tracking the cursor's actual position over the plot (set in
+   PercentileLineChart.tsx) — round 2 feedback was that a fixed vertical position read as
+   disconnected from what was being hovered. Offset up and to the right of the cursor (rather
+   than centered under it) so the pointer doesn't sit on top of its own tooltip. */
 .tooltip {
   position: absolute;
-  top: 0;
-  transform: translateX(-50%);
+  transform: translate(12px, -100%);
   max-width: calc(100% - var(--space-2));
   background: var(--color-bg);
   border: 1px solid var(--color-border-subtle);

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type MouseEvent } from 'react'
 import { Card } from '../Card/Card'
 import type { ChartBandRow } from '../ChartContainer/types'
 import { formatCurrency } from '../../utils/format'
@@ -51,11 +51,39 @@ const hoverLabel = (row: PercentileChartRow): string =>
  */
 export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  // Cursor position (px, relative to `plotWrapperRef`) while a point is hovered via mouse — kept
+  // separate from `hoveredIndex` because a keyboard `focus` has no cursor position to track, and
+  // falls back to a fixed point-aligned placement instead (see `tooltipStyle` below).
+  const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
+  const plotWrapperRef = useRef<HTMLDivElement>(null)
   const firstAge = rows.at(0)?.age
   const lastAge = rows.at(-1)?.age
   const maxValue = Math.max(1, ...rows.map((row) => row.p90))
   const lastIndex = Math.max(rows.length - 1, 1)
   const hoveredRow = hoveredIndex !== null ? rows[hoveredIndex] : undefined
+
+  // Tracks the mouse across the hover targets so the tooltip can follow the cursor rather than
+  // sit at a fixed vertical position (FIN-47 round 2 feedback: a fixed position read as
+  // disconnected from what was being hovered).
+  const handlePointerMove = (index: number, event: MouseEvent) => {
+    setHoveredIndex(index)
+    const wrapperRect = plotWrapperRef.current?.getBoundingClientRect()
+    if (wrapperRect) {
+      setCursorPos({ x: event.clientX - wrapperRect.left, y: event.clientY - wrapperRect.top })
+    }
+  }
+
+  const handlePointerLeave = () => {
+    setHoveredIndex(null)
+    setCursorPos(null)
+  }
+
+  // Keyboard focus has no cursor position, so fall back to the hovered point's own x (as a
+  // percentage of the plot width) anchored near the top of the plot.
+  const tooltipStyle =
+    hoveredIndex !== null && cursorPos
+      ? { left: cursorPos.x, top: cursorPos.y }
+      : { left: `${(xForIndex(hoveredIndex ?? 0, lastIndex) / VIEW_WIDTH) * 100}%`, top: 0 }
 
   return (
     <Card className={styles.card}>
@@ -71,7 +99,7 @@ export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
 
         {rows.length > 0 && (
           <>
-            <div className={styles.plotWrapper}>
+            <div className={styles.plotWrapper} ref={plotWrapperRef}>
               <svg
                 className={styles.plot}
                 viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
@@ -90,19 +118,17 @@ export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
                     type="button"
                     className={styles.hoverTarget}
                     aria-label={hoverLabel(row)}
-                    onMouseEnter={() => setHoveredIndex(index)}
-                    onMouseLeave={() => setHoveredIndex(null)}
+                    onMouseMove={(event) => handlePointerMove(index, event)}
+                    onMouseEnter={(event) => handlePointerMove(index, event)}
+                    onMouseLeave={handlePointerLeave}
                     onFocus={() => setHoveredIndex(index)}
-                    onBlur={() => setHoveredIndex(null)}
+                    onBlur={handlePointerLeave}
                   />
                 ))}
               </div>
 
               {hoveredRow && (
-                <output
-                  className={styles.tooltip}
-                  style={{ left: `${(xForIndex(hoveredIndex ?? 0, lastIndex) / VIEW_WIDTH) * 100}%` }}
-                >
+                <output className={styles.tooltip} style={tooltipStyle}>
                   <div className={styles.tooltipAge}>Age {hoveredRow.age}</div>
                   <div className={styles.tooltipRow}>
                     <span className={`${styles.swatch} ${styles.p90Swatch}`} /> {formatCurrency(hoveredRow.p90)}
