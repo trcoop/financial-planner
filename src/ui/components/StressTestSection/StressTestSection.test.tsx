@@ -254,4 +254,84 @@ describe('StressTestSection', () => {
     await waitFor(() => expect(screen.getByText(/cancelled.*click to re-run/i)).toBeInTheDocument())
     expect(onPercentilesChange).not.toHaveBeenCalled()
   })
+
+  it('calls onStaleChange with false once the initial auto-run completes', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const onStaleChange = vi.fn()
+    render(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />)
+
+    act(() => orchestrator.resolveRun())
+
+    await waitFor(() => expect(onStaleChange).toHaveBeenLastCalledWith(false))
+  })
+
+  it('calls onStaleChange with true when assumptions change after a completed run (FIN-48)', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const onStaleChange = vi.fn()
+    const { rerender } = render(
+      <StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />,
+    )
+
+    act(() => orchestrator.resolveRun())
+    await waitFor(() => expect(onStaleChange).toHaveBeenLastCalledWith(false))
+
+    rerender(
+      <StressTestSection
+        assumptions={{ ...baseAssumptions, currentAnnualIncome: 90_000 }}
+        orchestrator={orchestrator}
+        onStaleChange={onStaleChange}
+      />,
+    )
+
+    expect(onStaleChange).toHaveBeenLastCalledWith(true)
+  })
+
+  it('does not report stale on re-render with unchanged assumptions', () => {
+    const orchestrator = new FakeOrchestrator()
+    const onStaleChange = vi.fn()
+    const { rerender } = render(
+      <StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />,
+    )
+    onStaleChange.mockClear()
+    rerender(<StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />)
+
+    expect(onStaleChange).not.toHaveBeenCalled()
+  })
+
+  it('reports fresh again once a re-run completes after being stale', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const onStaleChange = vi.fn()
+    const { rerender } = render(
+      <StressTestSection assumptions={baseAssumptions} orchestrator={orchestrator} onStaleChange={onStaleChange} />,
+    )
+
+    act(() => orchestrator.resolveRun())
+    await waitFor(() => expect(onStaleChange).toHaveBeenLastCalledWith(false))
+
+    rerender(
+      <StressTestSection
+        assumptions={{ ...baseAssumptions, currentAnnualIncome: 90_000 }}
+        orchestrator={orchestrator}
+        onStaleChange={onStaleChange}
+      />,
+    )
+    expect(onStaleChange).toHaveBeenLastCalledWith(true)
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: 'Run stress test' }))
+    act(() => orchestrator.resolveRun())
+
+    await waitFor(() => expect(onStaleChange).toHaveBeenLastCalledWith(false))
+  })
+
+  it('exposes an imperative runStressTest handle so a parent can trigger a re-run without switching tabs', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const ref = { current: null as { runStressTest: () => void } | null }
+    render(<StressTestSection ref={ref} assumptions={baseAssumptions} orchestrator={orchestrator} />)
+
+    orchestrator.runCalls.length = 0
+    act(() => ref.current?.runStressTest())
+
+    expect(orchestrator.runCalls).toHaveLength(1)
+  })
 })

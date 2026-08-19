@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AdvancedAssumptionsForm,
   Button,
@@ -9,6 +9,7 @@ import {
   StatTile,
   StressTestSection,
 } from './ui/components'
+import type { StressTestSectionHandle } from './ui/components'
 import { TopBar } from './ui/components/TopBar/TopBar'
 import { TabBar, type TabBarTab } from './ui/components/TabBar/TabBar'
 import { Drawer } from './ui/components/Drawer/Drawer'
@@ -46,6 +47,13 @@ function App() {
   // itself still owns all Monte Carlo state/logic. Never cleared on cancellation, mirroring
   // successRate's behavior (ERD §7): the last completed band stays visible.
   const [percentiles, setPercentiles] = useState<PercentilePaths | null>(null)
+  // FIN-48: "inputs changed since the last completed stress test run", lifted out of
+  // StressTestSection via its `onStaleChange` seam so the Plan tab's "chance of success"
+  // StatTile can swap to a "Re-run stress test" CTA — same lift-up pattern as successRate.
+  const [isStressTestStale, setIsStressTestStale] = useState(false)
+  // Imperative handle onto the (always-mounted) StressTestSection, so the CTA above can
+  // trigger a re-run from the Plan tab without switching to the Stress Test tab.
+  const stressTestRef = useRef<StressTestSectionHandle>(null)
 
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
@@ -117,6 +125,13 @@ function App() {
                     label="Chance of success"
                     value={successRateValue}
                     isPlaceholder={successRate === null}
+                    action={
+                      isStressTestStale && successRate !== null ? (
+                        <Button variant="secondary" onClick={() => stressTestRef.current?.runStressTest()}>
+                          Re-run stress test
+                        </Button>
+                      ) : undefined
+                    }
                   />
                 </div>
 
@@ -141,6 +156,7 @@ function App() {
               >
                 <Card>
                   <StressTestSection
+                    ref={stressTestRef}
                     assumptions={assumptions}
                     allocation={{
                       stocksPercent: debouncedAdvanced.stocksAllocationPercent,
@@ -152,6 +168,7 @@ function App() {
                     }}
                     onSuccessRateChange={setSuccessRate}
                     onPercentilesChange={setPercentiles}
+                    onStaleChange={setIsStressTestStale}
                   />
                 </Card>
               </section>
