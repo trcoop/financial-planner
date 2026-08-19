@@ -192,6 +192,31 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.queryAllByTestId(/^chart-band-/).length).toBeGreaterThan(0))
   })
 
+  it('does not show the re-run CTA when inputs change before any stress test has ever completed (FIN-48)', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<App />)
+      // No emitComplete() here — the mocked orchestrator's initial auto-run never resolves,
+      // mirroring "the stress test has never completed yet" rather than "it completed and
+      // then went stale". The placeholder StatTile state should be unaffected by an input
+      // change in this state — there's no prior result for a re-run CTA to be standing in for.
+      expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
+
+      const ageInput = screen.getByLabelText('Current age')
+      await user.clear(ageInput)
+      await user.type(ageInput, '40')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350)
+      })
+
+      expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Re-run stress test' })).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('swaps the success rate for a "Re-run stress test" CTA once inputs change after a completed run (FIN-48)', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
