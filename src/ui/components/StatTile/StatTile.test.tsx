@@ -28,4 +28,16 @@ describe('StatTile', () => {
     const value = screen.getByText('87%')
     expect(value.className).not.toMatch(/placeholder/)
   })
+
+  it('renders the action element instead of the value when provided', () => {
+    render(<StatTile label="Chance of success" value="87%" action={<button>Re-run stress test</button>} />)
+    expect(screen.getByRole('button', { name: 'Re-run stress test' })).toBeInTheDocument()
+    expect(screen.queryByText('87%')).not.toBeInTheDocument()
+  })
+
+  it('still exposes the tile as a labeled region when rendering an action', () => {
+    render(<StatTile label="Chance of success" value="87%" action={<button>Re-run stress test</button>} />)
+    const region = screen.getByRole('region', { name: 'Chance of success' })
+    expect(region).toContainElement(screen.getByRole('button', { name: 'Re-run stress test' }))
+  })
 })

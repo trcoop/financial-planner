@@ -192,6 +192,83 @@ describe('App shell', () => {
     await waitFor(() => expect(screen.queryAllByTestId(/^chart-band-/).length).toBeGreaterThan(0))
   })
 
+  it('does not show the re-run CTA when inputs change before any stress test has ever completed (FIN-48)', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<App />)
+      // No emitComplete() here — the mocked orchestrator's initial auto-run never resolves,
+      // mirroring "the stress test has never completed yet" rather than "it completed and
+      // then went stale". The placeholder StatTile state should be unaffected by an input
+      // change in this state — there's no prior result for a re-run CTA to be standing in for.
+      expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
+
+      const ageInput = screen.getByLabelText('Current age')
+      await user.clear(ageInput)
+      await user.type(ageInput, '40')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350)
+      })
+
+      expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Re-run stress test' })).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('swaps the success rate for a "Re-run stress test" CTA once inputs change after a completed run (FIN-48)', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<App />)
+      act(() => {
+        lastOrchestrator.emitComplete()
+      })
+      expect(screen.getByText('87%')).toBeInTheDocument()
+
+      const ageInput = screen.getByLabelText('Current age')
+      await user.clear(ageInput)
+      await user.type(ageInput, '40')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350)
+      })
+
+      expect(screen.queryByText('87%')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Re-run stress test' })).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-running the stress test from the stale CTA triggers a run without switching tabs (FIN-48)', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<App />)
+      act(() => {
+        lastOrchestrator.emitComplete()
+      })
+      expect(screen.getByText('87%')).toBeInTheDocument()
+
+      const ageInput = screen.getByLabelText('Current age')
+      await user.clear(ageInput)
+      await user.type(ageInput, '40')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350)
+      })
+
+      const runsBefore = lastOrchestrator.runCalls.length
+      await user.click(screen.getByRole('button', { name: 'Re-run stress test' }))
+
+      expect(lastOrchestrator.runCalls.length).toBe(runsBefore + 1)
+      // Still on the Projection tab — no tab switch happened.
+      expect(screen.getByRole('tab', { name: 'Projection' })).toHaveAttribute('aria-selected', 'true')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps the chart retirement marker live as the retirement age input changes (FIN-44)', async () => {
     // jsdom stubs getBoundingClientRect to all-zeros, so the marker's pixel position can't be
     // asserted directly here (that's ChartContainer's own FIN-42 tests' job, with a mocked
