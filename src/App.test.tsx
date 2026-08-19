@@ -283,13 +283,13 @@ describe('App shell', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(screen.getByTestId('chart-retirement-marker')).toBeInTheDocument()
+    expect(screen.getByTestId('percentile-chart-retirement-marker')).toBeInTheDocument()
 
     const retirementAgeInput = screen.getByLabelText('Retirement age')
     await user.clear(retirementAgeInput)
     await user.type(retirementAgeInput, '20')
 
-    await waitFor(() => expect(screen.queryByTestId('chart-retirement-marker')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByTestId('percentile-chart-retirement-marker')).not.toBeInTheDocument())
   })
 })
 
@@ -335,9 +335,18 @@ describe('App persistence (FIN-43)', () => {
     const mockedSave = storageModule.saveAssumptions as unknown as ReturnType<typeof vi.fn>
 
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    // Fake timers are installed *before* the initial render (rather than right after it) so the
+    // mount-time debounce effect schedules its `setTimeout` against the fake clock from the
+    // start. Installing them after render left that first timer real/native — `mockClear()`
+    // right after render raced it (whether it had fired yet depended on incidental render cost,
+    // e.g. which chart component was mounted), making this test's "ignore the mount-time save"
+    // step flaky rather than deterministic.
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       render(<FreshApp />)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350) // let the mount-time save settle
+      })
       mockedSave.mockClear() // ignore the mount-time save
 
       const ageInput = screen.getByLabelText('Current age')
@@ -345,7 +354,9 @@ describe('App persistence (FIN-43)', () => {
       await user.type(ageInput, '5')
       await user.type(ageInput, '0')
 
-      await vi.advanceTimersByTimeAsync(350)
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350)
+      })
 
       expect(mockedSave).toHaveBeenCalledTimes(1)
     } finally {

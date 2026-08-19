@@ -6,7 +6,7 @@ import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
 import { formatPercent } from '../../utils/format'
 import { Button } from '../Button/Button'
 import type { ChartRow } from '../ChartContainer/types'
-import { PercentileLineChart, type PercentileChartRow } from '../PercentileLineChart/PercentileLineChart'
+import { PercentileLineChart, type LineChartRow, type LineChartSeries } from '../PercentileLineChart/PercentileLineChart'
 import styles from './StressTestSection.module.css'
 
 /**
@@ -16,6 +16,18 @@ import styles from './StressTestSection.module.css'
  * callers (and tests) that don't pass one.
  */
 const DEFAULT_ALLOCATION: PortfolioAllocation = { stocksPercent: 70, bondsPercent: 30 }
+
+/** The three percentile lines, ordered high-to-low so `PercentileLineChart`'s shading reads as
+ * "p90 down to p50, p50 down to p10, p10 down to the chart bottom" (FIN-60). Colors come from
+ * the shared theme rather than a chart-specific palette: p90 (best case) uses the "success"
+ * green, p50 (expected case) uses the primary blue, p10 (worst case) uses the "warning" amber —
+ * unchanged from FIN-47 in spirit (median was already the most prominent line) but now
+ * expressed as distinct colors instead of dash/solid styling. */
+const PERCENTILE_SERIES: LineChartSeries[] = [
+  { key: 'p90', label: '90th percentile', color: 'var(--color-success)' },
+  { key: 'p50', label: 'Median (50th percentile)', color: 'var(--color-primary)' },
+  { key: 'p10', label: '10th percentile', color: 'var(--color-warning)' },
+]
 
 interface StressTestSectionProps {
   /** The plan inputs to stress-test. Changing this cancels any in-flight run (FIN-14 AC). */
@@ -172,13 +184,11 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
   // Index-aligned mapping (ERD §6.3): percentiles.p10[i]/p50[i]/p90[i] correspond 1:1 with
   // rows[i], both keyed 0..horizon by construction — same assumption `App.tsx` previously used
   // to build the (now removed) Plan-tab band overlay.
-  const chartRows: PercentileChartRow[] | null = percentiles
+  const chartRows: LineChartRow[] | null = percentiles
     ? rows.map((row, i) => ({
         age: row.age,
         year: row.year,
-        p10: percentiles.p10[i],
-        p50: percentiles.p50[i],
-        p90: percentiles.p90[i],
+        values: { p10: percentiles.p10[i], p50: percentiles.p50[i], p90: percentiles.p90[i] },
       }))
     : null
 
@@ -205,6 +215,7 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
       {chartRows && (
         <PercentileLineChart
           rows={chartRows}
+          series={PERCENTILE_SERIES}
           title="Simulated outcomes by year"
           retirementAge={assumptions.retirementAge}
         />

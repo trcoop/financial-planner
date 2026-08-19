@@ -1,24 +1,68 @@
 import { useRef, useState, type MouseEvent } from 'react'
 import { Card } from '../Card/Card'
-import type { ChartBandRow } from '../ChartContainer/types'
 import { formatCurrency } from '../../utils/format'
 import styles from './PercentileLineChart.module.css'
 
-/** One year's Monte Carlo percentiles plus the age that year corresponds to, so this component
- * can label its x-axis the same way `ChartContainer` does — without depending on `ChartRow`
- * itself, since only `age` is actually needed here. */
-export type PercentileChartRow = ChartBandRow & { age: number }
+/** One projected year's worth of data points, one per series (keyed by `LineChartSeries.key`).
+ * Generic over the caller's series set (FIN-60) — Plan supplies one `values` entry (its
+ * deterministic balance), Stress Test supplies three (`p10`/`p50`/`p90`) — so this single
+ * component can back both the Plan tab's line chart and the Stress Test tab's percentile fan. */
+export interface LineChartRow {
+  year: number
+  age: number
+  values: Record<string, number>
+}
+
+/** One line's identity: which `values` key it plots, its legend label, and the color used for
+ * its line, shaded area, and legend swatch (FIN-60 replaces dash/solid style differences with
+ * color, since a single-line Plan chart has no "other line" to visually distinguish from).
+ *
+ * `series` order matters for shading: each line's area fills from that line down to the *next*
+ * series in the array (or the chart bottom for the last one) — so pass series ordered from
+ * highest-typical-value to lowest (e.g. Stress Test's p90, p50, p10) for the bands to read as
+ * "between this line and the one below it" rather than overlapping oddly. */
+export interface LineChartSeries {
+  key: string
+  label: string
+  /** Any valid CSS color (a `var(--color-*)` token is expected) — applied to the line stroke,
+   * its shaded area (at reduced opacity), and its legend swatch. */
+  color: string
+}
+
+/** Back-compat alias — `StressTestSection` (FIN-47) already imports this name; kept so that
+ * generalizing this component to arbitrary series (FIN-60) doesn't force an unrelated rename
+ * at every call site. */
+export type PercentileChartRow = LineChartRow
 
 export interface PercentileLineChartProps {
   /** One row per projected year. Presentational only — no `src/engine` calls happen here. */
-  rows: PercentileChartRow[]
+  rows: LineChartRow[]
+  /** The lines to plot, in shading-adjacency order (see {@link LineChartSeries}). */
+  series: LineChartSeries[]
   /** Title shown above the chart and used as the figure's accessible name. */
   title: string
-  /** Age at which the permanent retirement-year marker renders (FIN-47 round 5) — same idea as
-   * ChartContainer's retirement marker on the Plan tab (PRD Goal #3), reusing its dashed-line
-   * styling for visual consistency between the two tabs. Renders nothing if the age isn't
-   * present in `rows`. */
+  /** Age at which the permanent retirement-year marker renders. Renders nothing if the age
+   * isn't present in `rows`. */
   retirementAge?: number
+  /**
+   * Called with the newly selected row whenever a time slice is clicked/tapped (FIN-60). This
+   * component owns selection ("active period") state internally (uncontrolled) and lifts the
+   * selected row up via this callback — mirroring `ChartContainer`'s `onSelectRow` contract so
+   * both the Plan tab's bar chart it replaces, and now this chart, share the same shape.
+   * Optional: Stress Test still tracks the active period internally (for a solid active-period
+   * marker) even though it has nowhere to display the details yet.
+   */
+  onSelectRow?: (row: LineChartRow) => void
+  /**
+   * The `year` to select initially, e.g. the retirement year rather than the last year of the
+   * horizon. Only affects the initial render (uncontrolled) — falls back to no active period
+   * when omitted or when no row matches.
+   */
+  defaultSelectedYear?: number
+  /** Hides the legend — Plan has a single line and the legend would just repeat the chart
+   * title, so it passes `false` here. Stress Test's three-line legend is unaffected (defaults
+   * to shown). */
+  showLegend?: boolean
 }
 
 /** Fixed viewBox coordinate space the polylines are plotted in; scales to the rendered SVG size
@@ -27,34 +71,46 @@ const VIEW_WIDTH = 400
 const VIEW_HEIGHT = 200
 
 /** Y-axis gridlines are drawn at these fractions of `maxValue`, top to bottom — gives a sense of
- * scale (FIN-47 round 5) without cluttering a chart that already has three lines, a hover line,
- * and a retirement marker on it. */
+ * scale without cluttering a chart that can have multiple lines, a hover line, and markers. */
 const GRIDLINE_FRACTIONS = [1, 0.75, 0.5, 0.25, 0]
 
 const xForIndex = (index: number, lastIndex: number): number => (index / lastIndex) * VIEW_WIDTH
+const yForValue = (value: number, maxValue: number): number => VIEW_HEIGHT - (value / maxValue) * VIEW_HEIGHT
 
-const toPoints = (rows: PercentileChartRow[], key: 'p10' | 'p50' | 'p90', maxValue: number): string => {
+const toPoints = (rows: LineChartRow[], key: string, maxValue: number): string => {
   const lastIndex = Math.max(rows.length - 1, 1)
   return rows
-    .map((row, index) => {
-      const x = xForIndex(index, lastIndex)
-      const y = VIEW_HEIGHT - (row[key] / maxValue) * VIEW_HEIGHT
-      return `${x},${y}`
-    })
+    .map((row, index) => `${xForIndex(index, lastIndex)},${yForValue(row.values[key] ?? 0, maxValue)}`)
     .join(' ')
+}
+
+/** Builds the shaded-area polygon for one series: its own line as the top edge, and either the
+ * next series' line (reversed, to close the polygon) or the chart's bottom edge as the bottom
+ * edge — per FIN-60, "shading beneath each line, from that line down to the next line (or the
+ * chart bottom for the last line)". */
+const toAreaPoints = (rows: LineChartRow[], topKey: string, bottomKey: string | undefined, maxValue: number): string => {
+  const lastIndex = Math.max(rows.length - 1, 1)
+  const top = rows.map((row, index) => `${xForIndex(index, lastIndex)},${yForValue(row.values[topKey] ?? 0, maxValue)}`)
+  const bottom = [...rows]
+    .reverse()
+    .map((row, reversedIndex) => {
+      const index = rows.length - 1 - reversedIndex
+      const y = bottomKey === undefined ? VIEW_HEIGHT : yForValue(row.values[bottomKey] ?? 0, maxValue)
+      return `${xForIndex(index, lastIndex)},${y}`
+    })
+  return [...top, ...bottom].join(' ')
 }
 
 /** Values at/above this show as an abbreviated "$X.XM"; below it (but still $1M+) show as a full
  * number rounded to the nearest $100k instead — right at the 7-figure boundary, "$1.2M" reads as
- * terser than it needs to be, while a number like "$5.2M" is comfortably abbreviated (FIN-47
- * round 6). */
+ * terser than it needs to be, while a number like "$5.2M" is comfortably abbreviated. */
 const ABBREVIATE_THRESHOLD = 2_000_000
 const NEAR_MILLION_ROUNDING = 100_000
 const SUB_MILLION_ROUNDING = 10_000
 
 /** Rounds a y-axis gridline value and formats it — never to dollar-and-cent precision, and
  * increasingly coarse as the value grows, so the axis reads as "sense of scale" rather than an
- * exact figure (which the hover tooltip already provides) (FIN-47 round 6). */
+ * exact figure (which the hover tooltip already provides). */
 const formatAxisValue = (value: number): string => {
   const sign = value < 0 ? '-' : ''
   const abs = Math.abs(value)
@@ -68,29 +124,46 @@ const formatAxisValue = (value: number): string => {
   return `${sign}${formatCurrency(Math.round(abs / SUB_MILLION_ROUNDING) * SUB_MILLION_ROUNDING)}`
 }
 
-const hoverLabel = (row: PercentileChartRow): string =>
-  `Age ${row.age}: 10th percentile ${formatCurrency(row.p10)}, median ${formatCurrency(row.p50)}, ` +
-  `90th percentile ${formatCurrency(row.p90)}`
+const hoverLabel = (row: LineChartRow, series: LineChartSeries[]): string =>
+  `Age ${row.age}: ` + series.map((s) => `${s.label} ${formatCurrency(row.values[s.key] ?? 0)}`).join(', ')
 
 /**
- * A `Card`-based line chart plotting the Monte Carlo 10th/50th/90th percentile balance paths
- * over time — one line each, distinct from `ChartContainer`'s deterministic-plan bar chart
- * (FIN-47: the two were previously overlaid on one chart, which read as a confusing extra "bar
- * segment" with no legend; they're now split into separate views entirely). Includes a legend
- * so p10/p50/p90 are distinguishable at a glance, unlike the overlay it replaces.
+ * A `Card`-based line chart plotting one or more value series over time — shared by the Plan
+ * tab (one line: the deterministic balance) and the Stress Test tab (three lines: the Monte
+ * Carlo p10/p50/p90 balance paths) (FIN-60, generalizing FIN-47's Stress-Test-only chart).
  *
- * Hovering (or focusing, via keyboard) a point along the x-axis shows a tooltip with that year's
- * age plus its p10/p50/p90 values — the chart's only interaction, since (unlike ChartContainer's
- * bars) there's no year-detail panel this feeds into (FIN-47).
+ * Three kinds of vertical line can appear at once, visually distinguished (FIN-60 — see the
+ * CSS module for exact styling, and the PR description for the specific choice, which is a
+ * judgment call open for design feedback):
+ *  - a permanent **retirement-year marker** (dashed, muted) — always present if `retirementAge`
+ *    matches a row;
+ *  - a **hover line** (thin, muted, solid) that follows the mouse and drives the tooltip;
+ *  - an **active-period line** (bold, solid, high-contrast) for whichever period was last
+ *    clicked (or `defaultSelectedYear`) — for the Plan tab this is also what
+ *    `YearDetailPanel` displays.
+ *
+ * Each series gets its own color (replacing FIN-47's dashed/solid distinction, which doesn't
+ * generalize to a single-line chart) and a light shaded area beneath it, down to the next
+ * series or the chart bottom.
  */
-export function PercentileLineChart({ rows, title, retirementAge }: PercentileLineChartProps) {
+export function PercentileLineChart({
+  rows,
+  series,
+  title,
+  retirementAge,
+  onSelectRow,
+  defaultSelectedYear,
+  showLegend = true,
+}: PercentileLineChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [selectedYear, setSelectedYear] = useState<number | undefined>(() => {
+    const hasMatch = defaultSelectedYear !== undefined && rows.some((row) => row.year === defaultSelectedYear)
+    return hasMatch ? defaultSelectedYear : undefined
+  })
   // Cursor position (px, relative to `plotWrapperRef`) while a point is hovered via mouse, plus
-  // which edges it's close enough to that the tooltip should flip instead of running off-screen
-  // (FIN-47 round 3: near the plot's right edge, the default up-and-right offset pushed the
-  // tooltip past the viewport). Kept separate from `hoveredIndex` because a keyboard `focus` has
-  // no cursor position to track, and falls back to a fixed point-aligned placement instead (see
-  // `tooltipStyle` below).
+  // which edges it's close enough to that the tooltip should flip instead of running off-screen.
+  // Kept separate from `hoveredIndex` because a keyboard `focus` has no cursor position to
+  // track, and falls back to a fixed point-aligned placement instead (see `tooltipStyle` below).
   const [cursorPos, setCursorPos] = useState<{
     x: number
     y: number
@@ -100,14 +173,13 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
   const plotWrapperRef = useRef<HTMLDivElement>(null)
   const firstAge = rows.at(0)?.age
   const lastAge = rows.at(-1)?.age
-  const maxValue = Math.max(1, ...rows.map((row) => row.p90))
+  const maxValue = Math.max(1, ...rows.flatMap((row) => series.map((s) => row.values[s.key] ?? 0)))
   const lastIndex = Math.max(rows.length - 1, 1)
   const hoveredRow = hoveredIndex !== null ? rows[hoveredIndex] : undefined
 
   // Tracks the mouse across the hover targets so the tooltip can follow the cursor rather than
-  // sit at a fixed vertical position (FIN-47 round 2 feedback: a fixed position read as
-  // disconnected from what was being hovered). `flipX`/`flipY` use the wrapper's own measured
-  // size (rather than a fixed pixel threshold) so this still works across the mobile fixed-aspect
+  // sit at a fixed vertical position. `flipX`/`flipY` use the wrapper's own measured size
+  // (rather than a fixed pixel threshold) so this still works across the mobile fixed-aspect
   // fallback and the desktop fill-height layout alike.
   const handlePointerMove = (index: number, event: MouseEvent) => {
     setHoveredIndex(index)
@@ -129,6 +201,13 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
     setCursorPos(null)
   }
 
+  const handleSelect = (index: number) => {
+    const row = rows[index]
+    if (!row) return
+    setSelectedYear(row.year)
+    onSelectRow?.(row)
+  }
+
   // Keyboard focus has no cursor position, so fall back to the hovered point's own x (as a
   // percentage of the plot width) anchored near the top of the plot, using the default
   // top-right-offset transform from PercentileLineChart.module.css (no inline `transform` here).
@@ -147,6 +226,9 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
 
   const retirementIndex = retirementAge === undefined ? -1 : rows.findIndex((row) => row.age === retirementAge)
   const retirementX = retirementIndex >= 0 ? xForIndex(retirementIndex, lastIndex) : null
+
+  const selectedIndex = selectedYear === undefined ? -1 : rows.findIndex((row) => row.year === selectedYear)
+  const selectedX = selectedIndex >= 0 ? xForIndex(selectedIndex, lastIndex) : null
 
   return (
     <Card className={styles.card}>
@@ -169,8 +251,8 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
                 preserveAspectRatio="none"
                 aria-hidden="true"
               >
-                {/* Gives a sense of scale (FIN-47 round 5) — otherwise the only way to read an
-                    absolute value off this chart is the hover tooltip. */}
+                {/* Gives a sense of scale — otherwise the only way to read an absolute value
+                    off this chart is the hover tooltip. */}
                 {GRIDLINE_FRACTIONS.map((fraction) => (
                   <line
                     key={fraction}
@@ -181,13 +263,30 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
                     y2={VIEW_HEIGHT * (1 - fraction)}
                   />
                 ))}
-                <polyline className={styles.p10Line} points={toPoints(rows, 'p10', maxValue)} />
-                <polyline className={styles.p90Line} points={toPoints(rows, 'p90', maxValue)} />
-                <polyline className={styles.p50Line} points={toPoints(rows, 'p50', maxValue)} />
-                {/* Marks which point along the x-axis the tooltip's values belong to (FIN-47
-                    round 3) — otherwise, with the tooltip now free-floating at the cursor rather
-                    than pinned above a specific bar, there's nothing tying it back to an exact
-                    age on the plot. */}
+
+                {/* Shaded area beneath each line, down to the next line (or the chart bottom
+                    for the last one), at the line's own color and low opacity (FIN-60). */}
+                {series.map((s, index) => (
+                  <polygon
+                    key={`area-${s.key}`}
+                    className={styles.area}
+                    style={{ fill: s.color }}
+                    points={toAreaPoints(rows, s.key, series[index + 1]?.key, maxValue)}
+                  />
+                ))}
+
+                {series.map((s) => (
+                  <polyline
+                    key={`line-${s.key}`}
+                    className={styles.line}
+                    style={{ stroke: s.color }}
+                    points={toPoints(rows, s.key, maxValue)}
+                  />
+                ))}
+
+                {/* Marks which point along the x-axis the tooltip's values belong to — otherwise,
+                    with the tooltip free-floating at the cursor rather than pinned above a
+                    specific bar, there's nothing tying it back to an exact age on the plot. */}
                 {hoverLineX !== null && (
                   <line
                     className={styles.hoverLine}
@@ -199,15 +298,24 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
                 )}
               </svg>
 
-              {/* Permanent retirement-year marker (FIN-47 round 5) — same dashed-line pattern as
-                  ChartContainer's `.retirementMarker` on the Plan tab, reused here (rather than
-                  drawn as another SVG <line>) so the two tabs read as visually consistent. Unlike
-                  the hover line above, this doesn't depend on hover state and stays visible. */}
+              {/* Permanent retirement-year marker (dashed) — stays visible regardless of hover
+                  or selection state. */}
               {retirementX !== null && (
                 <div
                   data-testid="percentile-chart-retirement-marker"
                   className={styles.retirementMarker}
                   style={{ left: `${(retirementX / VIEW_WIDTH) * 100}%` }}
+                />
+              )}
+
+              {/* Active/selected-period marker (FIN-60) — bold and solid, distinct from both
+                  the dashed retirement marker and the thin hover line so all three remain
+                  legible when they coincide or sit near each other. */}
+              {selectedX !== null && (
+                <div
+                  data-testid="percentile-chart-active-marker"
+                  className={styles.activeMarker}
+                  style={{ left: `${(selectedX / VIEW_WIDTH) * 100}%` }}
                 />
               )}
 
@@ -233,12 +341,14 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
                     key={row.year}
                     type="button"
                     className={styles.hoverTarget}
-                    aria-label={hoverLabel(row)}
+                    aria-label={hoverLabel(row, series)}
+                    aria-pressed={row.year === selectedYear}
                     onMouseMove={(event) => handlePointerMove(index, event)}
                     onMouseEnter={(event) => handlePointerMove(index, event)}
                     onMouseLeave={handlePointerLeave}
                     onFocus={() => setHoveredIndex(index)}
                     onBlur={handlePointerLeave}
+                    onClick={() => handleSelect(index)}
                   />
                 ))}
               </div>
@@ -246,29 +356,24 @@ export function PercentileLineChart({ rows, title, retirementAge }: PercentileLi
               {hoveredRow && (
                 <output className={styles.tooltip} style={tooltipStyle}>
                   <div className={styles.tooltipAge}>Age {hoveredRow.age}</div>
-                  <div className={styles.tooltipRow}>
-                    <span className={`${styles.swatch} ${styles.p90Swatch}`} /> {formatCurrency(hoveredRow.p90)}
-                  </div>
-                  <div className={styles.tooltipRow}>
-                    <span className={`${styles.swatch} ${styles.p50Swatch}`} /> {formatCurrency(hoveredRow.p50)}
-                  </div>
-                  <div className={styles.tooltipRow}>
-                    <span className={`${styles.swatch} ${styles.p10Swatch}`} /> {formatCurrency(hoveredRow.p10)}
-                  </div>
+                  {series.map((s) => (
+                    <div key={s.key} className={styles.tooltipRow}>
+                      <span className={styles.swatch} style={{ borderTopColor: s.color }} />{' '}
+                      {formatCurrency(hoveredRow.values[s.key] ?? 0)}
+                    </div>
+                  ))}
                 </output>
               )}
             </div>
-            <ul className={styles.legend}>
-              <li className={styles.legendItem}>
-                <span className={`${styles.swatch} ${styles.p90Swatch}`} /> 90th percentile
-              </li>
-              <li className={styles.legendItem}>
-                <span className={`${styles.swatch} ${styles.p50Swatch}`} /> Median (50th percentile)
-              </li>
-              <li className={styles.legendItem}>
-                <span className={`${styles.swatch} ${styles.p10Swatch}`} /> 10th percentile
-              </li>
-            </ul>
+            {showLegend && (
+              <ul className={styles.legend}>
+                {series.map((s) => (
+                  <li key={s.key} className={styles.legendItem}>
+                    <span className={styles.swatch} style={{ borderTopColor: s.color }} /> {s.label}
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         )}
       </figure>

@@ -14,8 +14,12 @@ import type { StressTestSectionHandle } from './ui/components'
 import { TopBar } from './ui/components/TopBar/TopBar'
 import { TabBar, type TabBarTab } from './ui/components/TabBar/TabBar'
 import { Drawer } from './ui/components/Drawer/Drawer'
-import { ChartContainer } from './ui/components/ChartContainer/ChartContainer'
 import type { ChartRow } from './ui/components/ChartContainer/types'
+import {
+  PercentileLineChart,
+  type LineChartRow,
+  type LineChartSeries,
+} from './ui/components/PercentileLineChart/PercentileLineChart'
 import { DEFAULT_RETURN_ASSUMPTIONS } from './engine'
 import { YearDetailPanel } from './ui/components/YearDetailPanel/YearDetailPanel'
 import { useProjectionState } from './ui/hooks/useProjectionState'
@@ -30,6 +34,9 @@ const TABS: TabBarTab[] = [
   { id: 'projection', label: 'Projection' },
   { id: 'stress-test', label: 'Stress Test' },
 ]
+
+/** Plan has a single line (the deterministic balance) — one series, legend hidden (FIN-60). */
+const PLAN_SERIES: LineChartSeries[] = [{ key: 'balance', label: 'Balance', color: 'var(--color-primary)' }]
 
 function App() {
   const [coreValues, setCoreValues] = useState(() => loadAssumptions()?.core ?? DEFAULT_CORE_VALUES)
@@ -88,6 +95,20 @@ function App() {
   // if, for some reason, no row's age matches (e.g. retirement age outside the horizon).
   const retirementRow = rows.find((row) => row.age === coreValues.retirementAge) ?? rows.at(-1)
 
+  // FIN-60: Plan's chart is now a single-line `PercentileLineChart` (shared with Stress Test)
+  // rather than `ChartContainer`'s bars. It only knows about the `LineChartRow` shape (year,
+  // age, values) it was clicked on — this maps that back to the full `ChartRow` so
+  // `YearDetailPanel` still gets all the fields it displays.
+  const planChartRows: LineChartRow[] = rows.map((row) => ({
+    year: row.year,
+    age: row.age,
+    values: { balance: row.endingBalance },
+  }))
+  const handleSelectPlanRow = (lineRow: LineChartRow) => {
+    const row = rows.find((r) => r.year === lineRow.year)
+    if (row) setSelectedRow(row)
+  }
+
   return (
     <div className="shell">
       <TopBar />
@@ -134,12 +155,14 @@ function App() {
                 </div>
 
                 <div className="chartRow">
-                  <ChartContainer
-                    rows={rows}
+                  <PercentileLineChart
+                    rows={planChartRows}
+                    series={PLAN_SERIES}
                     title="Investment balance by year"
-                    onSelectRow={setSelectedRow}
+                    onSelectRow={handleSelectPlanRow}
                     defaultSelectedYear={retirementRow?.year}
                     retirementAge={coreValues.retirementAge}
+                    showLegend={false}
                   />
                   <YearDetailPanel row={selectedRow ?? retirementRow} />
                 </div>

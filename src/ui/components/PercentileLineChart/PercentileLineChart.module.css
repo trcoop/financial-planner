@@ -136,15 +136,26 @@
   font-variant-numeric: tabular-nums;
 }
 
-.p10Line,
-.p50Line,
-.p90Line {
+/* One polyline per series (FIN-60) — color comes from the series' own `color` via inline
+   `style`, so this only sets the shape-related properties that are the same for every line. */
+.line {
   fill: none;
+  stroke-width: 2.5;
   vector-effect: non-scaling-stroke;
 }
 
+/* Shaded area beneath each line, down to the next line or the chart bottom (FIN-60) — same
+   color as its line via inline `style`, kept at low opacity so it reads as background fill
+   rather than another line. */
+.area {
+  opacity: 0.14;
+  stroke: none;
+}
+
 /* Vertical marker at the hovered point's x position, tying the free-floating cursor-tracking
-   tooltip back to an exact age on the plot (FIN-47 round 3). */
+   tooltip back to an exact age on the plot. Thin and muted — distinct from the bold
+   `.activeMarker` below and the dashed `.retirementMarker`, so all three read differently even
+   when they land near each other (FIN-60: this is a judgment call worth a second look). */
 .hoverLine {
   stroke: var(--color-text-muted);
   stroke-width: 1;
@@ -173,6 +184,17 @@
   pointer-events: none;
 }
 
+/* Active/selected-period marker (FIN-60) — bold and solid, using the high-contrast text color
+   rather than a muted one, so it reads as "the thing currently selected" distinctly from both
+   the dashed retirement marker and the thin muted hover line. */
+.activeMarker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 2px solid var(--color-text);
+  pointer-events: none;
+}
+
 /* Dollar-amount labels for the gridlines above, as an HTML overlay rather than SVG <text> — the
    plot's `preserveAspectRatio="none"` non-uniform scale would distort text the same way it would
    a circle. */
@@ -193,22 +215,6 @@
   white-space: nowrap;
 }
 
-/* Median line is the primary "expected balance" signal here, so it's the most visually
-   prominent — solid and thicker, using the same primary color the Plan tab's bars use. */
-.p50Line {
-  stroke: var(--color-primary);
-  stroke-width: 2.5;
-}
-
-/* p10/p90 are the outer bounds, secondary to the median — thinner, dashed, and muted so the
-   median line reads first. */
-.p10Line,
-.p90Line {
-  stroke: var(--color-text-muted);
-  stroke-width: 1.5;
-  stroke-dasharray: 4 3;
-}
-
 .legend {
   display: flex;
   flex-wrap: wrap;
@@ -226,21 +232,13 @@
   color: var(--color-text-muted);
 }
 
+/* Color comes from each series' own `color` via inline `style` (`borderTopColor`) — this only
+   sets the shape (FIN-60: colors, not dash/solid style, now distinguish lines from each
+   other). */
 .swatch {
   display: inline-block;
   width: 14px;
   height: 0;
-  border-top-width: 2px;
-  border-top-style: solid;
-}
-
-.p50Swatch {
-  border-top-color: var(--color-primary);
   border-top-width: 2.5px;
-}
-
-.p10Swatch,
-.p90Swatch {
-  border-top-color: var(--color-text-muted);
-  border-top-style: dashed;
+  border-top-style: solid;
 }
