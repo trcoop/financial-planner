@@ -380,16 +380,18 @@ describe('App persistence (FIN-43)', () => {
     }
   })
 
-  it('reset control asks for confirmation, and does nothing on decline', async () => {
+  it('reset control asks for confirmation via an in-system dialog, and does nothing on decline', async () => {
     const user = userEvent.setup()
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
     render(<App />)
 
     await user.click(screen.getByRole('button', { name: 'Reset to defaults' }))
 
-    expect(confirmSpy).toHaveBeenCalled()
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Current age')).toHaveValue('35')
-    confirmSpy.mockRestore()
   })
 
   it('reset control clears storage and reverts to defaults with no reload, on confirm', async () => {
@@ -403,12 +405,11 @@ describe('App persistence (FIN-43)', () => {
       await vi.advanceTimersByTimeAsync(350)
       expect(window.localStorage.getItem(STORAGE_KEY)).not.toBeNull()
 
-      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
       await user.click(screen.getByRole('button', { name: 'Reset to defaults' }))
+      await user.click(screen.getByRole('button', { name: 'Reset' }))
 
       expect(screen.getByLabelText('Current age')).toHaveValue('35')
       expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull()
-      confirmSpy.mockRestore()
     } finally {
       vi.useRealTimers()
     }
