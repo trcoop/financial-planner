@@ -1,0 +1,246 @@
+.card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  /* `.card`'s `flex: 1` already let it grow; what was missing was `StressTestSection`'s own
+     `.section` having any height budget to grow into in the first place (see
+     StressTestSection.module.css) — with that fixed, `min-height: 0` here (mirroring
+     ChartContainer's round-1 fix) lets this card actually shrink/grow to fill it instead of
+     sizing to its own content. */
+  min-height: 0;
+  flex: 1 1 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  flex: 1;
+  min-height: 0;
+}
+
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Wraps the plot SVG, its invisible hover targets, and the hover tooltip so the tooltip can be
+   positioned absolutely against the plot's own box rather than the whole card. Flexes to fill
+   whatever height `.figure` has (desktop: `.section`'s full flex-assigned height; see
+   StressTestSection.module.css) rather than sizing to a fixed aspect ratio, so the chart actually
+   fills its allotted space instead of leaving empty page below it (FIN-47 round 2). */
+.plotWrapper {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+/* On narrow/mobile layouts `.section` doesn't get a flex-assigned height budget (see
+   StressTestSection.module.css's desktop-only media query) — the card just sits at content
+   height there, so `.plotWrapper`'s `flex: 1` has nothing to grow into and would otherwise
+   collapse to 0. Fall back to a fixed aspect ratio in that case, matching ChartContainer's same
+   mobile fallback. */
+@media (max-width: 959px) {
+  .plotWrapper {
+    flex: none;
+    aspect-ratio: 21 / 9;
+  }
+}
+
+/* Fills `.plotWrapper` (see above) — the viewBox/preserveAspectRatio on the <svg> itself keeps
+   the drawn lines matching whatever box this ends up being. */
+.plot {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* One invisible full-height hover/focus target per data point, evenly spaced across the plot's
+   width — a plain row of equal-width flex children lines up closely enough with each point's x
+   position (index / lastIndex) for a hover tooltip; exact pixel alignment isn't needed since the
+   targets are invisible and just need to be "near" their point. */
+.hoverTargets {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.hoverTarget {
+  flex: 1;
+  height: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.hoverTarget:focus-visible {
+  outline: none;
+  box-shadow: inset var(--focus-ring);
+}
+
+/* Small info box showing the hovered point's age and p10/p50/p90 values. Positioned via inline
+   `left`/`top` tracking the cursor's actual position over the plot (set in
+   PercentileLineChart.tsx) — round 2 feedback was that a fixed vertical position read as
+   disconnected from what was being hovered. Offset up and to the right of the cursor (rather
+   than centered under it) so the pointer doesn't sit on top of its own tooltip. */
+.tooltip {
+  position: absolute;
+  transform: translate(12px, -100%);
+  max-width: calc(100% - var(--space-2));
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.tooltipAge {
+  font-weight: 600;
+  margin-bottom: var(--space-1);
+}
+
+.tooltipRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+
+.p10Line,
+.p50Line,
+.p90Line {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Vertical marker at the hovered point's x position, tying the free-floating cursor-tracking
+   tooltip back to an exact age on the plot (FIN-47 round 3). */
+.hoverLine {
+  stroke: var(--color-text-muted);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+/* Horizontal reference lines giving a sense of scale (FIN-47 round 5) — subtler than the p10/p90
+   lines so they read as background structure, not another data series. */
+.gridLine {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Permanent retirement-year marker — deliberately the same selector name, same dashed-line
+   pattern, and the same `--color-text-muted` as ChartContainer's `.retirementMarker` on the Plan
+   tab (FIN-47 round 5), so the two charts read as visually consistent even though this one draws
+   it as an HTML overlay div (matching ChartContainer's approach) rather than an SVG line. Unlike
+   `.hoverLine`, this doesn't depend on hover state. */
+.retirementMarker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--color-text-muted);
+  pointer-events: none;
+}
+
+/* Dollar-amount labels for the gridlines above, as an HTML overlay rather than SVG <text> — the
+   plot's `preserveAspectRatio="none"` non-uniform scale would distort text the same way it would
+   a circle. */
+.yAxisLabels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.yAxisLabel {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-bg) 85%, transparent);
+  padding: 0 var(--space-1);
+  white-space: nowrap;
+}
+
+/* Median line is the primary "expected balance" signal here, so it's the most visually
+   prominent — solid and thicker, using the same primary color the Plan tab's bars use. */
+.p50Line {
+  stroke: var(--color-primary);
+  stroke-width: 2.5;
+}
+
+/* p10/p90 are the outer bounds, secondary to the median — thinner, dashed, and muted so the
+   median line reads first. */
+.p10Line,
+.p90Line {
+  stroke: var(--color-text-muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: solid;
+}
+
+.p50Swatch {
+  border-top-color: var(--color-primary);
+  border-top-width: 2.5px;
+}
+
+.p10Swatch,
+.p90Swatch {
+  border-top-color: var(--color-text-muted);
+  border-top-style: dashed;
+}

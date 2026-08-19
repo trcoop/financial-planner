@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChartContainer } from './ChartContainer'
-import type { ChartBandRow, ChartRow } from './types'
+import type { ChartRow } from './types'
 
 /**
  * jsdom's `getBoundingClientRect` always returns all-zero rects, which would make every bar
@@ -191,85 +191,15 @@ describe('ChartContainer', () => {
     expect(screen.queryAllByRole('button')).toHaveLength(0)
   })
 
-  describe('Monte Carlo band (FIN-42)', () => {
-    const band: ChartBandRow[] = [
-      { year: 0, p10: 80_000, p90: 160_000 },
-      { year: 1, p10: 90_000, p90: 200_000 },
-      { year: 2, p10: 100_000, p90: 260_000 },
-    ]
-
-    it('renders no band elements and no retirement marker when band/retirementAge are absent (regression guard)', () => {
+  describe('retirement marker (FIN-42)', () => {
+    it('renders no retirement marker when retirementAge is absent (regression guard)', () => {
       render(<ChartContainer rows={rows} title="Year-by-year balance" />)
-      expect(screen.queryByTestId(/^chart-band-/)).not.toBeInTheDocument()
-      expect(screen.queryAllByTestId(/^chart-band-/)).toHaveLength(0)
       expect(screen.queryByTestId('chart-retirement-marker')).not.toBeInTheDocument()
       // Bar count/labels/structure exactly as today.
       expect(screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })).toHaveLength(3)
     })
 
-    it('renders one band element per band row, behind the bars in DOM order', () => {
-      const { container } = render(<ChartContainer rows={rows} title="Year-by-year balance" band={band} />)
-      const bandEls = screen.getAllByTestId(/^chart-band-/)
-      expect(bandEls).toHaveLength(3)
-
-      const plot = container.querySelector('[class*="plot"]')
-      expect(plot).not.toBeNull()
-      const children = Array.from(plot?.children ?? [])
-      const lastBandIndex = Math.max(...bandEls.map((el) => children.indexOf(el)))
-      const firstBarIndex = children.findIndex((el) => el.tagName === 'BUTTON')
-      expect(lastBandIndex).toBeLessThan(firstBarIndex)
-    })
-
-    it('sizes each band element so p10/p90 heights order correctly relative to the bar (band spans below and above a mid-range bar)', () => {
-      render(<ChartContainer rows={rows} title="Year-by-year balance" band={band} />)
-      const bandEls = screen.getAllByTestId(/^chart-band-/)
-      const bars = screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })
-
-      // Year 0: endingBalance 122_000, band 80_000-160_000 (maxBalance 260_000 once the band's
-      // widest p90 is folded in) -> p10/p90 as percentages of that shared scale.
-      const maxBalance = 260_000
-      const expectedBottom = (80_000 / maxBalance) * 100
-      const expectedHeight = ((160_000 - 80_000) / maxBalance) * 100
-      const bottom0 = Number.parseFloat(bandEls[0].style.bottom)
-      const height0 = Number.parseFloat(bandEls[0].style.height)
-      expect(bottom0).toBeCloseTo(expectedBottom, 5)
-      expect(height0).toBeCloseTo(expectedHeight, 5)
-
-      // The band brackets the bar's own height on the same shared scale: p10 <= bar <= p90.
-      const barHeight0 = Number.parseFloat(bars[0].style.height)
-      expect(bottom0).toBeLessThanOrEqual(barHeight0)
-      expect(bottom0 + height0).toBeGreaterThanOrEqual(barHeight0)
-    })
-
-    it('extends the height scale so a wide band p90 does not clip (bars shrink relative to their own value)', () => {
-      const { rerender } = render(<ChartContainer rows={rows} title="Year-by-year balance" />)
-      const barsWithoutBand = screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })
-      const lastBarHeightWithoutBand = Number.parseFloat(barsWithoutBand[2].style.height)
-
-      cleanup()
-      stubBarLayout()
-      render(<ChartContainer rows={rows} title="Year-by-year balance" band={band} />)
-      const barsWithBand = screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })
-      const lastBarHeightWithBand = Number.parseFloat(barsWithBand[2].style.height)
-
-      // band's max p90 (260_000) exceeds the max endingBalance (172_097), so the scale widens
-      // and the same bar's height percentage shrinks.
-      expect(lastBarHeightWithBand).toBeLessThan(lastBarHeightWithoutBand)
-      void rerender
-    })
-
-    it('positions each band element at the same left/width as its matching bar', () => {
-      render(<ChartContainer rows={rows} title="Year-by-year balance" band={band} />)
-      const bars = screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })
-      const bandEls = screen.getAllByTestId(/^chart-band-/)
-
-      for (let i = 0; i < rows.length; i++) {
-        expect(bandEls[i].style.left).toBe(bars[i].getBoundingClientRect().left + 'px')
-        expect(bandEls[i].style.width).toBe(bars[i].getBoundingClientRect().width + 'px')
-      }
-    })
-
-    it('renders a retirement marker at the bar matching retirementAge, independent of band', () => {
+    it('renders a retirement marker at the bar matching retirementAge', () => {
       render(<ChartContainer rows={rows} title="Year-by-year balance" retirementAge={36} />)
       const marker = screen.getByTestId('chart-retirement-marker')
       expect(marker).toBeInTheDocument()
@@ -284,30 +214,20 @@ describe('ChartContainer', () => {
       expect(screen.queryByTestId('chart-retirement-marker')).not.toBeInTheDocument()
     })
 
-    it('still fires onSelectRow for a bar click when band and retirement marker are both present (actual non-interception is enforced by pointer-events: none, asserted separately below)', async () => {
+    it('still fires onSelectRow for a bar click when the retirement marker is present (actual non-interception is enforced by pointer-events: none, asserted separately below)', async () => {
       const user = userEvent.setup()
       const onSelectRow = vi.fn()
       render(
-        <ChartContainer
-          rows={rows}
-          title="Year-by-year balance"
-          band={band}
-          retirementAge={36}
-          onSelectRow={onSelectRow}
-        />,
+        <ChartContainer rows={rows} title="Year-by-year balance" retirementAge={36} onSelectRow={onSelectRow} />,
       )
       const bars = screen.getAllByRole('button', { name: /^Year \d+, age \d+/ })
       await user.click(bars[0])
       expect(onSelectRow).toHaveBeenCalledWith(rows[0])
     })
 
-    it('band and marker overlay elements are non-interactive (pointer-events: none)', () => {
-      render(<ChartContainer rows={rows} title="Year-by-year balance" band={band} retirementAge={36} />)
-      const bandEls = screen.getAllByTestId(/^chart-band-/)
+    it('marker overlay element is non-interactive (pointer-events: none)', () => {
+      render(<ChartContainer rows={rows} title="Year-by-year balance" retirementAge={36} />)
       const marker = screen.getByTestId('chart-retirement-marker')
-      for (const el of bandEls) {
-        expect(el.style.pointerEvents).toBe('none')
-      }
       expect(marker.style.pointerEvents).toBe('none')
     })
   })

@@ -22,14 +22,20 @@ export interface ChartRow {
   endingBalance: number
 }
 
-/** One year's Monte Carlo 10th/90th percentile band, keyed by the same `year` a `ChartRow`
- * uses. A parallel structure rather than fields bolted onto `ChartRow`, because band data is
- * optional and arrives later (after a stress test completes) than `rows` does — keeping it
- * separate avoids threading `p10`/`p90: number | undefined` through every `ChartRow` consumer
- * that has nothing to do with Monte Carlo (e.g. `YearDetailPanel`). No `p50` field — see ERD
- * §2.1: this story does not plot a median line. */
+/** One year's Monte Carlo 10th/50th/90th percentile values, keyed by the same `year` a
+ * `ChartRow` uses. A parallel structure rather than fields bolted onto `ChartRow`, because this
+ * data is optional and arrives later (after a stress test completes) than `rows` does — keeping
+ * it separate avoids threading `p10`/`p50`/`p90: number | undefined` through every `ChartRow`
+ * consumer that has nothing to do with Monte Carlo (e.g. `YearDetailPanel`).
+ *
+ * Previously used to overlay a p10-p90 band behind the Plan tab's bars (FIN-42); FIN-47 removed
+ * that overlay entirely in favor of a dedicated percentile line chart on the Stress Test tab
+ * (`PercentileLineChart`). `p50` — deliberately excluded before (ERD §2.1, "avoid two
+ * conflicting 'expected balance' numbers on one chart") — is included now: a standalone line
+ * chart with no plan bars has no such conflict to avoid. */
 export interface ChartBandRow {
   year: number
   p10: number
+  p50: number
   p90: number
 }

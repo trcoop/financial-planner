@@ -60,6 +60,17 @@
   gap: var(--space-5);
 }
 
+/* `[hidden]` and `.tabPanel` both have (0,1,0) specificity, and this stylesheet loads after the
+ * UA one, so without this override `.tabPanel`'s `display: flex` wins over the browser's default
+ * `[hidden] { display: none }` — the Projection tabpanel (with its stat tiles) never actually
+ * disappears when App.tsx sets `hidden` on it, it just sits at its own content height directly
+ * above the Stress Test tabpanel, reading as "the stat tiles are crowding the Stress Test chart"
+ * (FIN-47 round 3 bug report — this predates FIN-47 but is what's actually eating the chart's
+ * space). Explicit `[hidden]` override wins on specificity (0,2,0) and actually hides it. */
+.tabPanel[hidden] {
+  display: none;
+}
+
 .statTiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -84,5 +95,24 @@
 @media (max-width: 959px) {
   .chartRow {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Wraps StressTestSection on the Stress Test tab (App.tsx). `.tabPanel` on that tab's own
+ * <section> gives it the same height budget the Projection tabpanel gets from `.main` (and thus
+ * matches the Drawer's stretched height — FIN-47 round 4); this class passes that height on down
+ * through the Card to StressTestSection's own fill-to-height chain (its `.section` already flexes
+ * to fill whatever height its parent gives it, same as ChartContainer's card does on the Plan
+ * tab). Without `min-height: 0` this would hit the exact same overflow bug `.card`'s FIN-47
+ * round-1 fix addressed. */
+.stressTestCard {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+@media (min-width: 960px) {
+  .stressTestCard {
+    flex: 1;
   }
 }
