@@ -449,13 +449,9 @@ describe('validateAllocation', () => {
     ).toBe('ALLOCATION_SUM_INVALID');
   });
 
-  it('rejects a zero weight on either side', () => {
-    expect(codeThrownBy(() => validateAllocation({ stocksPercent: 100, bondsPercent: 0 }))).toBe(
-      'ALLOCATION_ZERO_WEIGHT',
-    );
-    expect(codeThrownBy(() => validateAllocation({ stocksPercent: 0, bondsPercent: 100 }))).toBe(
-      'ALLOCATION_ZERO_WEIGHT',
-    );
+  it('accepts an all-stock or all-bond (0/100 or 100/0) split (FIN-59)', () => {
+    expect(() => validateAllocation({ stocksPercent: 100, bondsPercent: 0 })).not.toThrow();
+    expect(() => validateAllocation({ stocksPercent: 0, bondsPercent: 100 })).not.toThrow();
   });
 
   it('rejects a negative weight even when the pair still sums to 100', () => {

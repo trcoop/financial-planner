@@ -112,13 +112,28 @@ describe('AdvancedAssumptionsForm', () => {
     expect(screen.getByLabelText('Bond return assumption')).toHaveAttribute('max', '100')
   })
 
-  it('enforces a 1-99 range on stock allocation, so both legs always keep positive weight', async () => {
+  it('enforces a 0-100 range on stock allocation, so an all-stock or all-bond split is allowed (FIN-59)', async () => {
     const user = userEvent.setup()
     render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
     await user.click(screen.getByText('▸ Advanced assumptions'))
 
-    expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toHaveAttribute('min', '1')
-    expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toHaveAttribute('max', '99')
+    expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toHaveAttribute('min', '0')
+    expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toHaveAttribute('max', '100')
+  })
+
+  it('accepts 0 and 100 as valid stock allocation values (FIN-59 0/100 and 100/0 splits)', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={onChange} />)
+    await user.click(screen.getByText('▸ Advanced assumptions'))
+
+    const stockAllocation = screen.getByLabelText('Stock allocation (vs. bonds)')
+
+    fireEvent.change(stockAllocation, { target: { value: '0' } })
+    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_VALUES, stocksAllocationPercent: 0 })
+
+    fireEvent.change(stockAllocation, { target: { value: '100' } })
+    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_VALUES, stocksAllocationPercent: 100 })
   })
 
   it('enforces the FIN-10 ranges via min/max, including negative bounds for return and inflation', async () => {

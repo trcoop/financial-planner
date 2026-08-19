@@ -15,9 +15,10 @@ export const ADVANCED_FIELD_RANGES: AdvancedFieldRange[] = [
   { key: 'bondReturnPercent', min: -50, max: 100 },
   { key: 'inflationPercent', min: -50, max: 100 },
   { key: 'withdrawalRatePercent', min: 0, max: 100 },
-  // 1-99, not 0-100: the engine's `validateAllocation` rejects a zero weight on either leg
-  // (ALLOCATION_ZERO_WEIGHT), so the UI range keeps both stocks and bonds always positive.
-  { key: 'stocksAllocationPercent', min: 1, max: 99 },
+  // 0-100 inclusive (FIN-59): an all-stock or all-bond split is a legitimate plan choice.
+  // The engine's `validateAllocation` allows a zero weight on either leg — it only rejects
+  // a negative weight or a pair that doesn't sum to 100 — so the UI mirrors that here.
+  { key: 'stocksAllocationPercent', min: 0, max: 100 },
 ]
 
 export function rangeError(value: number, min: number, max: number): string | undefined {
