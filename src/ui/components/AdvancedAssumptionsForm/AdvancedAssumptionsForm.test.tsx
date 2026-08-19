@@ -46,6 +46,20 @@ describe('AdvancedAssumptionsForm', () => {
     expect(screen.getByLabelText('Bond return assumption')).toBeInTheDocument()
   })
 
+  it('renders Bond return assumption immediately after Stock return assumption (FIN-58)', async () => {
+    const user = userEvent.setup()
+    const { container } = render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
+
+    await user.click(screen.getByText('▸ Advanced assumptions'))
+
+    const labels = Array.from(container.querySelectorAll('label')).map((el) => el.textContent)
+    const stockIndex = labels.indexOf('Stock return assumption')
+    const bondIndex = labels.indexOf('Bond return assumption')
+
+    expect(stockIndex).toBeGreaterThanOrEqual(0)
+    expect(bondIndex).toBe(stockIndex + 1)
+  })
+
   it('pre-fills the FIN-10 default values, the FIN-56 default 70/30 stock/bond split, and the FIN-57 default 4.5% bond return', async () => {
     const user = userEvent.setup()
     render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
