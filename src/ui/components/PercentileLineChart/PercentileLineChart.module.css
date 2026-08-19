@@ -152,6 +152,47 @@
   pointer-events: none;
 }
 
+/* Horizontal reference lines giving a sense of scale (FIN-47 round 5) — subtler than the p10/p90
+   lines so they read as background structure, not another data series. */
+.gridLine {
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+/* Permanent retirement-year marker — deliberately the same selector name, same dashed-line
+   pattern, and the same `--color-text-muted` as ChartContainer's `.retirementMarker` on the Plan
+   tab (FIN-47 round 5), so the two charts read as visually consistent even though this one draws
+   it as an HTML overlay div (matching ChartContainer's approach) rather than an SVG line. Unlike
+   `.hoverLine`, this doesn't depend on hover state. */
+.retirementMarker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px dashed var(--color-text-muted);
+  pointer-events: none;
+}
+
+/* Dollar-amount labels for the gridlines above, as an HTML overlay rather than SVG <text> — the
+   plot's `preserveAspectRatio="none"` non-uniform scale would distort text the same way it would
+   a circle. */
+.yAxisLabels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.yAxisLabel {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-bg) 85%, transparent);
+  padding: 0 var(--space-1);
+  white-space: nowrap;
+}
+
 /* Median line is the primary "expected balance" signal here, so it's the most visually
    prominent — solid and thicker, using the same primary color the Plan tab's bars use. */
 .p50Line {

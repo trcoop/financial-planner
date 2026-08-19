@@ -168,7 +168,13 @@ export function StressTestSection({
         Success rate: {successRate === null ? '[Run stress test to see results]' : formatPercent(successRate)}
       </p>
 
-      {chartRows && <PercentileLineChart rows={chartRows} title="Simulated outcomes by year" />}
+      {chartRows && (
+        <PercentileLineChart
+          rows={chartRows}
+          title="Simulated outcomes by year"
+          retirementAge={assumptions.retirementAge}
+        />
+      )}
     </section>
   )
 }

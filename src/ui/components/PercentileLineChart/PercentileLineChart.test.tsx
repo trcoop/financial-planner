@@ -85,4 +85,26 @@ describe('PercentileLineChart', () => {
     await user.unhover(target)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
+
+  it('renders a permanent retirement-year marker when retirementAge matches a row (FIN-47)', () => {
+    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" retirementAge={36} />)
+    expect(screen.getByTestId('percentile-chart-retirement-marker')).toBeInTheDocument()
+  })
+
+  it('renders no retirement marker when retirementAge is omitted or matches no row', () => {
+    const { rerender } = render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    expect(screen.queryByTestId('percentile-chart-retirement-marker')).not.toBeInTheDocument()
+
+    rerender(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" retirementAge={99} />)
+    expect(screen.queryByTestId('percentile-chart-retirement-marker')).not.toBeInTheDocument()
+  })
+
+  it('renders evenly-spaced y-axis gridline labels showing formatted dollar amounts (FIN-47)', () => {
+    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
+    expect(labels.length).toBeGreaterThanOrEqual(3)
+    for (const label of labels) {
+      expect(label).toHaveTextContent(/^\$[\d,]+$/)
+    }
+  })
 })

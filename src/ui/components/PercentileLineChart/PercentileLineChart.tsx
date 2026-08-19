@@ -14,12 +14,22 @@ export interface PercentileLineChartProps {
   rows: PercentileChartRow[]
   /** Title shown above the chart and used as the figure's accessible name. */
   title: string
+  /** Age at which the permanent retirement-year marker renders (FIN-47 round 5) — same idea as
+   * ChartContainer's retirement marker on the Plan tab (PRD Goal #3), reusing its dashed-line
+   * styling for visual consistency between the two tabs. Renders nothing if the age isn't
+   * present in `rows`. */
+  retirementAge?: number
 }
 
 /** Fixed viewBox coordinate space the polylines are plotted in; scales to the rendered SVG size
  * via `viewBox`/`preserveAspectRatio` so no pixel math is needed elsewhere in this component. */
 const VIEW_WIDTH = 400
 const VIEW_HEIGHT = 200
+
+/** Y-axis gridlines are drawn at these fractions of `maxValue`, top to bottom — gives a sense of
+ * scale (FIN-47 round 5) without cluttering a chart that already has three lines, a hover line,
+ * and a retirement marker on it. */
+const GRIDLINE_FRACTIONS = [1, 0.75, 0.5, 0.25, 0]
 
 const xForIndex = (index: number, lastIndex: number): number => (index / lastIndex) * VIEW_WIDTH
 
@@ -49,7 +59,7 @@ const hoverLabel = (row: PercentileChartRow): string =>
  * age plus its p10/p50/p90 values — the chart's only interaction, since (unlike ChartContainer's
  * bars) there's no year-detail panel this feeds into (FIN-47).
  */
-export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
+export function PercentileLineChart({ rows, title, retirementAge }: PercentileLineChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   // Cursor position (px, relative to `plotWrapperRef`) while a point is hovered via mouse, plus
   // which edges it's close enough to that the tooltip should flip instead of running off-screen
@@ -111,6 +121,9 @@ export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
 
   const hoverLineX = hoveredIndex !== null ? xForIndex(hoveredIndex, lastIndex) : null
 
+  const retirementIndex = retirementAge === undefined ? -1 : rows.findIndex((row) => row.age === retirementAge)
+  const retirementX = retirementIndex >= 0 ? xForIndex(retirementIndex, lastIndex) : null
+
   return (
     <Card className={styles.card}>
       <figure className={styles.figure} aria-label={title}>
@@ -132,6 +145,18 @@ export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
                 preserveAspectRatio="none"
                 aria-hidden="true"
               >
+                {/* Gives a sense of scale (FIN-47 round 5) — otherwise the only way to read an
+                    absolute value off this chart is the hover tooltip. */}
+                {GRIDLINE_FRACTIONS.map((fraction) => (
+                  <line
+                    key={fraction}
+                    className={styles.gridLine}
+                    x1={0}
+                    x2={VIEW_WIDTH}
+                    y1={VIEW_HEIGHT * (1 - fraction)}
+                    y2={VIEW_HEIGHT * (1 - fraction)}
+                  />
+                ))}
                 <polyline className={styles.p10Line} points={toPoints(rows, 'p10', maxValue)} />
                 <polyline className={styles.p90Line} points={toPoints(rows, 'p90', maxValue)} />
                 <polyline className={styles.p50Line} points={toPoints(rows, 'p50', maxValue)} />
@@ -149,6 +174,34 @@ export function PercentileLineChart({ rows, title }: PercentileLineChartProps) {
                   />
                 )}
               </svg>
+
+              {/* Permanent retirement-year marker (FIN-47 round 5) — same dashed-line pattern as
+                  ChartContainer's `.retirementMarker` on the Plan tab, reused here (rather than
+                  drawn as another SVG <line>) so the two tabs read as visually consistent. Unlike
+                  the hover line above, this doesn't depend on hover state and stays visible. */}
+              {retirementX !== null && (
+                <div
+                  data-testid="percentile-chart-retirement-marker"
+                  className={styles.retirementMarker}
+                  style={{ left: `${(retirementX / VIEW_WIDTH) * 100}%` }}
+                />
+              )}
+
+              {/* Dollar-amount labels for the gridlines above — an HTML overlay rather than SVG
+                  <text>, since the SVG's non-uniform scale (`preserveAspectRatio="none"`) would
+                  distort text the same way it would a circle. */}
+              <div className={styles.yAxisLabels} aria-hidden="true">
+                {GRIDLINE_FRACTIONS.map((fraction) => (
+                  <div
+                    key={fraction}
+                    data-testid="percentile-chart-y-axis-label"
+                    className={styles.yAxisLabel}
+                    style={{ top: `${(1 - fraction) * 100}%` }}
+                  >
+                    {formatCurrency(fraction * maxValue)}
+                  </div>
+                ))}
+              </div>
 
               <div className={styles.hoverTargets}>
                 {rows.map((row, index) => (
