@@ -1,29 +1,44 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it } from 'vitest'
-import { PercentileLineChart, type PercentileChartRow } from './PercentileLineChart'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { PercentileLineChart, type LineChartRow, type LineChartSeries } from './PercentileLineChart'
 
-const rows: PercentileChartRow[] = [
-  { age: 35, year: 0, p10: 80_000, p50: 110_000, p90: 160_000 },
-  { age: 36, year: 1, p10: 90_000, p50: 130_000, p90: 200_000 },
-  { age: 37, year: 2, p10: 100_000, p50: 160_000, p90: 260_000 },
+const rows: LineChartRow[] = [
+  { age: 35, year: 0, values: { p10: 80_000, p50: 110_000, p90: 160_000 } },
+  { age: 36, year: 1, values: { p10: 90_000, p50: 130_000, p90: 200_000 } },
+  { age: 37, year: 2, values: { p10: 100_000, p50: 160_000, p90: 260_000 } },
 ]
+
+const percentileSeries: LineChartSeries[] = [
+  { key: 'p90', label: '90th percentile', color: 'green' },
+  { key: 'p50', label: 'Median (50th percentile)', color: 'blue' },
+  { key: 'p10', label: '10th percentile', color: 'orange' },
+]
+
+const planRows: LineChartRow[] = [
+  { age: 35, year: 0, values: { balance: 100_000 } },
+  { age: 36, year: 1, values: { balance: 120_000 } },
+]
+
+const planSeries: LineChartSeries[] = [{ key: 'balance', label: 'Balance', color: 'blue' }]
 
 describe('PercentileLineChart', () => {
   afterEach(() => cleanup())
 
   it('renders a titled figure', () => {
-    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     expect(screen.getByRole('figure', { name: 'Monte Carlo outcomes' })).toBeInTheDocument()
   })
 
   it('renders an age range subtitle spanning the first and last row ages', () => {
-    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     expect(screen.getByText('Age 35 → 37')).toBeInTheDocument()
   })
 
-  it('renders three polylines — p10, p50, and p90 — each with one point per row', () => {
-    const { container } = render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+  it('renders one polyline per series, each with one point per row', () => {
+    const { container } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />,
+    )
     const polylines = container.querySelectorAll('polyline')
     expect(polylines).toHaveLength(3)
     for (const polyline of polylines) {
@@ -32,40 +47,63 @@ describe('PercentileLineChart', () => {
     }
   })
 
-  it('renders a legend labeling all three percentile lines, including the median', () => {
-    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+  it("colors each series' polyline with its own color", () => {
+    const { container } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />,
+    )
+    const polylines = Array.from(container.querySelectorAll('polyline'))
+    expect(polylines.map((el) => el.style.stroke)).toEqual(['green', 'blue', 'orange'])
+  })
+
+  it('renders one shaded area polygon per series, in each series color', () => {
+    const { container } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />,
+    )
+    const polygons = Array.from(container.querySelectorAll('polygon'))
+    expect(polygons).toHaveLength(3)
+    expect(polygons.map((el) => el.style.fill)).toEqual(['green', 'blue', 'orange'])
+  })
+
+  it('renders a single line, area, and no legend for a single-series (Plan) chart', () => {
+    const { container } = render(
+      <PercentileLineChart rows={planRows} series={planSeries} title="Investment balance by year" showLegend={false} />,
+    )
+    expect(container.querySelectorAll('polyline')).toHaveLength(1)
+    expect(container.querySelectorAll('polygon')).toHaveLength(1)
+    expect(screen.queryByText('Balance')).not.toBeInTheDocument()
+  })
+
+  it('renders a legend labeling all lines by default', () => {
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     expect(screen.getByText(/90th percentile/i)).toBeInTheDocument()
     expect(screen.getByText(/median.*50th percentile/i)).toBeInTheDocument()
     expect(screen.getByText(/10th percentile/i)).toBeInTheDocument()
   })
 
+  it('hides the legend when showLegend is false', () => {
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" showLegend={false} />)
+    expect(screen.queryByText(/90th percentile/i)).not.toBeInTheDocument()
+  })
+
   it('renders no subtitle, no polylines, and no legend when rows is empty', () => {
-    const { container } = render(<PercentileLineChart rows={[]} title="Monte Carlo outcomes" />)
+    const { container } = render(
+      <PercentileLineChart rows={[]} series={percentileSeries} title="Monte Carlo outcomes" />,
+    )
     expect(screen.queryByText(/^Age /)).not.toBeInTheDocument()
     expect(container.querySelectorAll('polyline')).toHaveLength(0)
     expect(screen.queryByText(/percentile/i)).not.toBeInTheDocument()
   })
 
-  it('orders the p50 line so it renders after (visually on top of) the p10/p90 lines', () => {
-    const { container } = render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
-    const polylines = Array.from(container.querySelectorAll('polyline'))
-    const p50Index = polylines.findIndex((el) => el.className.baseVal.includes('p50Line'))
-    const p10Index = polylines.findIndex((el) => el.className.baseVal.includes('p10Line'))
-    const p90Index = polylines.findIndex((el) => el.className.baseVal.includes('p90Line'))
-    expect(p50Index).toBeGreaterThan(p10Index)
-    expect(p50Index).toBeGreaterThan(p90Index)
-  })
-
   it('shows no tooltip before any point is hovered', () => {
-    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
-  it('shows a tooltip with age and p10/p50/p90 values on hovering a point (FIN-47)', async () => {
+  it('shows a tooltip with age and each series value on hovering a point', async () => {
     const user = userEvent.setup()
-    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
 
-    await user.hover(screen.getByLabelText('Age 36: 10th percentile $90,000, median $130,000, 90th percentile $200,000'))
+    await user.hover(screen.getByLabelText(/^Age 36:/))
 
     const tooltip = screen.getByRole('status')
     expect(tooltip).toHaveTextContent('Age 36')
@@ -76,9 +114,9 @@ describe('PercentileLineChart', () => {
 
   it('hides the tooltip again after unhovering', async () => {
     const user = userEvent.setup()
-    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
 
-    const target = screen.getByLabelText('Age 36: 10th percentile $90,000, median $130,000, 90th percentile $200,000')
+    const target = screen.getByLabelText(/^Age 36:/)
     await user.hover(target)
     expect(screen.getByRole('status')).toBeInTheDocument()
 
@@ -86,21 +124,110 @@ describe('PercentileLineChart', () => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
-  it('renders a permanent retirement-year marker when retirementAge matches a row (FIN-47)', () => {
-    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" retirementAge={36} />)
+  it('renders a permanent retirement-year marker when retirementAge matches a row', () => {
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" retirementAge={36} />)
     expect(screen.getByTestId('percentile-chart-retirement-marker')).toBeInTheDocument()
   })
 
   it('renders no retirement marker when retirementAge is omitted or matches no row', () => {
-    const { rerender } = render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+    const { rerender } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />,
+    )
     expect(screen.queryByTestId('percentile-chart-retirement-marker')).not.toBeInTheDocument()
 
-    rerender(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" retirementAge={99} />)
+    rerender(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" retirementAge={99} />)
     expect(screen.queryByTestId('percentile-chart-retirement-marker')).not.toBeInTheDocument()
   })
 
-  it('renders evenly-spaced y-axis gridline labels showing formatted dollar amounts (FIN-47)', () => {
-    render(<PercentileLineChart rows={rows} title="Monte Carlo outcomes" />)
+  it('renders no active-period marker until a default or click sets one', () => {
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
+    expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
+  })
+
+  it('renders an active-period marker for defaultSelectedYear', () => {
+    render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" defaultSelectedYear={1} />,
+    )
+    expect(screen.getByTestId('percentile-chart-active-marker')).toBeInTheDocument()
+  })
+
+  it('sets the active-period marker and calls onSelectRow when a time slice is clicked', async () => {
+    const user = userEvent.setup()
+    const onSelectRow = vi.fn()
+    render(
+      <PercentileLineChart
+        rows={rows}
+        series={percentileSeries}
+        title="Monte Carlo outcomes"
+        onSelectRow={onSelectRow}
+      />,
+    )
+
+    expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText(/^Age 36:/))
+
+    expect(screen.getByTestId('percentile-chart-active-marker')).toBeInTheDocument()
+    expect(onSelectRow).toHaveBeenCalledWith(rows[1])
+  })
+
+  it('suppresses the active-period marker when showActiveMarker is false, while still tracking selection', async () => {
+    const user = userEvent.setup()
+    const onSelectRow = vi.fn()
+    render(
+      <PercentileLineChart
+        rows={rows}
+        series={percentileSeries}
+        title="Monte Carlo outcomes"
+        defaultSelectedYear={1}
+        onSelectRow={onSelectRow}
+        showActiveMarker={false}
+      />,
+    )
+
+    expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText(/^Age 37:/))
+
+    expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
+    expect(onSelectRow).toHaveBeenCalledWith(rows[2])
+  })
+
+  it("shapes a non-last series' area polygon bottom edge to follow the next series' line, not a constant chart-bottom value", () => {
+    const { container } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />,
+    )
+    // First polygon is the p90 area (series[0]); its bottom edge should follow p50 (series[1]),
+    // per FIN-60's "shading beneath each line, down to the next line". maxValue across all rows
+    // is 260,000 (p90's last row), and VIEW_HEIGHT is 200 — so if the bottom edge used a
+    // constant chart-bottom value instead (the mutation under test), every bottom y would be
+    // exactly 200 regardless of p50's actual values.
+    const p90Area = container.querySelectorAll('polygon')[0]
+    const points = p90Area.getAttribute('points')?.trim().split(/\s+/) ?? []
+    expect(points).toHaveLength(rows.length * 2)
+
+    // Bottom half is the second half of the points list, in reverse row order (row2, row1, row0).
+    const bottomPoints = points.slice(rows.length)
+    const bottomYs = bottomPoints.map((p) => Number(p.split(',')[1]))
+
+    const maxValue = 260_000
+    const expectedYs = [...rows]
+      .reverse()
+      .map((row) => 200 - (row.values.p50 / maxValue) * 200)
+
+    bottomYs.forEach((y, i) => expect(y).toBeCloseTo(expectedYs[i], 3))
+    // None of these should be the constant chart-bottom value (VIEW_HEIGHT = 200) — confirming
+    // the bottom edge genuinely tracks the next series rather than always sitting at the floor.
+    for (const y of bottomYs) {
+      expect(y).not.toBeCloseTo(200, 3)
+    }
+    // And the bottom edge must actually vary across rows (not just "not 200" but genuinely
+    // following p50's changing values row to row).
+    expect(new Set(bottomYs.map((y) => y.toFixed(3))).size).toBe(rows.length)
+  })
+
+  it('renders evenly-spaced y-axis gridline labels showing formatted dollar amounts', () => {
+    render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
     expect(labels.length).toBeGreaterThanOrEqual(3)
     for (const label of labels) {
@@ -108,21 +235,21 @@ describe('PercentileLineChart', () => {
     }
   })
 
-  it('rounds a just-over-$1M y-axis label to the nearest $100k as a full number, not an abbreviation (FIN-47)', () => {
-    const highRows: PercentileChartRow[] = [
-      { age: 60, year: 0, p10: 900_000, p50: 1_050_000, p90: 1_180_000 },
+  it('rounds a just-over-$1M y-axis label to the nearest $100k as a full number, not an abbreviation', () => {
+    const highRows: LineChartRow[] = [
+      { age: 60, year: 0, values: { p10: 900_000, p50: 1_050_000, p90: 1_180_000 } },
     ]
-    render(<PercentileLineChart rows={highRows} title="Monte Carlo outcomes" />)
+    render(<PercentileLineChart rows={highRows} series={percentileSeries} title="Monte Carlo outcomes" />)
     const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
     // top gridline == maxValue == 1,180,000, rounds to nearest 100k => $1,200,000
     expect(labels[0]).toHaveTextContent('$1,200,000')
   })
 
-  it('abbreviates a comfortably-multi-million y-axis label to one decimal of millions (FIN-47)', () => {
-    const highRows: PercentileChartRow[] = [
-      { age: 60, year: 0, p10: 3_000_000, p50: 4_500_000, p90: 5_186_787 },
+  it('abbreviates a comfortably-multi-million y-axis label to one decimal of millions', () => {
+    const highRows: LineChartRow[] = [
+      { age: 60, year: 0, values: { p10: 3_000_000, p50: 4_500_000, p90: 5_186_787 } },
     ]
-    render(<PercentileLineChart rows={highRows} title="Monte Carlo outcomes" />)
+    render(<PercentileLineChart rows={highRows} series={percentileSeries} title="Monte Carlo outcomes" />)
     const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
     expect(labels[0]).toHaveTextContent('$5.2M')
   })

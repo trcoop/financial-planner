@@ -56,7 +56,7 @@ export function YearDetailPanel({ row }: YearDetailPanelProps) {
         )}
         {/* Per the design mockup: a persistent instructional line, not a state that
            disappears once a bar's been clicked — the chart stays interactive throughout. */}
-        <p className={styles.placeholder}>Click any bar to see that year's detail.</p>
+        <p className={styles.placeholder}>Click any point on the chart to see that year's detail.</p>
       </section>
     </Card>
   )

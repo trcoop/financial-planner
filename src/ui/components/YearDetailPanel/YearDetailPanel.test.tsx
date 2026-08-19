@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ChartContainer } from '../ChartContainer/ChartContainer'
+import { PercentileLineChart, type LineChartRow, type LineChartSeries } from '../PercentileLineChart/PercentileLineChart'
 import type { ChartRow } from '../ChartContainer/types'
 import { YearDetailPanel } from './YearDetailPanel'
 
@@ -37,11 +37,22 @@ const retirementRow: ChartRow = {
   endingBalance: 1_236_000,
 }
 
+const SERIES: LineChartSeries[] = [{ key: 'balance', label: 'Balance', color: 'var(--color-primary)' }]
+
 function ConnectedView({ initialRows }: { initialRows: ChartRow[] }) {
   const [selected, setSelected] = useState<ChartRow | undefined>(initialRows.at(-1))
+  const lineRows: LineChartRow[] = initialRows.map((row) => ({
+    year: row.year,
+    age: row.age,
+    values: { balance: row.endingBalance },
+  }))
+  const handleSelect = (lineRow: LineChartRow) => {
+    const row = initialRows.find((r) => r.year === lineRow.year)
+    if (row) setSelected(row)
+  }
   return (
     <>
-      <ChartContainer rows={initialRows} title="Year-by-year balance" onSelectRow={setSelected} />
+      <PercentileLineChart rows={lineRows} series={SERIES} title="Year-by-year balance" onSelectRow={handleSelect} />
       <YearDetailPanel row={selected} />
     </>
   )
@@ -79,18 +90,18 @@ describe('YearDetailPanel', () => {
   it('renders only the instructional caption when no row is selected', () => {
     render(<YearDetailPanel row={undefined} />)
     const panel = screen.getByRole('region', { name: 'Year detail' })
-    expect(panel).toHaveTextContent(/click any bar/i)
+    expect(panel).toHaveTextContent(/click any point/i)
     expect(panel.querySelector('dl')).not.toBeInTheDocument()
   })
 
   it('keeps the instructional caption visible alongside the detail rows once a row is selected', () => {
     render(<YearDetailPanel row={rows[0]} />)
     const panel = screen.getByRole('region', { name: 'Year detail' })
-    expect(panel).toHaveTextContent(/click any bar/i)
+    expect(panel).toHaveTextContent(/click any point/i)
     expect(panel.querySelector('dl')).toBeInTheDocument()
   })
 
-  it("updates its content when a bar in ChartContainer is selected", async () => {
+  it('updates its content when a time slice in PercentileLineChart is selected', async () => {
     const user = userEvent.setup()
     render(<ConnectedView initialRows={rows} />)
 
@@ -98,8 +109,8 @@ describe('YearDetailPanel', () => {
     // Defaults to the last row (year 1 / age 36).
     expect(panel).toHaveTextContent('$145,990')
 
-    const firstBar = screen.getByRole('button', { name: 'Year 1, age 35' })
-    await user.click(firstBar)
+    const firstTarget = screen.getByLabelText(/^Age 35:/)
+    await user.click(firstTarget)
 
     expect(panel).toHaveTextContent('$122,000')
     expect(panel).not.toHaveTextContent('$145,990')
