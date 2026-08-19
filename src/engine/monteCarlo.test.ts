@@ -1425,6 +1425,127 @@ describe('validated success-rate regression (FIN-56)', () => {
   }, 15000);
 });
 
+/**
+ * FIN-55: regression test formalizing an external formula-validation pass against the
+ * closed-form analytic lognormal-GBM median, `median = P0 * exp((ln(1+r) - sigma^2/2) * T)`.
+ *
+ * Isolated pure GBM growth — no contributions, no withdrawals, a 100% stock allocation — so
+ * the only thing under test is `gbmPeriodReturn`/`drawPortfolioReturn`'s per-period draw and
+ * `extractPercentiles`' nearest-rank P50, with none of the projection's other stages able to
+ * mask a regression there.
+ *
+ * The ticket's originating validation pass measured the engine's P50 ($327,060) against this
+ * same closed-form median ($309,001) — a ~5.8% gap, attributed to nearest-rank sampling noise
+ * at 5,000 paths rather than a bug — against the PRE-FIN-56 stock/bond modeling (shared
+ * mean return, zero correlation). FIN-56 has since split stock/bond expected returns and
+ * introduced a fixed -0.2 correlation; re-verified empirically before writing this test
+ * (see the FIN-55 PR description) that a 100%-stock isolation is unaffected, because
+ * `correlatedNormals` degenerates the bond leg into an independent draw that a 100/0
+ * allocation weights at zero regardless — the stock leg's own math, and its expected value,
+ * are untouched by FIN-56. Measured post-FIN-56 P50/median ratios at 5,000 paths across two
+ * seeds (42, 7) came back at 1.00006 and 1.0104 — within roughly 1%, comfortably inside the
+ * ticket's ~10% band, so the tolerance below is left as specified rather than loosened.
+ */
+describe('FIN-55: pure-GBM isolation against the analytic lognormal median', () => {
+  /** Applies only GBM growth to the balance — no contributions, no withdrawals, no tax. */
+  const growthOnlyStep: PipelineStage = (state, input) => {
+    const beginningBalance = state.balance;
+    const endingBalance = beginningBalance * (1 + input.returnForPeriod);
+
+    return {
+      ...state,
+      beginningBalance,
+      investmentReturn: endingBalance - beginningBalance,
+      balance: endingBalance,
+      rows: [
+        ...state.rows,
+        {
+          age: state.age,
+          year: state.year,
+          beginningBalance,
+          annualContribution: 0,
+          investmentReturn: endingBalance - beginningBalance,
+          annualWithdrawal: 0,
+          endingBalance,
+        },
+      ],
+    };
+  };
+
+  const isolationPlan: PlanAssumptions = assumptions({
+    currentAge: 40,
+    // Retirement is pushed past the horizon so `withdrawalRateInRetirement` never engages —
+    // belt-and-braces alongside `growthOnlyStep`, which ignores retirement entirely.
+    retirementAge: 200,
+    initialBalance: 100_000,
+    currentAnnualIncome: 0,
+    annualContributionRate: 0,
+    annualRaiseRate: 0,
+    annualReturnRate: 0.07,
+    inflationRate: 0,
+    withdrawalRateInRetirement: 0,
+    planningHorizonEndAge: 59, // 20-year horizon: age 40 -> 59.
+  });
+
+  const stocksOnly = { stocksPercent: 100, bondsPercent: 0 };
+  const P0 = 100_000;
+  const meanReturn = 0.07;
+  const stockVolatility = DEFAULT_VOLATILITY_ASSUMPTIONS.stocks;
+  const years = 20;
+
+  /** `median = P0 * exp((ln(1+r) - sigma^2/2) * T)` — the closed-form lognormal-GBM median. */
+  const analyticMedian =
+    P0 * Math.exp((Math.log(1 + meanReturn) - (stockVolatility * stockVolatility) / 2) * years);
+
+  /** The deterministic Story 1 projection's arithmetic-mean ending balance for the same inputs. */
+  const deterministicArithmeticMean = P0 * (1 + meanReturn) ** years;
+
+  const simulateFinalBalances = (seed: number, simulationCount: number): number[] => {
+    const draw = createSeededRandom(seed);
+    const config: TrialConfig = {
+      allocation: stocksOnly,
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      runPeriodFn: growthOnlyStep,
+    };
+
+    return Array.from({ length: simulationCount }, () => {
+      const balances = runMonteCarloTrial(isolationPlan, [], draw, config);
+      return balances[balances.length - 1];
+    });
+  };
+
+  const percentile50 = (values: number[]): number => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  };
+
+  it('produces a P50 within ~10% of the analytic lognormal median', () => {
+    const finalBalances = simulateFinalBalances(7, 5_000);
+    const p50 = percentile50(finalBalances);
+
+    expect(Math.abs(p50 / analyticMedian - 1)).toBeLessThan(0.1);
+  });
+
+  /**
+   * Regression guard against re-introducing double-counted volatility drag (see
+   * `gbmPeriodReturn`'s doc comment in `monteCarlo.ts`, "RESOLVED" — the resolved design
+   * decision this pins). A GBM median is always strictly below the arithmetic-mean/deterministic
+   * projection for the same inputs whenever volatility is nonzero; if a future change fed the
+   * simulation an already geometric-mean-adjusted rate, the drag would apply twice and P50
+   * would fall well short of this bound by a much wider margin than sampling noise explains,
+   * while a change that removed the drag entirely would push P50 up toward (or past) the
+   * deterministic figure.
+   */
+  it('keeps P50 below the deterministic arithmetic-mean projection for the same inputs', () => {
+    const finalBalances = simulateFinalBalances(7, 5_000);
+    const p50 = percentile50(finalBalances);
+
+    expect(p50).toBeLessThan(deterministicArithmeticMean);
+  });
+});
+
 describe('performance', () => {
   it('runs 5,000 paths over a full horizon inside the 3s budget', () => {
     // FIN-17 originally pinned this budget to 500ms for the pure engine work at 1,000
