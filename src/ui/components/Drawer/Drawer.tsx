@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import styles from './Drawer.module.css'
 
 interface DrawerProps {
@@ -25,6 +25,25 @@ function getDefaultOpen(): boolean {
 export function Drawer({ label, children }: DrawerProps) {
   const [isOpen, setIsOpen] = useState(getDefaultOpen)
   const contentId = useId()
+  // Once the user explicitly toggles the drawer, their choice wins over the
+  // responsive default for the rest of this mount — the listener below only
+  // re-applies the breakpoint default until then, so a rotate/resize before
+  // any manual interaction picks up the correct default retroactively.
+  const userToggled = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
+    const mediaQueryList = window.matchMedia(DESKTOP_QUERY)
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (!userToggled.current) {
+        setIsOpen(event.matches)
+      }
+    }
+    mediaQueryList.addEventListener('change', handleChange)
+    return () => mediaQueryList.removeEventListener('change', handleChange)
+  }, [])
 
   return (
     <div className={styles.drawer} data-open={isOpen}>
@@ -39,7 +58,10 @@ export function Drawer({ label, children }: DrawerProps) {
         aria-expanded={isOpen}
         aria-controls={contentId}
         aria-label={isOpen ? `Collapse ${label}` : `Expand ${label}`}
-        onClick={() => setIsOpen((open) => !open)}
+        onClick={() => {
+          userToggled.current = true
+          setIsOpen((open) => !open)
+        }}
       >
         <svg
           className={styles.icon}
