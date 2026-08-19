@@ -372,6 +372,40 @@ describe('App stock/bond allocation wiring (FIN-56)', () => {
   })
 })
 
+describe('App bond return assumption wiring (FIN-57)', () => {
+  beforeEach(() => mockMatchMedia(true))
+  afterEach(() => cleanup())
+
+  it('passes the 7%/4.5% default return assumptions to the stress test on mount', () => {
+    render(<App />)
+
+    const lastCall = lastOrchestrator.runCalls[0]
+    expect(lastCall?.[4]).toEqual({ stocks: 0.07, bonds: 0.045 })
+  })
+
+  it('re-runs the stress test with the updated bond return after editing the Advanced assumptions field', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<App />)
+      await user.click(screen.getByText('▸ Advanced assumptions'))
+
+      const bondReturnInput = screen.getByLabelText('Bond return assumption')
+      await user.clear(bondReturnInput)
+      await user.type(bondReturnInput, '5.5')
+      await vi.advanceTimersByTimeAsync(350)
+
+      await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
+      await user.click(screen.getByRole('button', { name: /run stress test/i }))
+
+      const lastCall = lastOrchestrator.runCalls.at(-1)
+      expect(lastCall?.[4]).toEqual({ stocks: 0.07, bonds: 0.055 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('App shell responsive behavior', () => {
   afterEach(() => cleanup())
 

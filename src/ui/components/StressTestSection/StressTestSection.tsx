@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { DEFAULT_VOLATILITY_ASSUMPTIONS } from '../../../engine'
-import type { PercentilePaths, PlanAssumptions, PortfolioAllocation } from '../../../engine'
+import { DEFAULT_RETURN_ASSUMPTIONS, DEFAULT_VOLATILITY_ASSUMPTIONS } from '../../../engine'
+import type { PercentilePaths, PlanAssumptions, PortfolioAllocation, ReturnAssumptions } from '../../../engine'
 import { createMonteCarloOrchestrator } from '../../../workers'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
 import { formatPercent } from '../../utils/format'
@@ -21,6 +21,9 @@ interface StressTestSectionProps {
   /** The stock/bond mix to stress-test against (FIN-56). Defaults to {@link DEFAULT_ALLOCATION}
    * (70/30) when omitted. */
   allocation?: PortfolioAllocation
+  /** Per-asset-class expected return to stress-test against (FIN-57). Defaults to
+   * {@link DEFAULT_RETURN_ASSUMPTIONS} (stocks 7% / bonds 4.5%) when omitted. */
+  returnAssumptions?: ReturnAssumptions
   /**
    * Test-only seam: substitute a fake `MonteCarloOrchestrator` instead of the real
    * Worker-backed one, mirroring the `runPeriodFn`/`WorkerFactory` injection seams elsewhere
@@ -46,6 +49,7 @@ interface StressTestSectionProps {
 export function StressTestSection({
   assumptions,
   allocation = DEFAULT_ALLOCATION,
+  returnAssumptions = DEFAULT_RETURN_ASSUMPTIONS,
   orchestrator: injectedOrchestrator,
   onSuccessRateChange,
   onPercentilesChange,
@@ -95,7 +99,7 @@ export function StressTestSection({
   }, [assumptions])
 
   const handleRunClick = () => {
-    orchestrator.run(assumptions, allocation, DEFAULT_VOLATILITY_ASSUMPTIONS).catch(() => {
+    orchestrator.run(assumptions, allocation, DEFAULT_VOLATILITY_ASSUMPTIONS, [], returnAssumptions).catch(() => {
       // Intentionally ignored: the orchestrator's `subscribe` callback already syncs `state`
       // to `cancelled`/`error` for both rejection paths (cancellation and worker failure).
       // This catch exists solely to prevent an unhandled promise rejection.

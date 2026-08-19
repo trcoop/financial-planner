@@ -32,6 +32,7 @@ const validRequest = (overrides: Partial<MonteCarloWorkerRequest> = {}): MonteCa
   allocation: { stocksPercent: 70, bondsPercent: 30 },
   volatilityAssumptions: { stocks: 0.15, bonds: 0.06 },
   events: [],
+  returnAssumptions: { stocks: 0.07, bonds: 0.045 },
   ...overrides,
 });
 
@@ -48,6 +49,7 @@ describe('handleMonteCarloRequest', () => {
       request.allocation,
       request.volatilityAssumptions,
       request.events,
+      { returnAssumptions: request.returnAssumptions },
     );
     // Both calls draw a fresh random seed, so compare shape/meta rather than exact values.
     expect(response.result.meta).toEqual(directly.meta);
@@ -78,6 +80,21 @@ describe('handleMonteCarloRequest', () => {
     const reconstructed = new InvalidProjectionInputError(response.code, response.message);
     expect(reconstructed).toBeInstanceOf(InvalidProjectionInputError);
     expect(reconstructed.code).toBe('CURRENT_AGE_EXCEEDS_HORIZON');
+  });
+
+  it('threads the request returnAssumptions through to runMonteCarloTrials (FIN-57)', () => {
+    const returnAssumptions = { stocks: 0.07, bonds: 0.06 };
+    const request = validRequest({ returnAssumptions });
+
+    handleMonteCarloRequest(request);
+
+    expect(runMonteCarloTrials).toHaveBeenLastCalledWith(
+      request.assumptions,
+      request.allocation,
+      request.volatilityAssumptions,
+      request.events,
+      { returnAssumptions },
+    );
   });
 
   it('propagates a non-InvalidProjectionInputError throw uncaught rather than misreporting it as a validation failure', () => {

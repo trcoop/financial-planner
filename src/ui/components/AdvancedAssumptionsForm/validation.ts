@@ -14,6 +14,9 @@ export const ADVANCED_FIELD_RANGES: AdvancedFieldRange[] = [
   // 1-99, not 0-100: the engine's `validateAllocation` rejects a zero weight on either leg
   // (ALLOCATION_ZERO_WEIGHT), so the UI range keeps both stocks and bonds always positive.
   { key: 'stocksAllocationPercent', min: 1, max: 99 },
+  // Same range as annualReturnPercent (FIN-57): the "same UI treatment/validation style as
+  // the existing Investment return assumption field" per the ticket's scope.
+  { key: 'bondReturnPercent', min: -50, max: 100 },
 ]
 
 export function rangeError(value: number, min: number, max: number): string | undefined {

@@ -90,7 +90,7 @@ describe('createMonteCarloOrchestrator', () => {
     expect(orchestrator.getState()).toEqual({ status: 'complete', result: fakeResult });
   });
 
-  it('posts the assumptions/allocation/volatility/events exactly as given, defaulting volatility and events', () => {
+  it('posts the assumptions/allocation/volatility/events/returns exactly as given, defaulting volatility, events and returns', () => {
     const { factory, workers } = fakeFactory();
     const orchestrator = createMonteCarloOrchestrator(factory);
 
@@ -102,6 +102,7 @@ describe('createMonteCarloOrchestrator', () => {
         allocation,
         volatilityAssumptions: { stocks: 0.15, bonds: 0.06 },
         events: [],
+        returnAssumptions: { stocks: 0.07, bonds: 0.045 },
       },
     ]);
   });
@@ -114,7 +115,29 @@ describe('createMonteCarloOrchestrator', () => {
 
     orchestrator.run(assumptions, allocation, volatility, events);
 
-    expect(workers[0].posted[0]).toEqual({ assumptions, allocation, volatilityAssumptions: volatility, events });
+    expect(workers[0].posted[0]).toEqual({
+      assumptions,
+      allocation,
+      volatilityAssumptions: volatility,
+      events,
+      returnAssumptions: { stocks: 0.07, bonds: 0.045 },
+    });
+  });
+
+  it('passes through an explicit returnAssumptions unchanged (FIN-57)', () => {
+    const { factory, workers } = fakeFactory();
+    const orchestrator = createMonteCarloOrchestrator(factory);
+    const returnAssumptions = { stocks: 0.07, bonds: 0.055 };
+
+    orchestrator.run(assumptions, allocation, undefined, undefined, returnAssumptions);
+
+    expect(workers[0].posted[0]).toEqual({
+      assumptions,
+      allocation,
+      volatilityAssumptions: { stocks: 0.15, bonds: 0.06 },
+      events: [],
+      returnAssumptions,
+    });
   });
 
   it('reconstructs a real InvalidProjectionInputError from the worker\'s error payload and rejects', async () => {

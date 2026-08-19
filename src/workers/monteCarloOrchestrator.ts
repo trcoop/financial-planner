@@ -10,8 +10,15 @@
  * injection seam already used in `src/engine/monteCarlo.ts`.
  */
 
-import { DEFAULT_VOLATILITY_ASSUMPTIONS, InvalidProjectionInputError } from '../engine';
-import type { MonteCarloResult, PlanAssumptions, PlanEvent, PortfolioAllocation, VolatilityAssumptions } from '../engine';
+import { DEFAULT_RETURN_ASSUMPTIONS, DEFAULT_VOLATILITY_ASSUMPTIONS, InvalidProjectionInputError } from '../engine';
+import type {
+  MonteCarloResult,
+  PlanAssumptions,
+  PlanEvent,
+  PortfolioAllocation,
+  ReturnAssumptions,
+  VolatilityAssumptions,
+} from '../engine';
 import type { MonteCarloWorkerRequest, MonteCarloWorkerResponse } from './protocol';
 
 /** ERD §7, including the `error` variant added after the initial pin. */
@@ -57,6 +64,7 @@ export interface MonteCarloOrchestrator {
     allocation: PortfolioAllocation,
     volatilityAssumptions?: VolatilityAssumptions,
     events?: PlanEvent[],
+    returnAssumptions?: ReturnAssumptions,
   ): Promise<MonteCarloResult>;
   cancel(): void;
 }
@@ -113,7 +121,13 @@ export const createMonteCarloOrchestrator = (
     setState({ status: 'cancelled' });
   };
 
-  const run: MonteCarloOrchestrator['run'] = (assumptions, allocation, volatilityAssumptions, events = []) => {
+  const run: MonteCarloOrchestrator['run'] = (
+    assumptions,
+    allocation,
+    volatilityAssumptions,
+    events = [],
+    returnAssumptions,
+  ) => {
     if (state.status === 'running') {
       cancel();
     }
@@ -126,6 +140,7 @@ export const createMonteCarloOrchestrator = (
         allocation,
         volatilityAssumptions: volatilityAssumptions ?? DEFAULT_VOLATILITY_ASSUMPTIONS,
         events,
+        returnAssumptions: returnAssumptions ?? DEFAULT_RETURN_ASSUMPTIONS,
       });
     });
   };
