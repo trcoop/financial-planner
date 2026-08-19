@@ -3,6 +3,7 @@ import {
   AdvancedAssumptionsForm,
   Button,
   Card,
+  ConfirmDialog,
   CoreInputsForm,
   DEFAULT_ADVANCED_VALUES,
   DEFAULT_CORE_VALUES,
@@ -54,6 +55,7 @@ function App() {
   // Imperative handle onto the (always-mounted) StressTestSection, so the CTA above can
   // trigger a re-run from the Plan tab without switching to the Stress Test tab.
   const stressTestRef = useRef<StressTestSectionHandle>(null)
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
 
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
@@ -70,10 +72,18 @@ function App() {
   }, [debouncedCore, debouncedAdvanced])
 
   const handleReset = () => {
-    if (!window.confirm('Clear your saved plan and reset to defaults?')) return
+    setIsResetConfirmOpen(true)
+  }
+
+  const handleConfirmReset = () => {
+    setIsResetConfirmOpen(false)
     clearAssumptions()
     setCoreValues(DEFAULT_CORE_VALUES)
     setAdvancedValues(DEFAULT_ADVANCED_VALUES)
+  }
+
+  const handleCancelReset = () => {
+    setIsResetConfirmOpen(false)
   }
 
   const successRateValue =
@@ -176,6 +186,16 @@ function App() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={isResetConfirmOpen}
+        title="Reset to defaults?"
+        message="Clear your saved plan and reset to defaults?"
+        confirmLabel="Reset"
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmReset}
+        onCancel={handleCancelReset}
+      />
     </div>
   )
 }
