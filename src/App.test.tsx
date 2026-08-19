@@ -381,17 +381,31 @@ describe('App persistence (FIN-43)', () => {
   })
 
   it('reset control asks for confirmation via an in-system dialog, and does nothing on decline', async () => {
-    const user = userEvent.setup()
-    render(<App />)
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<App />)
+      // Change a field away from its default first, so decline vs. confirm are
+      // actually distinguishable — asserting against the untouched default value
+      // can't tell "Cancel did nothing" apart from "Cancel silently reset everything".
+      const ageInput = screen.getByLabelText('Current age')
+      await user.clear(ageInput)
+      await user.type(ageInput, '50')
+      await vi.advanceTimersByTimeAsync(350)
+      expect(window.localStorage.getItem(STORAGE_KEY)).not.toBeNull()
 
-    await user.click(screen.getByRole('button', { name: 'Reset to defaults' }))
+      await user.click(screen.getByRole('button', { name: 'Reset to defaults' }))
 
-    const dialog = screen.getByRole('alertdialog')
-    expect(dialog).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      const dialog = screen.getByRole('alertdialog')
+      expect(dialog).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
-    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Current age')).toHaveValue('35')
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Current age')).toHaveValue('50')
+      expect(window.localStorage.getItem(STORAGE_KEY)).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('reset control clears storage and reverts to defaults with no reload, on confirm', async () => {

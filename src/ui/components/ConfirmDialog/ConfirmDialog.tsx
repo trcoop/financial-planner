@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { Button } from '../Button/Button'
 import styles from './ConfirmDialog.module.css'
 
@@ -29,6 +29,8 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const titleId = useId()
+  const messageId = useId()
 
   useEffect(() => {
     if (!isOpen) return
@@ -59,13 +61,13 @@ export function ConfirmDialog({
         className={styles.dialog}
         role="alertdialog"
         aria-modal="true"
-        aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-message"
+        aria-labelledby={titleId}
+        aria-describedby={messageId}
       >
-        <h2 id="confirm-dialog-title" className={styles.title}>
+        <h2 id={titleId} className={styles.title}>
           {title}
         </h2>
-        <p id="confirm-dialog-message" className={styles.message}>
+        <p id={messageId} className={styles.message}>
           {message}
         </p>
         <div className={styles.actions}>
