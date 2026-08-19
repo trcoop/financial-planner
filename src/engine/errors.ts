@@ -27,8 +27,10 @@ export type ProjectionErrorCode =
    */
   | 'ALLOCATION_SUM_INVALID'
   /**
-   * A Monte Carlo allocation puts zero or negative weight on stocks or on bonds. A
-   * single-asset portfolio is out of scope for Story 2's two-asset GBM blend.
+   * A Monte Carlo allocation puts negative weight on stocks or on bonds. A single-asset
+   * portfolio (0% or 100% stocks) is allowed (FIN-59) — `blendedPortfolioReturn` is a plain
+   * weighted sum with no division by either weight, so an all-stock or all-bond split is
+   * safe to simulate. Only a negative weight is rejected, since that isn't a real portfolio.
    */
   | 'ALLOCATION_ZERO_WEIGHT'
   /**

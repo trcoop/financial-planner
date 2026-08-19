@@ -230,10 +230,10 @@ export const validateAllocation = (allocation: PortfolioAllocation): void => {
     );
   }
 
-  if (allocation.stocksPercent <= 0 || allocation.bondsPercent <= 0) {
+  if (allocation.stocksPercent < 0 || allocation.bondsPercent < 0) {
     throw new InvalidProjectionInputError(
       'ALLOCATION_ZERO_WEIGHT',
-      `allocation must put positive weight on both stocks and bonds, received ${allocation.stocksPercent}% stocks and ${allocation.bondsPercent}% bonds`,
+      `allocation must not put negative weight on stocks or bonds, received ${allocation.stocksPercent}% stocks and ${allocation.bondsPercent}% bonds`,
     );
   }
 };
