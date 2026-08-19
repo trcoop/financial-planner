@@ -218,6 +218,10 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
           series={PERCENTILE_SERIES}
           title="Simulated outcomes by year"
           retirementAge={assumptions.retirementAge}
+          // Selection is still tracked internally, just not drawn — there's nowhere on the
+          // Stress Test tab to show a selected period's details yet. Drop this (or set it
+          // `true`) once that display exists.
+          showActiveMarker={false}
         />
       )}
     </section>

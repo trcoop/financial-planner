@@ -63,6 +63,14 @@ export interface PercentileLineChartProps {
    * title, so it passes `false` here. Stress Test's three-line legend is unaffected (defaults
    * to shown). */
   showLegend?: boolean
+  /**
+   * Hides the active-period marker (the bold vertical line for the clicked/`defaultSelectedYear`
+   * period) without disabling selection itself — `onSelectRow` still fires and `selectedYear`
+   * state is still tracked internally, there's just nothing drawn for it. Stress Test passes
+   * `false` here because it has no UI yet to show details for the selected period (FIN-60); flip
+   * it back to `true` (or drop the prop) once that display exists. Defaults to `true`.
+   */
+  showActiveMarker?: boolean
 }
 
 /** Fixed viewBox coordinate space the polylines are plotted in; scales to the rendered SVG size
@@ -154,6 +162,7 @@ export function PercentileLineChart({
   onSelectRow,
   defaultSelectedYear,
   showLegend = true,
+  showActiveMarker = true,
 }: PercentileLineChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const [selectedYear, setSelectedYear] = useState<number | undefined>(() => {
@@ -311,7 +320,7 @@ export function PercentileLineChart({
               {/* Active/selected-period marker (FIN-60) — bold and solid, distinct from both
                   the dashed retirement marker and the thin hover line so all three remain
                   legible when they coincide or sit near each other. */}
-              {selectedX !== null && (
+              {showActiveMarker && selectedX !== null && (
                 <div
                   data-testid="percentile-chart-active-marker"
                   className={styles.activeMarker}

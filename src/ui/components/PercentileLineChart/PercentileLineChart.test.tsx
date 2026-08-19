@@ -171,6 +171,28 @@ describe('PercentileLineChart', () => {
     expect(onSelectRow).toHaveBeenCalledWith(rows[1])
   })
 
+  it('suppresses the active-period marker when showActiveMarker is false, while still tracking selection', async () => {
+    const user = userEvent.setup()
+    const onSelectRow = vi.fn()
+    render(
+      <PercentileLineChart
+        rows={rows}
+        series={percentileSeries}
+        title="Monte Carlo outcomes"
+        defaultSelectedYear={1}
+        onSelectRow={onSelectRow}
+        showActiveMarker={false}
+      />,
+    )
+
+    expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText(/^Age 37:/))
+
+    expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
+    expect(onSelectRow).toHaveBeenCalledWith(rows[2])
+  })
+
   it('renders evenly-spaced y-axis gridline labels showing formatted dollar amounts', () => {
     render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
