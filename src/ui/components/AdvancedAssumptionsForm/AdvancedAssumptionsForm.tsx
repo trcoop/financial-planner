@@ -65,7 +65,7 @@ export const DEFAULT_ADVANCED_VALUES: AdvancedAssumptionValues = {
 
 export function AdvancedAssumptionsForm({ values, onChange }: AdvancedAssumptionsFormProps) {
   return (
-    <CollapsibleSection summary="▸ Advanced assumptions">
+    <CollapsibleSection summary="Advanced assumptions">
       <form aria-label="Advanced assumptions" className={styles.form}>
         {FIELDS.map((field) => (
           <NumberField

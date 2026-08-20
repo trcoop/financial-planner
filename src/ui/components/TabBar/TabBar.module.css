@@ -5,6 +5,9 @@
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  /* See TopBar.module.css's `.topBar` for why this is needed (FIN-61) — without it, this row
+   * gets crushed down to a sliver on mobile whenever `.shell`'s content exceeds the viewport. */
+  flex-shrink: 0;
 }
 
 .tab {
@@ -39,6 +42,15 @@
     border-bottom: none;
     padding: var(--space-2) var(--space-4);
     gap: var(--space-1);
+    /* Mobile's page scrolls as one long column past .shell's viewport-sized frame (App.css) —
+     * without this, switching tabs meant scrolling all the way back to the top first. Sticking
+     * to the viewport's own top (rather than below TopBar) keeps it reachable from anywhere on
+     * the page; `background` is needed since sticky doesn't imply an opaque backdrop, so content
+     * scrolling underneath would otherwise show through. */
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--color-bg);
   }
 
   .tab {

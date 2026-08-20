@@ -198,7 +198,7 @@ describe('StressTestSection', () => {
 
     const chart = await screen.findByRole('figure')
     expect(chart).toBeInTheDocument()
-    expect(screen.getByText(/median.*50th percentile/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/median.*50th percentile/i).length).toBeGreaterThan(0)
   })
 
   it('cancels the in-flight run and shows a transient cancelled message when assumptions change', async () => {
@@ -391,7 +391,7 @@ describe('StressTestSection', () => {
     await waitFor(() => expect(onStaleChange).toHaveBeenLastCalledWith(false))
   })
 
-  it('wires showActiveMarker={false} through to PercentileLineChart, so clicking a chart point never shows an active-period marker (FIN-60)', async () => {
+  it('shows an active-period marker and a selected-year detail readout for the clicked point (FIN-61)', async () => {
     const user = userEvent.setup()
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
@@ -403,7 +403,8 @@ describe('StressTestSection', () => {
     // target/point to click.
     await user.click(screen.getByLabelText(/^Age 35:/))
 
-    expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
+    expect(screen.getByTestId('percentile-chart-active-marker')).toBeInTheDocument()
+    expect(screen.getByLabelText('Selected year detail')).toBeInTheDocument()
   })
 
   it('exposes an imperative runStressTest handle so a parent can trigger a re-run without switching tabs', async () => {

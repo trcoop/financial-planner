@@ -23,9 +23,34 @@
 }
 
 @media (max-width: 959px) {
+  /* Desktop treats .shell as a fixed 100vh frame with independently-scrolling panes (Drawer's
+   * .content, .main) — appropriate for a side-by-side layout, but on mobile the accordion and
+   * main content are stacked in one column, so that same fixed frame just traps the accordion's
+   * own internal scroll region and squeezes .main out of view instead of letting the page grow
+   * and scroll normally (FIN-61: expanding the inputs made the rest of the page unreachable).
+   * Letting .shell grow past 100vh here is what makes the whole page scroll instead. */
+  .shell {
+    height: auto;
+    min-height: 100vh;
+    /* Desktop's overflow-x: hidden (above) clips the Drawer's off-canvas slide, but per the CSS
+     * spec, setting one axis to something other than `visible` forces the other axis's computed
+     * value from `visible` to `auto` — so without this override, `.shell` silently became its
+     * own internal vertical scroll container on mobile, trapping the page instead of letting it
+     * grow and scroll normally (the actual cause of FIN-61's "can't scroll past expanded inputs"
+     * bug — `height: auto` above wasn't sufficient by itself). Mobile's collapse is a vertical
+     * accordion (Drawer.module.css), not a horizontal slide, so it doesn't need the x-clip. */
+    overflow-x: visible;
+  }
+
   .body {
     flex-direction: column;
+    flex: none;
     padding: var(--space-4);
+  }
+
+  .main {
+    flex: none;
+    overflow-y: visible;
   }
 }
 

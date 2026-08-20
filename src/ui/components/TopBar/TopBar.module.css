@@ -8,6 +8,13 @@
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   box-sizing: border-box;
+  /* `.shell`'s own auto height resolves against its flex children's *shrunk* sizes, not their
+   * natural content sizes (FIN-61) — without this, whenever `.shell`'s content is taller than
+   * the viewport, flexbox steals height from whichever siblings still have the default
+   * flex-shrink: 1 instead of respecting this element's own explicit height, crushing it down
+   * to a sliver. `.body` already opts out via `flex: none` on mobile; this and `.tabBar` need
+   * the same. */
+  flex-shrink: 0;
 }
 
 .logo {

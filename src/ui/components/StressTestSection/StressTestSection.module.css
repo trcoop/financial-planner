@@ -36,3 +36,96 @@
   font-size: var(--font-size-lg);
   font-weight: 600;
 }
+
+/* Wraps the chart and the selected-year readout side by side on desktop (FIN-61 round 2) —
+   mirrors App.css's `.chartRow` (chart + YearDetailPanel on the Plan tab) so the Stress Test
+   tab fills the same "chart plus a data sidebar" space instead of leaving the sidebar's worth
+   of space empty next to (or, in the previous stacked layout, below) the chart. */
+.chartRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-4);
+  width: 100%;
+}
+
+@media (min-width: 960px) {
+  .chartRow {
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 959px) {
+  .chartRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Selected-year readout (FIN-61) — mirrors YearDetailPanel's role for the Plan tab. Full-width
+   block stacked under the chart on mobile; a fixed-width sidebar Card next to the chart on
+   desktop, matching YearDetailPanel's column treatment in `.chartRow` above. */
+.selectedRowCard {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (min-width: 960px) {
+  .selectedRowCard {
+    width: 280px;
+    flex-shrink: 0;
+  }
+}
+
+.selectedRow {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.selectedRowHeadline {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.selectedRowValues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Grid (not flex) so `dd` sits in a fixed-width column that lines up across rows even when a
+   longer `dt` label (e.g. "Median (50th percentile)") wraps to two lines on narrow mobile
+   widths — flex's baseline alignment let a wrapped label push its own `dd` out of line with
+   the other rows' values. */
+.selectedRowValue {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.selectedRowValue dt {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.selectedRowValue dd {
+  margin: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 0;
+  border-top-width: 2.5px;
+  border-top-style: solid;
+}
