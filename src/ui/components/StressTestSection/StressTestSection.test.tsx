@@ -407,6 +407,35 @@ describe('StressTestSection', () => {
     expect(screen.getByLabelText('Selected year detail')).toBeInTheDocument()
   })
 
+  it('defaults the selected-year detail readout to the retirement year, not the last row (FIN-61)', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const multiYearRows: ChartRow[] = [
+      { age: 35, year: 0, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0 },
+      { age: 67, year: 32, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0 },
+      { age: 100, year: 65, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0 },
+    ]
+    render(<StressTestSection assumptions={baseAssumptions} rows={multiYearRows} orchestrator={orchestrator} />)
+
+    act(() => {
+      // FakeOrchestrator's own `resolveRun` always resolves the module-level single-row
+      // `fakeResult` — reach past it to resolve with a multi-year result matching `multiYearRows`
+      // instead, since `setState` is only `private` at the type level (still callable at runtime).
+      const orchestratorWithPrivateAccess = orchestrator as unknown as {
+        setState: (state: StressTestState) => void
+      }
+      orchestratorWithPrivateAccess.setState({
+        status: 'complete',
+        result: { ...fakeResult, percentiles: { p10: [1, 2, 3], p50: [4, 5, 6], p90: [7, 8, 9] } },
+      })
+    })
+
+    await screen.findByLabelText('Selected year detail')
+
+    // retirementAge (67) is the middle row, not the last — this pins the retirement-year
+    // default against silently regressing to "default to the last row".
+    expect(screen.getByText('Age 67 · Year 33')).toBeInTheDocument()
+  })
+
   it('exposes an imperative runStressTest handle so a parent can trigger a re-run without switching tabs', async () => {
     const orchestrator = new FakeOrchestrator()
     const ref = { current: null as { runStressTest: () => void } | null }

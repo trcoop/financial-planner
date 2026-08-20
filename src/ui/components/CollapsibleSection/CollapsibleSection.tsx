@@ -11,7 +11,7 @@ export function CollapsibleSection({ summary, children, defaultOpen = false }: C
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
-    <details className={styles.details} data-open={isOpen} open={defaultOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)}>
+    <details className={styles.details} data-open={isOpen} open={isOpen} onToggle={(event) => setIsOpen(event.currentTarget.open)}>
       <summary className={styles.summary}>
         <span className={styles.icon} aria-hidden="true">
           ▸
