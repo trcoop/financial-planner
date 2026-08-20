@@ -24,9 +24,16 @@
   border-bottom: 2px solid transparent;
 }
 
-.tab:hover {
-  color: var(--color-text);
-  background: var(--color-surface-hover);
+/* Scoped to real pointer devices (not `:hover` alone) for two reasons: a touch tap has no
+   mouseleave to clear `:hover` afterward, so on a touch device this style would otherwise get
+   stuck on whichever tab was last tapped; and `.tab:hover`'s pseudo-class bumps its specificity
+   above plain `.tabActive` below, so a stuck hover was overriding the active tab's blue/gray
+   styling even after switching tabs. */
+@media (hover: hover) {
+  .tab:hover {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+  }
 }
 
 .tabActive {
