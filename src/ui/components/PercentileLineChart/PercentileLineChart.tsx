@@ -1,4 +1,4 @@
-import { useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { Card } from '../Card/Card'
 import { formatCurrency } from '../../utils/format'
 import styles from './PercentileLineChart.module.css'
@@ -217,6 +217,87 @@ export function PercentileLineChart({
     onSelectRow?.(row)
   }
 
+  // Touch has no hover concept and, once a finger is down on one of `.hoverTarget`'s narrow
+  // per-point buttons, the browser keeps routing touchmove to that same original target rather
+  // than whichever point the finger is now visually over — so touch can't reuse
+  // `handlePointerMove`'s per-button approach the way mouse does. Instead this computes the
+  // nearest point directly from the touch's x position across the whole plot width.
+  //
+  // Attached as native (not React synthetic) listeners because `touchmove`'s `preventDefault` —
+  // needed so a drag moves the tooltip instead of scrolling the page — throws
+  // "Unable to preventDefault inside passive event listener invocation" under React's default
+  // passive touch listeners; a manually-attached `{ passive: false }` listener is the only way
+  // to opt back in.
+  //
+  // Only a drag (touchmove) shows the tooltip, mirroring "press and hold, then drag to
+  // preview" — the mouse-hover equivalent. A plain tap (touchstart -> touchend with no move in
+  // between) instead just selects the nearest point directly, the same as a click, without ever
+  // flashing a tooltip that has no gesture to dismiss it.
+  useEffect(() => {
+    const wrapper = plotWrapperRef.current
+    if (!wrapper) return
+
+    let dragged = false
+    let draggedIndex: number | null = null
+
+    const nearestIndexFromClientX = (clientX: number): number => {
+      const wrapperRect = wrapper.getBoundingClientRect()
+      if (wrapperRect.width === 0) return 0
+      const ratio = (clientX - wrapperRect.left) / wrapperRect.width
+      return Math.min(lastIndex, Math.max(0, Math.round(ratio * lastIndex)))
+    }
+
+    const updateTouchHover = (touch: { clientX: number; clientY: number }) => {
+      const index = nearestIndexFromClientX(touch.clientX)
+      draggedIndex = index
+      setHoveredIndex(index)
+      const wrapperRect = wrapper.getBoundingClientRect()
+      const x = touch.clientX - wrapperRect.left
+      const y = touch.clientY - wrapperRect.top
+      setCursorPos({
+        x,
+        y,
+        flipX: x > wrapperRect.width * 0.75,
+        flipY: y < wrapperRect.height * 0.25,
+      })
+    }
+
+    const onTouchStart = () => {
+      dragged = false
+    }
+
+    const onTouchMove = (event: globalThis.TouchEvent) => {
+      event.preventDefault()
+      dragged = true
+      updateTouchHover(event.touches[0])
+    }
+
+    const onTouchEnd = (event: globalThis.TouchEvent) => {
+      // Without this, an untouched touchend lets the browser follow up with its usual
+      // touch-compatibility mouse events (mouseenter/mousemove/click) on whichever hover-target
+      // button sits under the finger — `handlePointerMove` then re-sets `hoveredIndex` and the
+      // tooltip pops back up and sticks, since no further mouse event ever clears it on a
+      // touch-only device. Suppressing those synthetic events is the whole point of calling this.
+      event.preventDefault()
+      const index = dragged ? draggedIndex : nearestIndexFromClientX(event.changedTouches[0].clientX)
+      if (index !== null) handleSelect(index)
+      setHoveredIndex(null)
+      setCursorPos(null)
+    }
+
+    wrapper.addEventListener('touchstart', onTouchStart)
+    wrapper.addEventListener('touchmove', onTouchMove, { passive: false })
+    wrapper.addEventListener('touchend', onTouchEnd)
+    wrapper.addEventListener('touchcancel', onTouchEnd)
+    return () => {
+      wrapper.removeEventListener('touchstart', onTouchStart)
+      wrapper.removeEventListener('touchmove', onTouchMove)
+      wrapper.removeEventListener('touchend', onTouchEnd)
+      wrapper.removeEventListener('touchcancel', onTouchEnd)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastIndex, rows])
+
   // Keyboard focus has no cursor position, so fall back to the hovered point's own x (as a
   // percentage of the plot width) anchored near the top of the plot, using the default
   // top-right-offset transform from PercentileLineChart.module.css (no inline `transform` here).
@@ -253,6 +334,20 @@ export function PercentileLineChart({
 
         {rows.length > 0 && (
           <>
+            {/* A second, discoverable way to move through years besides clicking/tapping a point
+                directly on the plot — driven by the same `selectedYear`/`handleSelect` state a
+                click already sets, so it works identically on desktop and mobile rather than
+                being mobile-only UI (FIN-61). */}
+            <input
+              type="range"
+              className={styles.yearSlider}
+              aria-label={`Select a year on ${title}`}
+              min={0}
+              max={lastIndex}
+              step={1}
+              value={selectedIndex >= 0 ? selectedIndex : 0}
+              onChange={(event) => handleSelect(Number(event.target.value))}
+            />
             <div className={styles.plotWrapper} ref={plotWrapperRef}>
               <svg
                 className={styles.plot}

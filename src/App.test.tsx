@@ -462,7 +462,7 @@ describe('App stock/bond allocation wiring (FIN-56)', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       render(<App />)
-      await user.click(screen.getByText('▸ Advanced assumptions'))
+      await user.click(screen.getByText('Advanced assumptions'))
 
       const allocationInput = screen.getByLabelText('Stock allocation (vs. bonds)')
       await user.clear(allocationInput)
@@ -496,7 +496,7 @@ describe('App bond return assumption wiring (FIN-57)', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
       render(<App />)
-      await user.click(screen.getByText('▸ Advanced assumptions'))
+      await user.click(screen.getByText('Advanced assumptions'))
 
       const bondReturnInput = screen.getByLabelText('Bond return assumption')
       await user.clear(bondReturnInput)

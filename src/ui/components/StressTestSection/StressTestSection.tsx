@@ -3,8 +3,9 @@ import { DEFAULT_RETURN_ASSUMPTIONS, DEFAULT_VOLATILITY_ASSUMPTIONS } from '../.
 import type { PercentilePaths, PlanAssumptions, PortfolioAllocation, ReturnAssumptions } from '../../../engine'
 import { createMonteCarloOrchestrator } from '../../../workers'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
-import { formatPercent } from '../../utils/format'
+import { formatCurrency, formatPercent } from '../../utils/format'
 import { Button } from '../Button/Button'
+import { Card } from '../Card/Card'
 import type { ChartRow } from '../ChartContainer/types'
 import { PercentileLineChart, type LineChartRow, type LineChartSeries } from '../PercentileLineChart/PercentileLineChart'
 import styles from './StressTestSection.module.css'
@@ -107,6 +108,10 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
   // FIN-48: "inputs changed since last completed run". Set true alongside the existing
   // cancel-on-input-change effect below, set false whenever a run completes.
   const [isStale, setIsStale] = useState(false)
+  // Selected year's row, for the detail readout below the chart (FIN-61) — without this there
+  // was nothing tying the slider/tap selection to any visible data, making it unclear what the
+  // slider was even for.
+  const [selectedRow, setSelectedRow] = useState<LineChartRow | null>(null)
   // Tracks the last `assumptions` the cancel effect has seen, so it can tell "assumptions
   // actually changed" from "this effect ran again" (e.g. StrictMode's dev-only double-invoke
   // of effects on mount). A boolean "is this the first run" ref breaks under double-invoke: it
@@ -192,6 +197,20 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
       }))
     : null
 
+  // Defaults the detail readout (and the chart's own active marker/slider position) to the
+  // retirement year, mirroring the Plan tab's `retirementRow` default in App.tsx — falls back
+  // to the last row if retirement age isn't present.
+  const defaultRow = chartRows
+    ? (chartRows.find((row) => row.age === assumptions.retirementAge) ?? chartRows.at(-1))
+    : undefined
+
+  useEffect(() => {
+    if (chartRows) {
+      setSelectedRow(defaultRow ?? null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [percentiles])
+
   return (
     <section className={styles.section}>
       <Button onClick={handleRunClick} disabled={isRunning}>
@@ -213,16 +232,38 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
       </p>
 
       {chartRows && (
-        <PercentileLineChart
-          rows={chartRows}
-          series={PERCENTILE_SERIES}
-          title="Simulated outcomes by year"
-          retirementAge={assumptions.retirementAge}
-          // Selection is still tracked internally, just not drawn — there's nowhere on the
-          // Stress Test tab to show a selected period's details yet. Drop this (or set it
-          // `true`) once that display exists.
-          showActiveMarker={false}
-        />
+        <div className={styles.chartRow}>
+          <PercentileLineChart
+            rows={chartRows}
+            series={PERCENTILE_SERIES}
+            title="Simulated outcomes by year"
+            retirementAge={assumptions.retirementAge}
+            // Mirrors App.tsx's Plan-tab default so both tabs' sliders/markers start at the same
+            // year rather than this one defaulting to index 0 (current age) — FIN-61.
+            defaultSelectedYear={defaultRow?.year}
+            onSelectRow={setSelectedRow}
+          />
+
+          {selectedRow && (
+            <Card className={styles.selectedRowCard}>
+              <dl className={styles.selectedRow} aria-label="Selected year detail">
+                <div className={styles.selectedRowHeadline}>
+                  Age {selectedRow.age} · Year {selectedRow.year + 1}
+                </div>
+                <div className={styles.selectedRowValues}>
+                  {PERCENTILE_SERIES.map((s) => (
+                    <div key={s.key} className={styles.selectedRowValue}>
+                      <dt>
+                        <span className={styles.swatch} style={{ borderTopColor: s.color }} /> {s.label}
+                      </dt>
+                      <dd>{formatCurrency(selectedRow.values[s.key] ?? 0)}</dd>
+                    </div>
+                  ))}
+                </div>
+              </dl>
+            </Card>
+          )}
+        </div>
       )}
     </section>
   )

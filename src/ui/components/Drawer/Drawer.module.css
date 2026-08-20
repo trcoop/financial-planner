@@ -62,22 +62,29 @@
   min-height: 0;
 }
 
-.drawer[data-open='false'] .panel {
-  /* Needs to clear more than .panel's own 280px: .tab's 28px it sits behind, plus
-   * .body's --space-6 (32px) left padding .drawer itself sits inset by — otherwise
-   * the right edge lands inside that padding gutter, still on-screen, and a sliver
-   * of .content peeks out. The total (340px) overshoots what .body's flex layout
-   * needs to reclaim the space (280px), but flex clamps an item's negative outer
-   * size to 0, so the extra distance only affects .panel's own paint position, not
-   * how far .main shifts over. */
-  margin-left: -340px;
-  border-right: none;
+/* Desktop only (>= 960px) — this fixed -340px offset assumes .panel's fixed 280px desktop
+ * width; paired with mobile's flex: 1 1 0% panel width instead, it's what produced the
+ * flex-sizing blowout FIN-61 originally reported (the -340px margin isn't scoped to mobile's
+ * accordion collapse below, which handles it via .content[hidden] instead — see that block's
+ * comment for the full story). */
+@media (min-width: 960px) {
+  .drawer[data-open='false'] .panel {
+    /* Needs to clear more than .panel's own 280px: .tab's 28px it sits behind, plus
+     * .body's --space-6 (32px) left padding .drawer itself sits inset by — otherwise
+     * the right edge lands inside that padding gutter, still on-screen, and a sliver
+     * of .content peeks out. The total (340px) overshoots what .body's flex layout
+     * needs to reclaim the space (280px), but flex clamps an item's negative outer
+     * size to 0, so the extra distance only affects .panel's own paint position, not
+     * how far .main shifts over. */
+    margin-left: -340px;
+    border-right: none;
+  }
 }
 
 .header {
   display: flex;
   align-items: center;
-  padding: var(--space-5) var(--space-5) 0;
+  padding: var(--space-5);
   flex-shrink: 0;
 }
 
@@ -95,6 +102,15 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* `[hidden]` and `.content` both have (0,1,0) specificity, and this stylesheet loads
+ * after the UA one, so without this override `.content`'s `display: flex` wins over
+ * the browser's default `[hidden] { display: none }` — same class of bug as
+ * `.tabPanel[hidden]` in App.css. Left uncaught here, the collapsed accordion content
+ * stays laid out and painted on mobile instead of actually collapsing. */
+.content[hidden] {
+  display: none;
 }
 
 /* Mobile (< 960px): accordion above content, matches CollapsibleSection. The pane is
@@ -115,14 +131,24 @@
     border-bottom: 1px solid var(--color-border-subtle);
   }
 
+  /* Collapsed state on mobile is a vertical accordion (content hidden, header stays),
+   * not desktop's horizontal off-canvas slide (FIN-61) — that reused mechanism paired
+   * a negative percentage margin-left with this same element's flex: 1 1 0% sizing and
+   * produced a badly oversized flex width in real browsers (~2x the container), so the
+   * margin only partially cleared it off-screen and left a clipped, misaligned sliver
+   * of the panel visible instead of a clean collapse. `.content[hidden]` above already
+   * collapses the panel's height to just its header; no margin trick needed here. */
   .drawer[data-open='false'] .panel {
-    /* Percentage margins resolve against the containing block's (.drawer's) width,
-     * not .panel's own — so -100% here shifts by .drawer's full width, clearing
-     * .tab's 28px the same way -340px's extra 60px does for the fixed-width desktop
-     * case above. Still need to separately clear .body's --space-4 (16px) left
-     * padding on mobile so the right edge doesn't land in that on-screen gutter. */
-    margin-left: calc(-100% - 16px);
     border-bottom: none;
+  }
+
+  /* Desktop's .content scrolls internally within a fixed-height panel; on mobile the panel
+   * grows with the page instead (see .shell's mobile override in App.css), so this lets
+   * .content grow to its natural height rather than clamping to whatever space it happened
+   * to get and scrolling internally — same fix as .main's mobile override. */
+  .content {
+    flex: none;
+    overflow-y: visible;
   }
 }
 

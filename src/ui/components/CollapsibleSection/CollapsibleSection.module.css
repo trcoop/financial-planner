@@ -20,6 +20,15 @@
   box-shadow: var(--focus-ring);
 }
 
+.icon {
+  display: inline-block;
+  transition: transform 0.2s ease;
+}
+
+.details[data-open='true'] .icon {
+  transform: rotate(90deg);
+}
+
 .content {
   display: flex;
   flex-direction: column;

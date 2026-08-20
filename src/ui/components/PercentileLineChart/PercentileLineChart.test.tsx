@@ -1,7 +1,36 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PercentileLineChart, type LineChartRow, type LineChartSeries } from './PercentileLineChart'
+
+/** jsdom has no `TouchEvent` constructor and no real layout engine, so touch gestures are
+ * simulated as plain `Event`s carrying a `touches`/`changedTouches` array (the only properties
+ * the component's native listeners read), dispatched against a wrapper whose
+ * `getBoundingClientRect` is stubbed to a fixed, non-zero box — real jsdom rects are always
+ * zero-sized, which would make every touch resolve to index 0. Wrapped in `act` because these
+ * are native `addEventListener` handlers, not React synthetic events, so React doesn't flush
+ * the resulting state update automatically the way it would for a `fireEvent` call. */
+const dispatchTouch = (target: Element, type: string, clientX: number) => {
+  let event!: Event
+  act(() => {
+    event = new Event(type, { bubbles: true, cancelable: true })
+    const touch = { clientX, clientY: 0 }
+    Object.defineProperty(event, 'touches', { value: [touch] })
+    Object.defineProperty(event, 'changedTouches', { value: [touch] })
+    target.dispatchEvent(event)
+  })
+  return event
+}
+
+/** The plot wrapper (the touch listeners' attach target) has no test id of its own — it's the
+ * `<svg>`'s parent, which is stable regardless of the wrapper's hashed CSS Module class name. */
+const getPlotWrapper = (container: HTMLElement): HTMLElement => {
+  const svg = container.querySelector('svg')
+  if (!svg?.parentElement) throw new Error('plot wrapper not found')
+  svg.parentElement.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, right: 300, bottom: 100, width: 300, height: 100, x: 0, y: 0, toJSON: () => {} }) as DOMRect
+  return svg.parentElement
+}
 
 const rows: LineChartRow[] = [
   { age: 35, year: 0, values: { p10: 80_000, p50: 110_000, p90: 160_000 } },
@@ -252,5 +281,73 @@ describe('PercentileLineChart', () => {
     render(<PercentileLineChart rows={highRows} series={percentileSeries} title="Monte Carlo outcomes" />)
     const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
     expect(labels[0]).toHaveTextContent('$5.2M')
+  })
+
+  it('renders a year-scrubber slider spanning the rows, wired to the same selection as a click (FIN-61)', () => {
+    const onSelectRow = vi.fn()
+    render(
+      <PercentileLineChart
+        rows={rows}
+        series={percentileSeries}
+        title="Monte Carlo outcomes"
+        onSelectRow={onSelectRow}
+      />,
+    )
+
+    const slider = screen.getByLabelText('Select a year on Monte Carlo outcomes')
+    expect(slider).toHaveAttribute('min', '0')
+    expect(slider).toHaveAttribute('max', String(rows.length - 1))
+
+    fireEvent.change(slider, { target: { value: '2' } })
+
+    expect(onSelectRow).toHaveBeenCalledWith(rows[2])
+    expect(screen.getByTestId('percentile-chart-active-marker')).toBeInTheDocument()
+  })
+
+  it('a drag shows a live tooltip that follows the touch and selects the point it ends on (FIN-61)', () => {
+    const onSelectRow = vi.fn()
+    const { container } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" onSelectRow={onSelectRow} />,
+    )
+    const wrapper = getPlotWrapper(container)
+
+    dispatchTouch(wrapper, 'touchstart', 0)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+
+    dispatchTouch(wrapper, 'touchmove', 150) // middle of the 300px-wide stub rect -> index 1
+    expect(screen.getByRole('status')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Age 36')
+
+    // touchend fires at a *different* x (back near the start) than the last touchmove — a real
+    // finger lift is never pixel-exact to where the last move landed. Selection must use the
+    // last dragged position (index 1), not recompute from touchend's own x (which would give
+    // index 0), pinning the `dragged` branch against silently always recomputing from touchend.
+    dispatchTouch(wrapper, 'touchend', 0)
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(onSelectRow).toHaveBeenCalledWith(rows[1])
+  })
+
+  it('touchmove calls preventDefault so a drag moves the tooltip instead of scrolling the page (FIN-61)', () => {
+    const { container } = render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
+    const wrapper = getPlotWrapper(container)
+
+    dispatchTouch(wrapper, 'touchstart', 0)
+    const moveEvent = dispatchTouch(wrapper, 'touchmove', 150)
+
+    expect(moveEvent.defaultPrevented).toBe(true)
+  })
+
+  it('a plain tap (no touchmove) selects the tapped point without ever showing a tooltip (FIN-61)', () => {
+    const onSelectRow = vi.fn()
+    const { container } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" onSelectRow={onSelectRow} />,
+    )
+    const wrapper = getPlotWrapper(container)
+
+    dispatchTouch(wrapper, 'touchstart', 300) // rightmost -> index 2 (last row)
+    dispatchTouch(wrapper, 'touchend', 300)
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    expect(onSelectRow).toHaveBeenCalledWith(rows[2])
   })
 })

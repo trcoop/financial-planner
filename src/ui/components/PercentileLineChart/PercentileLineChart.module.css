@@ -47,6 +47,23 @@
   white-space: nowrap;
 }
 
+/* Shared year-scrubber (FIN-61) — sits between the title and the plot so it's reachable without
+   scrolling on mobile, and drives the same selection state a click/tap on the plot does. Full
+   width and a larger thumb than the browser default so it's a comfortable touch target. */
+.yearSlider {
+  width: 100%;
+  accent-color: var(--color-primary);
+}
+
+/* Desktop already has a mouse-hover tooltip plus click-to-select on the plot itself, so the
+   slider reads as a redundant, distracting control there — mobile keeps it since press-and-drag
+   on the narrow plot is a fiddlier way to reach a specific year than on desktop. */
+@media (min-width: 960px) {
+  .yearSlider {
+    display: none;
+  }
+}
+
 /* Wraps the plot SVG, its invisible hover targets, and the hover tooltip so the tooltip can be
    positioned absolutely against the plot's own box rather than the whole card. Flexes to fill
    whatever height `.figure` has (desktop: `.section`'s full flex-assigned height; see
@@ -57,6 +74,9 @@
   width: 100%;
   flex: 1;
   min-height: 0;
+  /* Press-and-drag across the plot drives the tooltip (FIN-61) — without this, touch treats the
+     drag as a page scroll instead. */
+  touch-action: none;
 }
 
 /* On narrow/mobile layouts `.section` doesn't get a flex-assigned height budget (see
