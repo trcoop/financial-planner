@@ -189,10 +189,6 @@ function App() {
                       stocksPercent: debouncedAdvanced.stocksAllocationPercent,
                       bondsPercent: 100 - debouncedAdvanced.stocksAllocationPercent,
                     }}
-                    returnAssumptions={{
-                      stocks: debouncedAdvanced.annualReturnPercent / 100,
-                      bonds: debouncedAdvanced.bondReturnPercent / 100,
-                    }}
                     onSuccessRateChange={setSuccessRate}
                     onStaleChange={setIsStressTestStale}
                   />

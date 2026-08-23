@@ -2,10 +2,14 @@
  * Reference table (FIN-64) for the "suggested return assumptions" info dialogs on the stock and
  * bond return fields. Three tiers:
  *
- * - Aggressive: the raw historical average, {@link DEFAULT_RETURN_ASSUMPTIONS} in
- *   `src/engine/monteCarlo.ts` (11.5% stocks / 5% bonds) — the same 1928-2025 dataset
- *   (`historicalReturns.ts`) that drives the Monte Carlo engine's own block-bootstrap, so this
- *   isn't a separate guess, just that average surfaced for the Tier 1 projection field too.
+ * - Aggressive: {@link DEFAULT_RETURN_ASSUMPTIONS} in `src/engine/monteCarlo.ts` (11.5% stocks /
+ *   5% bonds) — the same figures the Monte Carlo engine falls back to for its parametric 'gbm'
+ *   return model, sourced from Ibbotson SBBI/Damodaran (see that constant's own doc comment).
+ *   Close to but not identical to the mean of the bundled 1928-2025 dataset
+ *   (`historicalReturns.ts`, ~11.9% stocks / ~4.8% bonds) that actually drives the engine's
+ *   production block-bootstrap — reusing the already-cited `DEFAULT_RETURN_ASSUMPTIONS` value
+ *   here rather than a separately-computed dataset average, so there's one number to keep in
+ *   sync instead of two.
  * - Moderate: this app's own defaults ({@link DEFAULT_ADVANCED_VALUES}, 8% stocks / 4% bonds) —
  *   see that constant's doc comment for why 8% was chosen over the raw historical average.
  * - Conservative: a deliberately more cautious rule-of-thumb pair (5% stocks / 2.5% bonds),

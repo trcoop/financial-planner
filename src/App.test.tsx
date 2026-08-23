@@ -484,36 +484,20 @@ describe('App return assumption wiring (FIN-57, FIN-64)', () => {
   beforeEach(() => mockMatchMedia(true))
   afterEach(() => cleanup())
 
-  it('passes the 8%/4% default return assumptions to the stress test on mount', () => {
+  // Tier 1 (the Plan projection) and Tier 2 (this stress test) deliberately use different
+  // return bases (FIN-64): production always runs Tier 2 with `returnModel: 'historical'`,
+  // which ignores the `returnAssumptions` argument entirely. App no longer threads the
+  // Advanced assumptions form's editable stock/bond return fields into it, since doing so
+  // implied those fields affected the stress test when they never did — these tests lock in
+  // that it stays pinned to the engine's own default regardless of what the user types.
+  it('always passes the engine default return assumptions to the stress test, not the Advanced assumptions fields', () => {
     render(<App />)
 
     const lastCall = lastOrchestrator.runCalls[0]
-    expect(lastCall?.[4]).toEqual({ stocks: 0.08, bonds: 0.04 })
+    expect(lastCall?.[4]).toEqual({ stocks: 0.115, bonds: 0.05 })
   })
 
-  it('re-runs the stress test with the updated bond return after editing the Advanced assumptions field', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    try {
-      render(<App />)
-      await user.click(screen.getByText('Advanced assumptions'))
-
-      const bondReturnInput = screen.getByLabelText('Bond return assumption')
-      await user.clear(bondReturnInput)
-      await user.type(bondReturnInput, '5.5')
-      await vi.advanceTimersByTimeAsync(350)
-
-      await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
-      await user.click(screen.getByRole('button', { name: /run stress test/i }))
-
-      const lastCall = lastOrchestrator.runCalls.at(-1)
-      expect(lastCall?.[4]).toEqual({ stocks: 0.08, bonds: 0.055 })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('re-runs the stress test with the updated stock return after editing the Advanced assumptions field (FIN-64)', async () => {
+  it('does not change the stress test return assumptions after editing the Advanced assumptions fields', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
@@ -523,13 +507,16 @@ describe('App return assumption wiring (FIN-57, FIN-64)', () => {
       const stockReturnInput = screen.getByLabelText('Stock return assumption')
       await user.clear(stockReturnInput)
       await user.type(stockReturnInput, '9')
+      const bondReturnInput = screen.getByLabelText('Bond return assumption')
+      await user.clear(bondReturnInput)
+      await user.type(bondReturnInput, '5.5')
       await vi.advanceTimersByTimeAsync(350)
 
       await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
       await user.click(screen.getByRole('button', { name: /run stress test/i }))
 
       const lastCall = lastOrchestrator.runCalls.at(-1)
-      expect(lastCall?.[4]).toEqual({ stocks: 0.09, bonds: 0.04 })
+      expect(lastCall?.[4]).toEqual({ stocks: 0.115, bonds: 0.05 })
     } finally {
       vi.useRealTimers()
     }
