@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
@@ -88,9 +88,19 @@ describe('AdvancedAssumptionsForm', () => {
     expect(DEFAULT_ADVANCED_VALUES.stocksAllocationPercent).toBe(70)
   })
 
-  it('defaults the bond return assumption to 4.5% (FIN-57)', () => {
-    expect(DEFAULT_ADVANCED_VALUES.bondReturnPercent).toBe(4.5)
+  it('defaults the bond return assumption to 4% (FIN-64)', () => {
+    expect(DEFAULT_ADVANCED_VALUES.bondReturnPercent).toBe(4)
   })
+
+  // A prior version of this suite asserted DEFAULT_ADVANCED_VALUES.annualReturnPercent/
+  // bondReturnPercent equal DEFAULT_RETURN_ASSUMPTIONS.stocks/bonds, to guard the two from
+  // drifting apart. That invariant is gone by design (FIN-64): these UI defaults feed only the
+  // Tier 1 deterministic Plan (drag-adjusted via `expectedPortfolioReturn`), while the Monte
+  // Carlo stress test's default `returnModel: 'historical'` block-bootstraps real 1928-2025
+  // returns and never reads these fields at all — see `DEFAULT_ADVANCED_VALUES`'s doc comment.
+  // `src/ui/calibration.test.ts`'s FIN-64 suite is the thing that actually guards the 90-95%
+  // success band now, and it is built entirely from live defaults without touching these two
+  // fields, so there is nothing left here for this test to protect.
 
   it('calls onChange with the updated bond return, preserving the rest', async () => {
     const onChange = vi.fn()
@@ -216,5 +226,61 @@ describe('AdvancedAssumptionsForm', () => {
     expect(screen.getByLabelText('Withdrawal rate in retirement')).toHaveValue('4%')
     expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toHaveValue('70%')
     expect(screen.getByLabelText('Bond return assumption')).toHaveValue('4.5%')
+  })
+
+  describe('withdrawal rate info tooltip (FIN-64)', () => {
+    it('shows an info button next to Withdrawal rate in retirement, and no other field', async () => {
+      const user = userEvent.setup()
+      render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
+      await user.click(screen.getByText('Advanced assumptions'))
+
+      expect(screen.getByRole('button', { name: 'Why this withdrawal rate?' })).toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: /^why this/i })).toHaveLength(1)
+    })
+
+    it('opens a tooltip with the 30/35/40-year safe withdrawal rates on click/tap', async () => {
+      const user = userEvent.setup()
+      render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
+      await user.click(screen.getByText('Advanced assumptions'))
+
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+
+      const trigger = screen.getByRole('button', { name: 'Why this withdrawal rate?' })
+      await user.click(trigger)
+
+      const tooltip = screen.getByRole('tooltip')
+      expect(tooltip).toBeInTheDocument()
+      expect(trigger).toHaveAttribute('aria-expanded', 'true')
+      expect(within(tooltip).getByText('30 years')).toBeInTheDocument()
+      expect(within(tooltip).getByText('4%')).toBeInTheDocument()
+      expect(within(tooltip).getByText('35 years')).toBeInTheDocument()
+      expect(within(tooltip).getByText('3.9%')).toBeInTheDocument()
+      expect(within(tooltip).getByText('40 years')).toBeInTheDocument()
+      expect(within(tooltip).getByText('3.7%')).toBeInTheDocument()
+    })
+
+    it('closes the tooltip on a click outside it', async () => {
+      const user = userEvent.setup()
+      render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
+      await user.click(screen.getByText('Advanced assumptions'))
+
+      await user.click(screen.getByRole('button', { name: 'Why this withdrawal rate?' }))
+      expect(screen.getByRole('tooltip')).toBeInTheDocument()
+
+      await user.click(document.body)
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+    })
+
+    it('closes the tooltip on Escape', async () => {
+      const user = userEvent.setup()
+      render(<AdvancedAssumptionsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
+      await user.click(screen.getByText('Advanced assumptions'))
+
+      await user.click(screen.getByRole('button', { name: 'Why this withdrawal rate?' }))
+      expect(screen.getByRole('tooltip')).toBeInTheDocument()
+
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
+    })
   })
 })

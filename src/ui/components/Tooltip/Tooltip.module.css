@@ -1,0 +1,80 @@
+.container {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.trigger {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-style: italic;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.trigger:hover {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+}
+
+.trigger:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.trigger[aria-expanded='true'] {
+  color: var(--color-text);
+  border-color: var(--color-primary);
+}
+
+.popover {
+  position: fixed;
+  z-index: 50;
+  width: max-content;
+  max-width: min(280px, calc(100vw - 2 * var(--space-4)));
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  text-align: left;
+}
+
+.popover p {
+  margin: 0 0 var(--space-2);
+}
+
+.popover p:last-child {
+  margin-bottom: 0;
+}
+
+.rates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.rates li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.rateLabel {
+  color: var(--color-text-muted);
+}
+
+.rateValue {
+  color: var(--color-text);
+  font-weight: 600;
+}

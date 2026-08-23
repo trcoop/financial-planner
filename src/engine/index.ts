@@ -49,11 +49,14 @@ export type {
 
 export {
   correlatedNormals,
+  createHistoricalReturnGenerator,
   createRandomSeed,
   createSeededRandom,
+  expectedPortfolioReturn,
   runMonteCarloTrial,
   runMonteCarloTrials,
   validateAllocation,
+  DEFAULT_BLOCK_LENGTH_YEARS,
   DEFAULT_CORRELATION,
   DEFAULT_RETURN_ASSUMPTIONS,
   DEFAULT_SIMULATION_COUNT,
@@ -68,6 +71,10 @@ export type {
   PortfolioAllocation,
   RandomSource,
   ReturnAssumptions,
+  ReturnModel,
   TrialConfig,
   VolatilityAssumptions,
 } from './monteCarlo';
+
+export { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
+export type { HistoricalYearReturn } from './historicalReturns';

@@ -44,8 +44,11 @@ interface StressTestSectionProps {
   /** The stock/bond mix to stress-test against (FIN-56). Defaults to {@link DEFAULT_ALLOCATION}
    * (70/30) when omitted. */
   allocation?: PortfolioAllocation
-  /** Per-asset-class expected return to stress-test against (FIN-57). Defaults to
-   * {@link DEFAULT_RETURN_ASSUMPTIONS} (stocks 7% / bonds 4.5%) when omitted. */
+  /** Per-asset-class expected return to stress-test against (FIN-57). Only consulted when
+   * `returnModel: 'gbm'` is explicitly requested — production always runs the 'historical'
+   * default (FIN-64), which ignores this prop entirely; nothing in the app currently sets
+   * `returnModel`, so this is effectively test-only plumbing today. Defaults to
+   * {@link DEFAULT_RETURN_ASSUMPTIONS} (stocks 11.5% / bonds 5%) when omitted. */
   returnAssumptions?: ReturnAssumptions
   /**
    * Test-only seam: substitute a fake `MonteCarloOrchestrator` instead of the real

@@ -128,13 +128,13 @@ describe('StressTestSection', () => {
     expect(allocationArg).toEqual({ stocksPercent: 85, bondsPercent: 15 })
   })
 
-  it('defaults to a 7%/4.5% return assumption, and runs against a caller-supplied one instead (FIN-57)', () => {
+  it('defaults to an 11.5%/5% return assumption, and runs against a caller-supplied one instead (FIN-57, FIN-64)', () => {
     const orchestrator = new FakeOrchestrator()
     const { unmount } = render(<StressTestSection assumptions={baseAssumptions}
         rows={baseRows} orchestrator={orchestrator} />)
 
     const [, , , , returnAssumptionsArg] = orchestrator.runCalls[0]
-    expect(returnAssumptionsArg).toEqual({ stocks: 0.07, bonds: 0.045 })
+    expect(returnAssumptionsArg).toEqual({ stocks: 0.115, bonds: 0.05 })
     unmount()
 
     const orchestrator2 = new FakeOrchestrator()

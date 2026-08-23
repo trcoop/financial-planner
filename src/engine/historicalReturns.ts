@@ -1,0 +1,121 @@
+/**
+ * Real historical annual asset-class returns (FIN-64), used to drive the Monte Carlo stress
+ * test's block-bootstrap sampling instead of independent draws from a fitted lognormal
+ * distribution — see {@link createHistoricalBlockGenerator} in `monteCarlo.ts` for why.
+ *
+ * Source: Aswath Damodaran's (NYU Stern) "Annual Returns on Stock, T.Bonds and T.Bills"
+ * dataset — https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/histretSP.html —
+ * a freely published, annually-updated academic reference derived from Ibbotson/FRED sources.
+ * `stockReturn` is the S&P 500 total return (price + dividends); `bondReturn` is the 10-year
+ * US Treasury bond total return (coupon + price change). Both are nominal, not inflation-
+ * adjusted, matching {@link DEFAULT_RETURN_ASSUMPTIONS}' own basis.
+ *
+ * 98 years, 1928-2025 inclusive. Static and bundled — no network fetch at runtime (this
+ * project takes zero network calls after page load, per `CLAUDE.md`).
+ */
+export interface HistoricalYearReturn {
+  year: number;
+  stockReturn: number;
+  bondReturn: number;
+}
+
+export const HISTORICAL_ANNUAL_RETURNS: readonly HistoricalYearReturn[] = [
+  { year: 1928, stockReturn: 0.4381, bondReturn: 0.0084 },
+  { year: 1929, stockReturn: -0.0830, bondReturn: 0.0420 },
+  { year: 1930, stockReturn: -0.2512, bondReturn: 0.0454 },
+  { year: 1931, stockReturn: -0.4384, bondReturn: -0.0256 },
+  { year: 1932, stockReturn: -0.0864, bondReturn: 0.0879 },
+  { year: 1933, stockReturn: 0.4998, bondReturn: 0.0186 },
+  { year: 1934, stockReturn: -0.0119, bondReturn: 0.0796 },
+  { year: 1935, stockReturn: 0.4674, bondReturn: 0.0447 },
+  { year: 1936, stockReturn: 0.3194, bondReturn: 0.0502 },
+  { year: 1937, stockReturn: -0.3534, bondReturn: 0.0138 },
+  { year: 1938, stockReturn: 0.2928, bondReturn: 0.0421 },
+  { year: 1939, stockReturn: -0.0110, bondReturn: 0.0441 },
+  { year: 1940, stockReturn: -0.1067, bondReturn: 0.0540 },
+  { year: 1941, stockReturn: -0.1277, bondReturn: -0.0202 },
+  { year: 1942, stockReturn: 0.1917, bondReturn: 0.0229 },
+  { year: 1943, stockReturn: 0.2506, bondReturn: 0.0249 },
+  { year: 1944, stockReturn: 0.1903, bondReturn: 0.0258 },
+  { year: 1945, stockReturn: 0.3582, bondReturn: 0.0380 },
+  { year: 1946, stockReturn: -0.0843, bondReturn: 0.0313 },
+  { year: 1947, stockReturn: 0.0520, bondReturn: 0.0092 },
+  { year: 1948, stockReturn: 0.0570, bondReturn: 0.0195 },
+  { year: 1949, stockReturn: 0.1830, bondReturn: 0.0466 },
+  { year: 1950, stockReturn: 0.3081, bondReturn: 0.0043 },
+  { year: 1951, stockReturn: 0.2368, bondReturn: -0.0030 },
+  { year: 1952, stockReturn: 0.1815, bondReturn: 0.0227 },
+  { year: 1953, stockReturn: -0.0121, bondReturn: 0.0414 },
+  { year: 1954, stockReturn: 0.5256, bondReturn: 0.0329 },
+  { year: 1955, stockReturn: 0.3260, bondReturn: -0.0134 },
+  { year: 1956, stockReturn: 0.0744, bondReturn: -0.0226 },
+  { year: 1957, stockReturn: -0.1046, bondReturn: 0.0680 },
+  { year: 1958, stockReturn: 0.4372, bondReturn: -0.0210 },
+  { year: 1959, stockReturn: 0.1206, bondReturn: -0.0265 },
+  { year: 1960, stockReturn: 0.0034, bondReturn: 0.1164 },
+  { year: 1961, stockReturn: 0.2664, bondReturn: 0.0206 },
+  { year: 1962, stockReturn: -0.0881, bondReturn: 0.0569 },
+  { year: 1963, stockReturn: 0.2261, bondReturn: 0.0168 },
+  { year: 1964, stockReturn: 0.1642, bondReturn: 0.0373 },
+  { year: 1965, stockReturn: 0.1240, bondReturn: 0.0072 },
+  { year: 1966, stockReturn: -0.0997, bondReturn: 0.0291 },
+  { year: 1967, stockReturn: 0.2380, bondReturn: -0.0158 },
+  { year: 1968, stockReturn: 0.1081, bondReturn: 0.0327 },
+  { year: 1969, stockReturn: -0.0824, bondReturn: -0.0501 },
+  { year: 1970, stockReturn: 0.0356, bondReturn: 0.1675 },
+  { year: 1971, stockReturn: 0.1422, bondReturn: 0.0979 },
+  { year: 1972, stockReturn: 0.1876, bondReturn: 0.0282 },
+  { year: 1973, stockReturn: -0.1431, bondReturn: 0.0366 },
+  { year: 1974, stockReturn: -0.2590, bondReturn: 0.0199 },
+  { year: 1975, stockReturn: 0.3700, bondReturn: 0.0361 },
+  { year: 1976, stockReturn: 0.2383, bondReturn: 0.1598 },
+  { year: 1977, stockReturn: -0.0698, bondReturn: 0.0129 },
+  { year: 1978, stockReturn: 0.0651, bondReturn: -0.0078 },
+  { year: 1979, stockReturn: 0.1852, bondReturn: 0.0067 },
+  { year: 1980, stockReturn: 0.3174, bondReturn: -0.0299 },
+  { year: 1981, stockReturn: -0.0470, bondReturn: 0.0820 },
+  { year: 1982, stockReturn: 0.2042, bondReturn: 0.3281 },
+  { year: 1983, stockReturn: 0.2234, bondReturn: 0.0320 },
+  { year: 1984, stockReturn: 0.0615, bondReturn: 0.1373 },
+  { year: 1985, stockReturn: 0.3124, bondReturn: 0.2571 },
+  { year: 1986, stockReturn: 0.1849, bondReturn: 0.2428 },
+  { year: 1987, stockReturn: 0.0581, bondReturn: -0.0496 },
+  { year: 1988, stockReturn: 0.1654, bondReturn: 0.0822 },
+  { year: 1989, stockReturn: 0.3148, bondReturn: 0.1769 },
+  { year: 1990, stockReturn: -0.0306, bondReturn: 0.0624 },
+  { year: 1991, stockReturn: 0.3023, bondReturn: 0.1500 },
+  { year: 1992, stockReturn: 0.0749, bondReturn: 0.0936 },
+  { year: 1993, stockReturn: 0.0997, bondReturn: 0.1421 },
+  { year: 1994, stockReturn: 0.0133, bondReturn: -0.0804 },
+  { year: 1995, stockReturn: 0.3720, bondReturn: 0.2348 },
+  { year: 1996, stockReturn: 0.2268, bondReturn: 0.0143 },
+  { year: 1997, stockReturn: 0.3310, bondReturn: 0.0994 },
+  { year: 1998, stockReturn: 0.2834, bondReturn: 0.1492 },
+  { year: 1999, stockReturn: 0.2089, bondReturn: -0.0825 },
+  { year: 2000, stockReturn: -0.0903, bondReturn: 0.1666 },
+  { year: 2001, stockReturn: -0.1185, bondReturn: 0.0557 },
+  { year: 2002, stockReturn: -0.2197, bondReturn: 0.1512 },
+  { year: 2003, stockReturn: 0.2836, bondReturn: 0.0038 },
+  { year: 2004, stockReturn: 0.1074, bondReturn: 0.0449 },
+  { year: 2005, stockReturn: 0.0483, bondReturn: 0.0287 },
+  { year: 2006, stockReturn: 0.1561, bondReturn: 0.0196 },
+  { year: 2007, stockReturn: 0.0548, bondReturn: 0.1021 },
+  { year: 2008, stockReturn: -0.3655, bondReturn: 0.2010 },
+  { year: 2009, stockReturn: 0.2594, bondReturn: -0.1112 },
+  { year: 2010, stockReturn: 0.1482, bondReturn: 0.0846 },
+  { year: 2011, stockReturn: 0.0210, bondReturn: 0.1604 },
+  { year: 2012, stockReturn: 0.1589, bondReturn: 0.0297 },
+  { year: 2013, stockReturn: 0.3215, bondReturn: -0.0910 },
+  { year: 2014, stockReturn: 0.1352, bondReturn: 0.1075 },
+  { year: 2015, stockReturn: 0.0138, bondReturn: 0.0128 },
+  { year: 2016, stockReturn: 0.1177, bondReturn: 0.0069 },
+  { year: 2017, stockReturn: 0.2161, bondReturn: 0.0280 },
+  { year: 2018, stockReturn: -0.0423, bondReturn: -0.0002 },
+  { year: 2019, stockReturn: 0.3121, bondReturn: 0.0964 },
+  { year: 2020, stockReturn: 0.1802, bondReturn: 0.1133 },
+  { year: 2021, stockReturn: 0.2847, bondReturn: -0.0442 },
+  { year: 2022, stockReturn: -0.1804, bondReturn: -0.1783 },
+  { year: 2023, stockReturn: 0.2606, bondReturn: 0.0388 },
+  { year: 2024, stockReturn: 0.2488, bondReturn: -0.0164 },
+  { year: 2025, stockReturn: 0.1778, bondReturn: 0.0780 },
+];

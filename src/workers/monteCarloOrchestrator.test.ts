@@ -100,9 +100,9 @@ describe('createMonteCarloOrchestrator', () => {
       {
         assumptions,
         allocation,
-        volatilityAssumptions: { stocks: 0.15, bonds: 0.06 },
+        volatilityAssumptions: { stocks: 0.195, bonds: 0.077 },
         events: [],
-        returnAssumptions: { stocks: 0.07, bonds: 0.045 },
+        returnAssumptions: { stocks: 0.115, bonds: 0.05 },
       },
     ]);
   });
@@ -120,7 +120,7 @@ describe('createMonteCarloOrchestrator', () => {
       allocation,
       volatilityAssumptions: volatility,
       events,
-      returnAssumptions: { stocks: 0.07, bonds: 0.045 },
+      returnAssumptions: { stocks: 0.115, bonds: 0.05 },
     });
   });
 
@@ -134,7 +134,7 @@ describe('createMonteCarloOrchestrator', () => {
     expect(workers[0].posted[0]).toEqual({
       assumptions,
       allocation,
-      volatilityAssumptions: { stocks: 0.15, bonds: 0.06 },
+      volatilityAssumptions: { stocks: 0.195, bonds: 0.077 },
       events: [],
       returnAssumptions,
     });
