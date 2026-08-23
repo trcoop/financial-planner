@@ -1,13 +1,28 @@
 import { useMemo, useRef } from 'react'
-import { runProjection, InvalidProjectionInputError, type PlanAssumptions } from '../../engine'
+import {
+  runProjection,
+  expectedPortfolioReturn,
+  InvalidProjectionInputError,
+  DEFAULT_VOLATILITY_ASSUMPTIONS,
+  type PlanAssumptions,
+} from '../../engine'
 import { isAdvancedInputValid, isCoreInputValid } from '../components'
 import type { AdvancedAssumptionValues, CoreInputValues } from '../components'
 import { useDebouncedValue } from './useDebouncedValue'
 
-/** Planning horizon is a call-site default per FIN-19 — not user input for the MVP. */
-const PLANNING_HORIZON_END_AGE = 100
+/** Planning horizon is a call-site default per FIN-19 — not user input for the MVP. Exported so
+ * tests that need to reproduce the app's real assumptions (e.g. the FIN-64 default-calibration
+ * suite) can build on the same constant rather than a second hardcoded 100. */
+export const PLANNING_HORIZON_END_AGE = 100
 
-function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptionValues): PlanAssumptions {
+/** Exported so tests can build the exact `PlanAssumptions` the live app would compute from a
+ * given core/advanced form state — see `PLANNING_HORIZON_END_AGE`'s note. */
+export function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptionValues): PlanAssumptions {
+  const allocation = {
+    stocksPercent: advanced.stocksAllocationPercent,
+    bondsPercent: 100 - advanced.stocksAllocationPercent,
+  }
+
   return {
     currentAge: core.currentAge,
     retirementAge: core.retirementAge,
@@ -16,7 +31,14 @@ function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptionValues
     annualContributionRate: core.annualContributionRatePercent / 100,
     planningHorizonEndAge: PLANNING_HORIZON_END_AGE,
     annualRaiseRate: advanced.annualRaisePercent / 100,
-    annualReturnRate: advanced.annualReturnPercent / 100,
+    // FIN-64: the same stock/bond blend, allocation, and volatility the stress test uses, drag-
+    // adjusted to a realistic compounding rate — not the raw arithmetic stock return — so the
+    // Plan chart and the stress test never quote different growth assumptions for one plan.
+    annualReturnRate: expectedPortfolioReturn(
+      allocation,
+      { stocks: advanced.annualReturnPercent / 100, bonds: advanced.bondReturnPercent / 100 },
+      DEFAULT_VOLATILITY_ASSUMPTIONS,
+    ),
     inflationRate: advanced.inflationPercent / 100,
     withdrawalRateInRetirement: advanced.withdrawalRatePercent / 100,
   }

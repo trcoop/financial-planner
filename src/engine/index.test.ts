@@ -14,7 +14,9 @@ import type {
   PortfolioValue,
   ProjectionErrorCode,
   ProjectionRow,
+  HistoricalYearReturn,
   RandomSource,
+  ReturnModel,
   RunPeriodInput,
   TaxCalculator,
   TaxContext,
@@ -54,6 +56,8 @@ type PublicTypeSurface = {
   randomSource: RandomSource;
   trialConfig: TrialConfig;
   volatilityAssumptions: VolatilityAssumptions;
+  historicalYearReturn: HistoricalYearReturn;
+  returnModel: ReturnModel;
 };
 
 /**
@@ -89,6 +93,10 @@ describe('public surface', () => {
     'correlatedNormals',
     'DEFAULT_CORRELATION',
     'DEFAULT_RETURN_ASSUMPTIONS',
+    'expectedPortfolioReturn',
+    'createHistoricalReturnGenerator',
+    'DEFAULT_BLOCK_LENGTH_YEARS',
+    'HISTORICAL_ANNUAL_RETURNS',
   ];
 
   it.each(runtimeExports)('re-exports %s', (name) => {

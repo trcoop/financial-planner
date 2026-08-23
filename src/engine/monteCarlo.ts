@@ -7,6 +7,8 @@
  */
 
 import { InvalidProjectionInputError } from './errors';
+import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
+import type { HistoricalYearReturn } from './historicalReturns';
 import { runPeriod } from './pipeline';
 import { withdrawFullShortfall, zeroTax } from './strategies';
 import type {
@@ -252,17 +254,23 @@ export interface ReturnAssumptions {
 }
 
 /**
- * Historically-calibrated expected-return defaults (FIN-56).
+ * Historically-calibrated expected-return defaults (FIN-64).
  *
- * Stocks ~7% and bonds ~4.5% arithmetic mean annual return: the ~2.5 point gap is the
- * historical equity risk premium — long-run U.S. large-cap equities have returned roughly
- * 6-10% nominal, versus roughly 3-5% for intermediate/aggregate bonds (standard textbook
- * Monte Carlo retirement-planning ranges; see e.g. Kitces on sequence-of-returns modeling,
- * or any standard capital-market-assumptions table). Before FIN-56 both asset classes used
- * the same blended ~7% mean and differed only in volatility, which understated bonds'
- * ballast role in a portfolio and inflated simulated downside risk.
+ * Long-run nominal arithmetic mean annual return, large-cap U.S. stocks vs.
+ * intermediate-term U.S. government bonds, 1926-2023 (Ibbotson SBBI / Damodaran's published
+ * "Historical Returns on Stocks, Bonds and Bills" series). Arithmetic, not geometric/CAGR —
+ * that is what {@link gbmPeriodReturn}'s `mu` expects so the simulation's own draws produce
+ * the volatility drag rather than double-counting it (see that function's doc comment).
+ *
+ * Deliberately the same dataset lineage Bengen's original 4%-rule research drew from, not a
+ * forward-looking (CAPE-adjusted) estimate: FIN-64 exists to make this engine's Monte Carlo
+ * success rate agree with Bengen's finding, and a forward-looking haircut would intentionally
+ * defeat that by construction. Paired with {@link DEFAULT_VOLATILITY_ASSUMPTIONS} from the
+ * same source — bumping the mean while leaving volatility at FIN-56's more conservative
+ * figures overstates success (verified: it pushes a textbook 30yr/4% case to ~98%, well past
+ * Bengen's ~90-95%).
  */
-export const DEFAULT_RETURN_ASSUMPTIONS: ReturnAssumptions = { stocks: 0.07, bonds: 0.045 };
+export const DEFAULT_RETURN_ASSUMPTIONS: ReturnAssumptions = { stocks: 0.115, bonds: 0.05 };
 
 /**
  * Fixed stock/bond correlation (FIN-56): mild negative, the standard "flight to quality"
@@ -274,6 +282,58 @@ export const DEFAULT_RETURN_ASSUMPTIONS: ReturnAssumptions = { stocks: 0.07, bon
  * they empirically do — the two assets moved as if in separate, unrelated worlds.
  */
 export const DEFAULT_CORRELATION = -0.2;
+
+/**
+ * Portfolio variance from per-asset volatility, allocation weight, and correlation:
+ * `var = w_s^2*sigma_s^2 + w_b^2*sigma_b^2 + 2*w_s*w_b*rho*sigma_s*sigma_b`. The standard
+ * two-asset variance formula — used by {@link expectedPortfolioReturn} to size the volatility
+ * drag between the blended arithmetic mean and the growth an investor actually experiences.
+ */
+const portfolioVariance = (
+  allocation: PortfolioAllocation,
+  volatility: VolatilityAssumptions,
+  correlation: number,
+): number => {
+  const stockWeight = allocation.stocksPercent / 100;
+  const bondWeight = allocation.bondsPercent / 100;
+
+  return (
+    stockWeight ** 2 * volatility.stocks ** 2 +
+    bondWeight ** 2 * volatility.bonds ** 2 +
+    2 * stockWeight * bondWeight * correlation * volatility.stocks * volatility.bonds
+  );
+};
+
+/**
+ * FIN-64 (plan/stress-test consistency): the deterministic Tier 1 projection's single
+ * compounding rate, derived from the same stock/bond return, volatility, allocation, and
+ * correlation inputs the Monte Carlo stress test uses — rather than a separately-chosen
+ * number — so the two views can't quote different growth assumptions for the same plan.
+ *
+ * Blends the arithmetic means by allocation weight (`{@link blendedPortfolioReturn}`), then
+ * applies the standard variance-drag approximation, `geometricMean ≈ arithmeticMean -
+ * variance/2`, that converts an arithmetic mean into the compounding (geometric) rate an
+ * investor actually experiences — the same relationship {@link gbmPeriodReturn} applies
+ * per-draw inside the Monte Carlo engine, just computed once here as a closed form instead of
+ * simulated. Without this, Tier 1 compounds the raw undragged arithmetic mean every year,
+ * which overstates growth (a 70/30 portfolio's ~9.5% arithmetic blend compounds to unrealistic
+ * decades-out balances without the ~0.9 points of drag this subtracts).
+ */
+export const expectedPortfolioReturn = (
+  allocation: PortfolioAllocation,
+  returnAssumptions: ReturnAssumptions,
+  volatilityAssumptions: VolatilityAssumptions,
+  correlation: number = DEFAULT_CORRELATION,
+): number => {
+  const arithmeticBlend = blendedPortfolioReturn(
+    allocation,
+    returnAssumptions.stocks,
+    returnAssumptions.bonds,
+  );
+  const variance = portfolioVariance(allocation, volatilityAssumptions, correlation);
+
+  return arithmeticBlend - variance / 2;
+};
 
 /**
  * One period's portfolio return: a correlated GBM draw per asset class (via
@@ -324,14 +384,83 @@ export const createInitialPeriodState = (plan: PlanAssumptions): PeriodState => 
   annualWithdrawal: 0,
 });
 
+/**
+ * Which per-period return model a trial draws from (FIN-64):
+ *
+ * - `'historical'` (the production default): block-bootstrap resampling of real annual
+ *   returns from {@link HISTORICAL_ANNUAL_RETURNS} — see {@link createHistoricalReturnGenerator}.
+ * - `'gbm'`: the original independent lognormal draw per period ({@link drawPortfolioReturn}),
+ *   kept for the tests that specifically validate that formula in isolation.
+ */
+export type ReturnModel = 'historical' | 'gbm';
+
+/**
+ * Contiguous run length, in years, that a block-bootstrap draw copies out of history before
+ * picking a fresh random start point (FIN-64).
+ *
+ * Chosen in the commonly-used 3-10 year range for block-bootstrap retirement simulations: long
+ * enough to carry forward a real multi-year sequence (bear-market-into-recovery, the mean-
+ * reversion structure {@link ReturnModel}'s `'historical'` mode exists to preserve — see the
+ * `DEFAULT_RETURN_ASSUMPTIONS` doc comment's citation), short enough that a 98-year dataset
+ * still yields many distinct block-start points to combine (94 possible starts at length 5),
+ * so 5,000+ simulated paths remain meaningfully different from each other rather than repeating
+ * the same handful of historical windows.
+ */
+export const DEFAULT_BLOCK_LENGTH_YEARS = 5;
+
+/**
+ * Builds a per-path return stream from real history instead of an independent lognormal draw
+ * (FIN-64) — the block-bootstrap technique Trinity's own rolling-window study and tools like
+ * ProjectionLab's "historical" mode use, chosen specifically because independent-per-year draws
+ * assume zero serial correlation between consecutive years, while real returns mean-revert
+ * (a bad decade tends to be followed by a recovery, not by more independently-bad decades).
+ * Parametric Monte Carlo without this produces both unrealistically catastrophic failure paths
+ * and unrealistically enormous success paths that no rolling window of actual market history
+ * ever produced (Kitces/Tharp/Fitzpatrick, "Fat Tails In Monte Carlo Analysis vs Safe
+ * Withdrawal Rates").
+ *
+ * Returns a closure that, called once per period, hands back that period's real historical
+ * stock/bond returns. Internally walks forward through a `blockLength`-year slice of
+ * {@link HISTORICAL_ANNUAL_RETURNS} starting at a random year; once the slice is exhausted it
+ * draws a fresh random start and continues — so a single path is a concatenation of several
+ * real historical multi-year runs, not one continuous 30-40 year historical window (there are
+ * nowhere near enough non-overlapping ones to feed 5,000+ simulations).
+ */
+export const createHistoricalReturnGenerator = (
+  draw: RandomSource,
+  data: readonly HistoricalYearReturn[] = HISTORICAL_ANNUAL_RETURNS,
+  blockLength: number = DEFAULT_BLOCK_LENGTH_YEARS,
+): (() => HistoricalYearReturn) => {
+  let block: readonly HistoricalYearReturn[] = [];
+  let index = 0;
+
+  return () => {
+    if (index >= block.length) {
+      const maxStart = data.length - blockLength;
+      const start = Math.floor(draw() * (maxStart + 1));
+      block = data.slice(start, start + blockLength);
+      index = 0;
+    }
+
+    const yearReturn = block[index];
+    index += 1;
+    return yearReturn;
+  };
+};
+
 /** Everything a single simulated path needs beyond the plan, the events and its RNG. */
 export interface TrialConfig {
   allocation: PortfolioAllocation;
   volatility: VolatilityAssumptions;
   /** Per-asset-class expected return and the fixed stock/bond correlation (FIN-56) — see
-   * {@link DEFAULT_RETURN_ASSUMPTIONS} and {@link DEFAULT_CORRELATION}. */
+   * {@link DEFAULT_RETURN_ASSUMPTIONS} and {@link DEFAULT_CORRELATION}. Only consulted when
+   * `returnModel` is `'gbm'`; the `'historical'` default ignores it in favor of real data. */
   returnAssumptions: ReturnAssumptions;
   correlation: number;
+  /** See {@link ReturnModel}. Defaults to `'historical'` in {@link runMonteCarloTrials}. */
+  returnModel?: ReturnModel;
+  /** See {@link DEFAULT_BLOCK_LENGTH_YEARS}. Only consulted when `returnModel` is `'historical'`. */
+  blockLengthYears?: number;
   /**
    * The per-period step function. Defaults to the engine's own {@link runPeriod}, which is
    * the point of the design: Monte Carlo varies `returnForPeriod` and reuses the projection
@@ -369,22 +498,35 @@ export const runMonteCarloTrial = (
   const taxCalculator = config.taxCalculator ?? zeroTax;
   const periodCount = plan.planningHorizonEndAge - plan.currentAge + 1;
 
+  // One generator per path (not per period): a block-bootstrap path is a single continuous
+  // walk through history that persists its position across periods, unlike the GBM branch
+  // where each period is an independent draw (FIN-64) — see `createHistoricalReturnGenerator`.
+  const nextHistoricalYear =
+    (config.returnModel ?? 'historical') === 'historical'
+      ? createHistoricalReturnGenerator(draw, HISTORICAL_ANNUAL_RETURNS, config.blockLengthYears)
+      : null;
+
   let state = createInitialPeriodState(plan);
   const balances: number[] = [];
 
   for (let year = 0; year < periodCount; year += 1) {
+    const historicalYear = nextHistoricalYear?.();
+    const returnForPeriod = historicalYear
+      ? blendedPortfolioReturn(config.allocation, historicalYear.stockReturn, historicalYear.bondReturn)
+      : // Per-asset-class expected return/correlation (FIN-56) rather than the plan's single
+        // blended `annualReturnRate` — see `drawPortfolioReturn`'s doc comment.
+        drawPortfolioReturn(
+          config.returnAssumptions,
+          config.allocation,
+          config.volatility,
+          config.correlation,
+          draw,
+        );
+
     state = step(state, {
       events,
       assumptions: plan,
-      // Per-asset-class expected return/correlation (FIN-56) rather than the plan's single
-      // blended `annualReturnRate` — see `drawPortfolioReturn`'s doc comment.
-      returnForPeriod: drawPortfolioReturn(
-        config.returnAssumptions,
-        config.allocation,
-        config.volatility,
-        config.correlation,
-        draw,
-      ),
+      returnForPeriod,
       withdrawalStrategy,
       taxCalculator,
     });
@@ -396,10 +538,15 @@ export const runMonteCarloTrial = (
 };
 
 /**
- * Historically-calibrated volatility defaults (Story 2 PRD, R5): the S&P 500's and an
- * aggregate bond index's realized annual volatility, rounded conservatively.
+ * Historically-calibrated volatility defaults (FIN-64): realized annual standard deviation
+ * over the same 1926-2023 Ibbotson SBBI / Damodaran window as
+ * {@link DEFAULT_RETURN_ASSUMPTIONS}, large-cap U.S. stocks vs. intermediate-term U.S.
+ * government bonds — a matched mean/volatility pair from one source, not this figure alone.
+ * FIN-56's original 15%/6% pair undercounted historical volatility, which is what let the
+ * mean-return bump alone push success past Bengen's ~90-95% band (see that constant's doc
+ * comment).
  */
-export const DEFAULT_VOLATILITY_ASSUMPTIONS: VolatilityAssumptions = { stocks: 0.15, bonds: 0.06 };
+export const DEFAULT_VOLATILITY_ASSUMPTIONS: VolatilityAssumptions = { stocks: 0.195, bonds: 0.077 };
 
 /** Paths per run. Industry standard, and enough resolution for 10th/50th/90th percentiles. */
 export const DEFAULT_SIMULATION_COUNT = 5000;
@@ -417,8 +564,13 @@ export interface MonteCarloOptions {
   /** Expected return per asset class. Defaults to {@link DEFAULT_RETURN_ASSUMPTIONS}. */
   returnAssumptions?: ReturnAssumptions;
   /** Stock/bond correlation. Defaults to {@link DEFAULT_CORRELATION}; a test seam only —
-   * production code should rely on the default (FIN-56: not a user-facing plan input). */
+   * production code should rely on the default (FIN-56: not a user-facing plan input). Only
+   * consulted when `returnModel` is `'gbm'`. */
   correlation?: number;
+  /** See {@link ReturnModel}. Defaults to `'historical'`. */
+  returnModel?: ReturnModel;
+  /** See {@link DEFAULT_BLOCK_LENGTH_YEARS}. Only consulted when `returnModel` is `'historical'`. */
+  blockLengthYears?: number;
   /**
    * See {@link TrialConfig.runPeriodFn}.
    *
@@ -502,6 +654,8 @@ export const runMonteCarloTrials = (
     volatility: volatilityAssumptions,
     returnAssumptions: options.returnAssumptions ?? DEFAULT_RETURN_ASSUMPTIONS,
     correlation: options.correlation ?? DEFAULT_CORRELATION,
+    returnModel: options.returnModel,
+    blockLengthYears: options.blockLengthYears,
     runPeriodFn: options.runPeriodFn,
     withdrawalStrategy: options.withdrawalStrategy,
     taxCalculator: options.taxCalculator,

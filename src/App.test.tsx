@@ -112,7 +112,7 @@ describe('App shell', () => {
   it('renders the core inputs form pre-filled with defaults, inside the Drawer', () => {
     render(<App />)
     expect(screen.getByLabelText('Current age')).toHaveValue('35')
-    expect(screen.getByLabelText('Retirement age')).toHaveValue('67')
+    expect(screen.getByLabelText('Retirement age')).toHaveValue('65')
     expect(within(screen.getByRole('region', { name: 'Plan inputs' })).getByLabelText('Current investment balance')).toHaveValue('$250,000')
     expect(screen.getByLabelText('Current annual income')).toHaveValue('$85,000')
     expect(screen.getByLabelText('Annual savings percentage')).toHaveValue('15%')
@@ -122,7 +122,7 @@ describe('App shell', () => {
     render(<App />)
     expect(screen.getByRole('tab', { name: 'Projection' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toBeInTheDocument()
-    expect(screen.getByText('Projected balance at 67')).toBeInTheDocument()
+    expect(screen.getByText('Projected balance at 65')).toBeInTheDocument()
     expect(screen.getByText('Chance of success')).toBeInTheDocument()
     expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
     expect(screen.getByRole('figure', { name: 'Investment balance by year' })).toBeInTheDocument()
@@ -480,15 +480,15 @@ describe('App stock/bond allocation wiring (FIN-56)', () => {
   })
 })
 
-describe('App bond return assumption wiring (FIN-57)', () => {
+describe('App return assumption wiring (FIN-57, FIN-64)', () => {
   beforeEach(() => mockMatchMedia(true))
   afterEach(() => cleanup())
 
-  it('passes the 7%/4.5% default return assumptions to the stress test on mount', () => {
+  it('passes the 8%/4% default return assumptions to the stress test on mount', () => {
     render(<App />)
 
     const lastCall = lastOrchestrator.runCalls[0]
-    expect(lastCall?.[4]).toEqual({ stocks: 0.07, bonds: 0.045 })
+    expect(lastCall?.[4]).toEqual({ stocks: 0.08, bonds: 0.04 })
   })
 
   it('re-runs the stress test with the updated bond return after editing the Advanced assumptions field', async () => {
@@ -507,7 +507,29 @@ describe('App bond return assumption wiring (FIN-57)', () => {
       await user.click(screen.getByRole('button', { name: /run stress test/i }))
 
       const lastCall = lastOrchestrator.runCalls.at(-1)
-      expect(lastCall?.[4]).toEqual({ stocks: 0.07, bonds: 0.055 })
+      expect(lastCall?.[4]).toEqual({ stocks: 0.08, bonds: 0.055 })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('re-runs the stress test with the updated stock return after editing the Advanced assumptions field (FIN-64)', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      render(<App />)
+      await user.click(screen.getByText('Advanced assumptions'))
+
+      const stockReturnInput = screen.getByLabelText('Stock return assumption')
+      await user.clear(stockReturnInput)
+      await user.type(stockReturnInput, '9')
+      await vi.advanceTimersByTimeAsync(350)
+
+      await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
+      await user.click(screen.getByRole('button', { name: /run stress test/i }))
+
+      const lastCall = lastOrchestrator.runCalls.at(-1)
+      expect(lastCall?.[4]).toEqual({ stocks: 0.09, bonds: 0.04 })
     } finally {
       vi.useRealTimers()
     }

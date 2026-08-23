@@ -20,7 +20,6 @@ import {
   type LineChartRow,
   type LineChartSeries,
 } from './ui/components/PercentileLineChart/PercentileLineChart'
-import { DEFAULT_RETURN_ASSUMPTIONS } from './engine'
 import { YearDetailPanel } from './ui/components/YearDetailPanel/YearDetailPanel'
 import { useProjectionState } from './ui/hooks/useProjectionState'
 import { formatCurrency, formatPercent } from './ui/utils/format'
@@ -191,7 +190,7 @@ function App() {
                       bondsPercent: 100 - debouncedAdvanced.stocksAllocationPercent,
                     }}
                     returnAssumptions={{
-                      stocks: DEFAULT_RETURN_ASSUMPTIONS.stocks,
+                      stocks: debouncedAdvanced.annualReturnPercent / 100,
                       bonds: debouncedAdvanced.bondReturnPercent / 100,
                     }}
                     onSuccessRateChange={setSuccessRate}

@@ -106,6 +106,10 @@ const trialConfig = (overrides: Partial<TrialConfig> = {}): TrialConfig => ({
   volatility: { stocks: 0.15, bonds: 0.06 },
   returnAssumptions: { stocks: 0.07, bonds: 0.07 },
   correlation: 0,
+  // This whole suite exercises the GBM draw's math directly (fixed mean/volatility, specific
+  // seeded values) — FIN-64's block-bootstrap `'historical'` default ignores those inputs
+  // entirely, so every test built on this helper opts back into `'gbm'` explicitly.
+  returnModel: 'gbm',
   runPeriodFn: referenceRunPeriod,
   ...overrides,
 });
@@ -618,10 +622,11 @@ describe('correlatedNormals', () => {
 describe('DEFAULT_RETURN_ASSUMPTIONS', () => {
   it('gives stocks a materially higher expected return than bonds', () => {
     expect(DEFAULT_RETURN_ASSUMPTIONS.stocks).toBeGreaterThan(DEFAULT_RETURN_ASSUMPTIONS.bonds);
-    // Historical equity risk premium: stocks ~7%, bonds ~4-5% (see the code comment on
-    // DEFAULT_RETURN_ASSUMPTIONS for the citation).
-    expect(DEFAULT_RETURN_ASSUMPTIONS.stocks).toBeCloseTo(0.07, 5);
-    expect(DEFAULT_RETURN_ASSUMPTIONS.bonds).toBeCloseTo(0.045, 5);
+    // Historical (Ibbotson SBBI/Damodaran 1926-2023) nominal arithmetic mean, large-cap U.S.
+    // stocks vs. intermediate-term U.S. government bonds (see the code comment on
+    // DEFAULT_RETURN_ASSUMPTIONS for the citation and FIN-64 rationale).
+    expect(DEFAULT_RETURN_ASSUMPTIONS.stocks).toBeCloseTo(0.115, 5);
+    expect(DEFAULT_RETURN_ASSUMPTIONS.bonds).toBeCloseTo(0.05, 5);
   });
 
   it('large samples of stock and bond GBM draws have distinctly different means', () => {
@@ -859,8 +864,8 @@ describe('runMonteCarloTrials', () => {
     const result = runMonteCarloTrials(assumptions(), allocation70_30, undefined, [], options());
 
     expect(result.meta.simulationCount).toBe(5000);
-    expect(result.meta.stockVolatility).toBe(0.15);
-    expect(result.meta.bondVolatility).toBe(0.06);
+    expect(result.meta.stockVolatility).toBe(0.195);
+    expect(result.meta.bondVolatility).toBe(0.077);
   });
 
   it('reports overridden volatility assumptions instead of the defaults', () => {
@@ -883,7 +888,7 @@ describe('runMonteCarloTrials', () => {
         allocation70_30,
         { stocks, bonds: 0.06 },
         [],
-        options({ simulationCount: 200 }),
+        options({ simulationCount: 200, returnModel: 'gbm' }),
       );
 
       return percentiles.p90[65] - percentiles.p10[65];
@@ -1414,11 +1419,22 @@ describe('validated success-rate regression (FIN-56)', () => {
   it('lands in the validated success-rate range for the age 35-100 accumulate-then-drawdown scenario', () => {
     const plan = assumptions({ currentAge: 35, retirementAge: 67, planningHorizonEndAge: 100 });
 
-    const result = runMonteCarloTrials(plan, allocation70_30, DEFAULT_VOLATILITY_ASSUMPTIONS, [], {
-      seed: 1,
-      simulationCount: 20_000,
-      runPeriodFn: referenceRunPeriod,
-    });
+    // Pinned to the exact 7%/15% stocks, 4.5%/6% bonds the independent reimplementation above
+    // was run against (FIN-56) — not the engine's current defaults, which FIN-64 has since
+    // recalibrated. This test's whole point is agreement with that specific external check.
+    const result = runMonteCarloTrials(
+      plan,
+      allocation70_30,
+      { stocks: 0.15, bonds: 0.06 },
+      [],
+      {
+        seed: 1,
+        simulationCount: 20_000,
+        returnAssumptions: { stocks: 0.07, bonds: 0.045 },
+        runPeriodFn: referenceRunPeriod,
+        returnModel: 'gbm',
+      },
+    );
 
     expect(result.successRate).toBeGreaterThanOrEqual(60);
     expect(result.successRate).toBeLessThanOrEqual(85);
@@ -1489,7 +1505,9 @@ describe('FIN-55: pure-GBM isolation against the analytic lognormal median', () 
 
   const stocksOnly = { stocksPercent: 100, bondsPercent: 0 };
   const P0 = 100_000;
-  const meanReturn = 0.07;
+  // Must track DEFAULT_RETURN_ASSUMPTIONS.stocks (FIN-64 recalibrated it away from 0.07) since
+  // simulateFinalBalances below feeds the simulation DEFAULT_RETURN_ASSUMPTIONS directly.
+  const meanReturn = DEFAULT_RETURN_ASSUMPTIONS.stocks;
   const stockVolatility = DEFAULT_VOLATILITY_ASSUMPTIONS.stocks;
   const years = 20;
 
@@ -1508,6 +1526,7 @@ describe('FIN-55: pure-GBM isolation against the analytic lognormal median', () 
       returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
       correlation: DEFAULT_CORRELATION,
       runPeriodFn: growthOnlyStep,
+      returnModel: 'gbm',
     };
 
     return Array.from({ length: simulationCount }, () => {
