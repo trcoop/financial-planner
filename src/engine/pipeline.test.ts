@@ -10,6 +10,7 @@ import {
   recordPeriod,
   runPeriod,
   runStages,
+  snapshotBeginningBalance,
 } from './pipeline';
 import { withdrawFullShortfall, zeroTax } from './strategies';
 import type {
@@ -30,8 +31,8 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   priorWithdrawal: null,
   rows: [],
   // Deliberately different from `balance` so that a stage which sets `beginningBalance`
-  // from `balance` — a half-implemented `applyGrowth` — is caught by the identity
-  // assertions below rather than passing as "still a stub".
+  // from `balance` when it should not — anything other than `snapshotBeginningBalance` — is
+  // caught by the identity assertions below rather than passing unnoticed.
   beginningBalance: 42_000,
   investmentReturn: 0,
   annualContribution: 0,
@@ -61,11 +62,17 @@ const runPeriodInput = (overrides: Partial<RunPeriodInput> = {}): RunPeriodInput
 
 describe('pipelineStages', () => {
   it('runs the stages in the order the architecture fixes', () => {
+    // Reordered once, deliberately, at FIN-65 change 2: `computeWithdrawals` moved ahead of
+    // `applyGrowth` so a retirement year resolves as `(beginning - withdrawal) * (1 + r)`,
+    // and the beginning-balance snapshot moved into its own leading stage to make that
+    // possible. `computeIncome` stayed put, after growth — contributions still earn no return
+    // in the year they are made.
     expect(pipelineStages).toEqual([
-      applyGrowth,
+      snapshotBeginningBalance,
       applyLifeEvents,
-      computeIncome,
       computeWithdrawals,
+      applyGrowth,
+      computeIncome,
       applyTax,
       recordPeriod,
     ]);
@@ -78,6 +85,7 @@ describe('stage purity', () => {
     ['applyLifeEvents', applyLifeEvents],
     ['computeIncome', computeIncome],
     ['computeWithdrawals', computeWithdrawals],
+    ['snapshotBeginningBalance', snapshotBeginningBalance],
     ['applyTax', applyTax],
     ['recordPeriod', recordPeriod],
   ];
@@ -107,10 +115,17 @@ describe('applyGrowth', () => {
     expect(result.balance).toBe(107_000);
   });
 
-  it('snapshots the incoming balance as this period beginning balance', () => {
-    const result = applyGrowth(periodState({ balance: 100_000 }), runPeriodInput({ returnForPeriod: 0.07 }));
+  it('leaves the beginning-balance snapshot alone — that is snapshotBeginningBalance now', () => {
+    // FIN-65 change 2. `applyGrowth` used to take the snapshot itself, which only worked
+    // while it ran first. It now runs *after* `computeWithdrawals`, where `state.balance` is
+    // already net of the withdrawal, so taking the snapshot here would report a beginning
+    // balance that is short by exactly one year's spending.
+    const result = applyGrowth(
+      periodState({ balance: 100_000, beginningBalance: 42_000 }),
+      runPeriodInput({ returnForPeriod: 0.07 }),
+    );
 
-    expect(result.beginningBalance).toBe(100_000);
+    expect(result.beginningBalance).toBe(42_000);
   });
 
   it('records the investment return in dollars', () => {
@@ -132,9 +147,33 @@ describe('applyGrowth', () => {
   it('drives a negative balance further negative rather than flooring it', () => {
     const result = applyGrowth(periodState({ balance: -50_000 }), runPeriodInput({ returnForPeriod: 0.07 }));
 
-    expect(result.beginningBalance).toBe(-50_000);
     expect(result.investmentReturn).toBeCloseTo(-3_500, 6);
     expect(result.balance).toBeCloseTo(-53_500, 6);
+  });
+});
+
+describe('snapshotBeginningBalance', () => {
+  it('records the balance the period opened with', () => {
+    const result = snapshotBeginningBalance(
+      periodState({ balance: 100_000, beginningBalance: 42_000 }),
+      runPeriodInput(),
+    );
+
+    expect(result.beginningBalance).toBe(100_000);
+  });
+
+  it('changes nothing else — it is a snapshot, not arithmetic', () => {
+    const state = periodState({ balance: 100_000 });
+
+    const result = snapshotBeginningBalance(state, runPeriodInput());
+
+    expect(result).toEqual({ ...state, beginningBalance: 100_000 });
+  });
+
+  it('snapshots a negative balance as-is rather than flooring it', () => {
+    const result = snapshotBeginningBalance(periodState({ balance: -50_000 }), runPeriodInput());
+
+    expect(result.beginningBalance).toBe(-50_000);
   });
 });
 
@@ -218,14 +257,19 @@ describe('computeIncome', () => {
 });
 
 describe('computeWithdrawals', () => {
-  /** A retirement period state, post-`applyGrowth`: 1M at the start of the year, grown 7%. */
+  /**
+   * A retirement period state as `computeWithdrawals` now sees it: post-
+   * `snapshotBeginningBalance`, PRE-`applyGrowth`. $1M at the start of the year, untouched —
+   * FIN-65 change 2 put this stage ahead of growth, so `balance` and `beginningBalance`
+   * coincide here and the year's return has not been earned yet.
+   */
   const retiredState = (overrides: Partial<PeriodState> = {}): PeriodState =>
     periodState({
       age: 67,
       year: 0,
       beginningBalance: 1_000_000,
-      balance: 1_070_000,
-      investmentReturn: 70_000,
+      balance: 1_000_000,
+      investmentReturn: 0,
       ...overrides,
     });
 
@@ -261,9 +305,12 @@ describe('computeWithdrawals', () => {
     expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
   });
 
-  it('rates the balance at the START of the retirement year, not the post-growth balance', () => {
-    // 4% of the grown 1_070_000 would be 42_800 — the spec says 40_000.
-    const result = computeWithdrawals(retiredState(), retiredInput());
+  it('rates the START-of-year snapshot, not whatever `balance` happens to hold', () => {
+    // Inside `runPeriod` the two now coincide, because this stage runs before `applyGrowth`.
+    // The stage is exported and reused, though, and reading `balance` instead of the snapshot
+    // would be a live bug the moment anything moves ahead of it again — so the two are pulled
+    // apart deliberately here. 4% of 1_070_000 would be 42_800; the spec says 40_000.
+    const result = computeWithdrawals(retiredState({ balance: 1_070_000 }), retiredInput());
 
     expect(result.annualWithdrawal).not.toBeCloseTo(42_800, 6);
     expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
@@ -271,17 +318,19 @@ describe('computeWithdrawals', () => {
 
   it('inflates the prior withdrawal in later retirement years instead of re-rating the balance', () => {
     const result = computeWithdrawals(
-      retiredState({ age: 68, year: 1, priorWithdrawal: 40_000, beginningBalance: 900_000, balance: 963_000 }),
+      retiredState({ age: 68, year: 1, priorWithdrawal: 40_000, beginningBalance: 900_000, balance: 900_000 }),
       retiredInput(),
     );
 
     expect(result.annualWithdrawal).toBeCloseTo(41_000, 6);
   });
 
-  it('deducts the sourced withdrawal from the balance', () => {
+  it('deducts the sourced withdrawal from the balance, before any growth is applied', () => {
+    // FIN-65 change 2: 1_000_000 - 40_000 = 960_000, which `applyGrowth` then grows. The
+    // old end-of-year model left 1_030_000 here (1_000_000 * 1.07 - 40_000).
     const result = computeWithdrawals(retiredState(), retiredInput());
 
-    expect(result.balance).toBeCloseTo(1_030_000, 6);
+    expect(result.balance).toBeCloseTo(960_000, 6);
   });
 
   it('hands the strategy the shortfall it computed, alongside the current state', () => {
@@ -319,7 +368,7 @@ describe('computeWithdrawals', () => {
     const result = computeWithdrawals(retiredState(), retiredInput({ withdrawalStrategy: halfShortfall }));
 
     expect(result.annualWithdrawal).toBeCloseTo(20_000, 6);
-    expect(result.balance).toBeCloseTo(1_050_000, 6);
+    expect(result.balance).toBeCloseTo(980_000, 6);
   });
 
   it('keeps inflating the requested need after a shortfall rather than ratcheting spending down', () => {
@@ -399,12 +448,12 @@ describe('computeWithdrawals', () => {
 
   it('keeps withdrawing from an exhausted portfolio rather than clamping at zero', () => {
     const result = computeWithdrawals(
-      retiredState({ age: 75, year: 8, priorWithdrawal: 12_000, beginningBalance: 5_000, balance: 5_350 }),
+      retiredState({ age: 75, year: 8, priorWithdrawal: 12_000, beginningBalance: 5_000, balance: 5_000 }),
       retiredInput(),
     );
 
     expect(result.annualWithdrawal).toBeCloseTo(12_300, 6);
-    expect(result.balance).toBeCloseTo(-6_950, 6);
+    expect(result.balance).toBeCloseTo(-7_300, 6);
   });
 });
 

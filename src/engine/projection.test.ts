@@ -221,9 +221,13 @@ describe('acceptance: immediate retirement', () => {
     rows.forEach((row) => expect(row.annualContribution).toBe(0));
   });
 
-  it('reduces the grown balance by the withdrawal', () => {
-    expect(rows[0].endingBalance).toBeCloseTo(1_030_000, 6);
-    expect(rows[1].endingBalance).toBeCloseTo(1_061_100, 6);
+  it('grows what is left after the withdrawal, not the other way round', () => {
+    // FIN-65 change 2, `(beginning - withdrawal) * (1 + r)`:
+    //   year 0: (1_000_000 - 40_000) * 1.07 = 960_000 * 1.07 = 1_027_200
+    //   year 1: (1_027_200 - 41_000) * 1.07 = 986_200 * 1.07 = 1_055_234
+    // The old end-of-year model gave 1_030_000 and 1_061_100.
+    expect(rows[0].endingBalance).toBeCloseTo(1_027_200, 6);
+    expect(rows[1].endingBalance).toBeCloseTo(1_055_234, 6);
   });
 });
 
@@ -346,13 +350,19 @@ describe('acceptance: zero income and no contributions', () => {
   });
 
   it('grows the balance from investment returns alone', () => {
-    rows.forEach((row) => expect(row.investmentReturn).toBeCloseTo(row.beginningBalance * 0.06, 6));
+    // FIN-65 change 2: the year's return is earned on what remains after the withdrawal,
+    // so it is rated against `beginningBalance - annualWithdrawal`, not `beginningBalance`.
+    rows.forEach((row) =>
+      expect(row.investmentReturn).toBeCloseTo((row.beginningBalance - row.annualWithdrawal) * 0.06, 6),
+    );
   });
 
   it('withdraws correctly from year 0, inflation-adjusted after', () => {
+    // year 0 ending: (750_000 - 30_000) * 1.06 = 720_000 * 1.06 = 763_200.
+    // The old end-of-year model gave 765_000 (750_000 * 1.06 - 30_000).
     expect(rows[0].annualWithdrawal).toBeCloseTo(30_000, 6);
     expect(rows[1].annualWithdrawal).toBeCloseTo(30_750, 6);
-    expect(rows[0].endingBalance).toBeCloseTo(765_000, 6);
+    expect(rows[0].endingBalance).toBeCloseTo(763_200, 6);
   });
 });
 
@@ -509,19 +519,20 @@ describe('FIN-65 scope fence: the deterministic projection stays on assumptions.
   );
 
   it('runs the flat-inflation spending chain, year by year', () => {
-    // Year 0: w = 1_000_000 * 0.04 = 40_000; ending = 1_000_000 * 1.07 - 40_000 = 1_030_000.
+    // `ending = (beginning - w) * 1.07` — FIN-65 change 2's start-of-year withdrawal.
+    // Year 0: w = 1_000_000 * 0.04 = 40_000; ending = 960_000 * 1.07 = 1_027_200.
     expect(rows[0].annualWithdrawal).toBeCloseTo(40_000, 6);
-    expect(rows[0].endingBalance).toBeCloseTo(1_030_000, 6);
+    expect(rows[0].endingBalance).toBeCloseTo(1_027_200, 6);
 
-    // Year 1: w = 40_000 * 1.025 = 41_000; ending = 1_030_000 * 1.07 - 41_000
-    //         = 1_102_100 - 41_000 = 1_061_100.
+    // Year 1: w = 40_000 * 1.025 = 41_000; ending = (1_027_200 - 41_000) * 1.07
+    //         = 986_200 * 1.07 = 1_055_234.
     expect(rows[1].annualWithdrawal).toBeCloseTo(41_000, 6);
-    expect(rows[1].endingBalance).toBeCloseTo(1_061_100, 6);
+    expect(rows[1].endingBalance).toBeCloseTo(1_055_234, 6);
 
-    // Year 2: w = 41_000 * 1.025 = 42_025; ending = 1_061_100 * 1.07 - 42_025
-    //         = 1_135_377 - 42_025 = 1_093_352.
+    // Year 2: w = 41_000 * 1.025 = 42_025; ending = (1_055_234 - 42_025) * 1.07
+    //         = 1_013_209 * 1.07 = 1_084_133.63.
     expect(rows[2].annualWithdrawal).toBeCloseTo(42_025, 6);
-    expect(rows[2].endingBalance).toBeCloseTo(1_093_352, 6);
+    expect(rows[2].endingBalance).toBeCloseTo(1_084_133.63, 6);
   });
 
   it('shows no trace of 1966-1968 realised CPI, which is what a leak would look like', () => {
@@ -628,7 +639,12 @@ describe('FIN-55: external formula validation — deterministic scenario B (alre
 
     expect(firstNegative).toBeGreaterThan(0);
     expect(rows[firstNegative].age).toBe(67);
-    expect(rows[firstNegative].endingBalance).toBeCloseTo(-23_331.897801584084, 4);
+    // FIN-65 change 2 rebaseline. Re-derived by folding
+    //   ending = (beginning - w) * 1.03  (+ contribution, pre-retirement only)
+    // from age 60 with w = beginningBalance-at-62 * 0.20 = 23_678, indexed 3%/yr. The
+    // accumulation years and the first retirement withdrawal are untouched — only the timing
+    // of the draw moved, which is why the failure year is still 67. Was -23_331.897801584084.
+    expect(rows[firstNegative].endingBalance).toBeCloseTo(-28_272.77027721367, 4);
   });
 
   it('keeps every row after the first negative one unclamped and finite, still inflating withdrawals', () => {
@@ -644,6 +660,7 @@ describe('FIN-55: external formula validation — deterministic scenario B (alre
 
     // Final year matches the independent reconstruction exactly, confirming no clamping
     // ever kicked in across the remaining 23 years of runaway negative compounding.
-    expect(rows[rows.length - 1].endingBalance).toBeCloseTo(-1_292_039.2034206502, 3);
+    // FIN-65 change 2 rebaseline, same re-derivation as above. Was -1_292_039.2034206502.
+    expect(rows[rows.length - 1].endingBalance).toBeCloseTo(-1_339_170.193230963, 3);
   });
 });

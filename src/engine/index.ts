@@ -22,6 +22,7 @@ export {
   recordPeriod,
   runPeriod,
   runStages,
+  snapshotBeginningBalance,
 } from './pipeline';
 
 /**

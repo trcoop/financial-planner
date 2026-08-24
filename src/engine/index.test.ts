@@ -73,6 +73,8 @@ describe('public surface', () => {
     'InvalidProjectionInputError',
     'withdrawFullShortfall',
     'zeroTax',
+    // FIN-65 change 2: split out of `applyGrowth` so the withdrawal stage can run first.
+    'snapshotBeginningBalance',
     'applyGrowth',
     'applyLifeEvents',
     'computeIncome',

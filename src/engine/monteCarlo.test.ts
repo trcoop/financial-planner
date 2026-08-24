@@ -68,7 +68,6 @@ const allocation70_30 = { stocksPercent: 70, bondsPercent: 30 };
 const referenceRunPeriod: PipelineStage = (state, input) => {
   const plan = input.assumptions;
   const beginningBalance = state.balance;
-  const investmentReturn = beginningBalance * input.returnForPeriod;
   const retired = state.age >= plan.retirementAge;
 
   const income = retired
@@ -89,8 +88,13 @@ const referenceRunPeriod: PipelineStage = (state, input) => {
   const sourced = input.withdrawalStrategy(state, requestedWithdrawal).amount;
   const taxOwed = input.taxCalculator(income, sourced, { age: state.age, year: state.year }).taxOwed;
 
+  // FIN-65 change 2: the withdrawal comes out before the year's growth is applied, so the
+  // year's return is earned on `beginningBalance - sourced`. Contributions still land after
+  // growth and earn nothing in the year they are made (ERD §5), unchanged.
+  const investmentReturn = (beginningBalance - sourced) * input.returnForPeriod;
+
   const endingBalance =
-    beginningBalance + investmentReturn + annualContribution - sourced - taxOwed;
+    beginningBalance - sourced + investmentReturn + annualContribution - taxOwed;
 
   return {
     ...state,
@@ -1273,6 +1277,12 @@ describe('accuracy against deterministic reference figures', () => {
    * Future value of a portfolio in drawdown: the first withdrawal is
    * `startingBalance × withdrawalRateInRetirement` and each later one is indexed to
    * inflation.
+   *
+   * FIN-65 change 2 moved the withdrawal to the START of the year, so the money taken in year
+   * `k` forgoes growth for that year as well as every year after it — `n - k` periods, where
+   * the old end-of-year model gave it `n - 1 - k`. That single exponent is the whole
+   * difference between the two published conventions, and it is what makes ours the more
+   * conservative of the two.
    */
   const drawdownFutureValue = (
     plan: PlanAssumptions,
@@ -1284,7 +1294,7 @@ describe('accuracy against deterministic reference figures', () => {
     let futureValue = startingBalance * (1 + rate) ** years;
     for (let year = 0; year < years; year += 1) {
       const withdrawal = firstWithdrawal * (1 + plan.inflationRate) ** year;
-      futureValue -= withdrawal * (1 + rate) ** (years - 1 - year);
+      futureValue -= withdrawal * (1 + rate) ** (years - year);
     }
     return futureValue;
   };
@@ -1691,24 +1701,27 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
     it('spends the first three years exactly as the published recurrence says', () => {
       const { rows } = runCohort(1966, 30, true);
 
+      // The recurrence is `ending = (beginning - w) * (1 + r)` — FIN-65 change 2's
+      // start-of-year withdrawal, per Bengen (1994) and Trinity.
+
       // Year 1 (1966): the withdrawal is 4% of the START-of-year balance, no CPI involved.
       //   w = 1_000_000 * 0.04 = 40_000
-      //   ending = 1_000_000 * (1 - 0.0997) - 40_000 = 900_300 - 40_000 = 860_300
+      //   ending = (1_000_000 - 40_000) * (1 - 0.0997) = 960_000 * 0.9003 = 864_288
       expect(rows[0].annualWithdrawal).toBeCloseTo(40_000, 6);
-      expect(rows[0].endingBalance).toBeCloseTo(860_300, 6);
+      expect(rows[0].endingBalance).toBeCloseTo(864_288, 6);
 
       // Year 2 (1967): 1967 return +23.80%, 1967 CPI-U +2.77%.
       //   w = 40_000 * 1.0277 = 41_108
-      //   ending = 860_300 * 1.238 - 41_108 = 1_065_051.40 - 41_108 = 1_023_943.40
+      //   ending = (864_288 - 41_108) * 1.238 = 823_180 * 1.238 = 1_019_096.84
       expect(rows[1].annualWithdrawal).toBeCloseTo(41_108, 6);
-      expect(rows[1].endingBalance).toBeCloseTo(1_023_943.4, 4);
+      expect(rows[1].endingBalance).toBeCloseTo(1_019_096.84, 4);
 
       // Year 3 (1968): 1968 return +10.81%, 1968 CPI-U +4.19%.
       //   w = 41_108 * 1.0419 = 42_830.4252
-      //   ending = 1_023_943.40 * 1.1081 - 42_830.4252 = 1_134_631.68154 - 42_830.4252
-      //          = 1_091_801.25634
+      //   ending = (1_019_096.84 - 42_830.4252) * 1.1081 = 976_266.4148 * 1.1081
+      //          = 1_081_800.81424
       expect(rows[2].annualWithdrawal).toBeCloseTo(42_830.4252, 4);
-      expect(rows[2].endingBalance).toBeCloseTo(1_091_801.25634, 3);
+      expect(rows[2].endingBalance).toBeCloseTo(1_081_800.81424, 3);
     });
 
     it('inflates spending at realised CPI, not 2.5%, so the 1970s cost what they cost', () => {
@@ -1732,28 +1745,30 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
      * dividing out the cohort's own realised cumulative CPI-U (4.83774x over 1966-1995).
      *
      * Derived by folding the documented recurrence
-     *   ending_t = beginning_t * (1 + r_t) - w_t,  w_0 = 1_000_000 * 0.04,
+     *   ending_t = (beginning_t - w_t) * (1 + r_t),  w_0 = 1_000_000 * 0.04,
      *   w_t = w_(t-1) * (1 + cpi_t)
      * over 1966-1995 of our own two tables — not by recording what the engine printed.
      *
      * Cross-check against the ticket (measured on ProjectionLab's different series):
-     * as-shipped $3.22M -> $117.5K real. Ours moves $1.396M -> $174.4K real: same direction,
-     * same order of magnitude, an 8.0x correction. A result still in the millions would mean
-     * joint sampling never reached the withdrawal stage.
+     * as-shipped $3.22M -> $117.5K real, and Bengen's own model on that series lands at
+     * -$157.8K. Ours moves $1.170M -> -$208.7K: same direction, and now on the same side of
+     * zero as Bengen, which is the point — the 1966 retiree taking a 4% initial withdrawal
+     * indexed to *realised* CPI does not comfortably survive 30 years. A result still in the
+     * millions would mean joint sampling never reached the withdrawal stage.
      */
-    it('falls from ~$1.40M to ~$174K in 1966 dollars once CPI is real', () => {
+    it('falls from ~$1.17M to ~-$209K in 1966 dollars once CPI is real', () => {
       const withFixed = runCohort(1966, 30, false);
       const withHistorical = runCohort(1966, 30, true);
 
       expect(cumulativeInflation(1966, 30)).toBeCloseTo(4.83774, 5);
 
-      expect(withFixed.terminalInStartYearDollars).toBeCloseTo(1_395_595.52, 2);
-      expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(174_391.61, 2);
-      expect(withHistorical.terminal).toBeCloseTo(843_660.89, 2);
+      expect(withFixed.terminalInStartYearDollars).toBeCloseTo(1_169_969.88, 2);
+      expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(-208_720.19, 2);
+      expect(withHistorical.terminal).toBeCloseTo(-1_009_733.57, 2);
 
-      // The order-of-magnitude fence the ticket asks for: hundreds of thousands, not millions.
-      expect(withHistorical.terminalInStartYearDollars).toBeGreaterThan(100_000);
-      expect(withHistorical.terminalInStartYearDollars).toBeLessThan(1_000_000);
+      // The order-of-magnitude fence the ticket asks for: hundreds of thousands either side of
+      // zero, never millions.
+      expect(Math.abs(withHistorical.terminalInStartYearDollars)).toBeLessThan(1_000_000);
     });
   });
 
@@ -1770,8 +1785,8 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
     expect(cumulativeInflation(1994, 30)).toBeCloseTo(2.1088, 4);
     expect(1.025 ** 30).toBeCloseTo(2.09757, 5);
 
-    expect(withFixed.terminalInStartYearDollars).toBeCloseTo(4_672_296.5, 1);
-    expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(4_696_186.32, 1);
+    expect(withFixed.terminalInStartYearDollars).toBeCloseTo(4_283_578.76, 1);
+    expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(4_313_484.97, 1);
 
     const relativeMove =
       Math.abs(withHistorical.terminalInStartYearDollars - withFixed.terminalInStartYearDollars) /
