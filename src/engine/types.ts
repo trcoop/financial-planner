@@ -214,6 +214,19 @@ export interface RunPeriodInput {
   assumptions: PlanAssumptions;
   /** This period's market return, as a decimal. */
   returnForPeriod: number;
+  /**
+   * This period's cost-of-living increase, as a decimal, when the caller knows it.
+   *
+   * Present only on the Monte Carlo *historical* path (FIN-65), where each period's return is
+   * drawn from a real historical year and this carries that same year's realised CPI-U — the
+   * two must move together, or the engine runs nominal returns against an invented inflation
+   * rate and systematically flatters high-inflation cohorts.
+   *
+   * Optional because the two callers that have no historical year to key off — the
+   * deterministic projection, and Monte Carlo's GBM branch — deliberately fall back to the
+   * plan's own `inflationRate` instead. See {@link computeWithdrawals}.
+   */
+  inflationForPeriod?: number;
   withdrawalStrategy: WithdrawalStrategy;
   taxCalculator: TaxCalculator;
 }

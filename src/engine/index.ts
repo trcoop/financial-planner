@@ -78,3 +78,6 @@ export type {
 
 export { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 export type { HistoricalYearReturn } from './historicalReturns';
+
+export { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
+export type { HistoricalYearInflation } from './inflationData';

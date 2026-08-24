@@ -482,6 +482,56 @@ describe('runProjection input validation', () => {
  * `runProjection`/`pipeline.ts` so a bug shared between the engine and its own test fixtures
  * cannot hide from this file.
  */
+/**
+ * FIN-65 scope fence. Change 1 makes the Monte Carlo historical path inflate spending at the
+ * drawn year's realised CPI-U. `runProjection` must be untouched by that: it pairs a
+ * user-chosen nominal return with a fixed nominal spending inflator, which is internally
+ * consistent, and it never sets `inflationForPeriod` — the `??` fallback in
+ * `computeWithdrawals` is what enforces it. Every figure below is hand-derivable from
+ * `assumptions.inflationRate` alone, so any leak of historical CPI into the deterministic
+ * projection fails here loudly.
+ */
+describe('FIN-65 scope fence: the deterministic projection stays on assumptions.inflationRate', () => {
+  // Already-retired: $1M, 7% flat return, 2.5% flat inflation, 4% withdrawal, 3 years.
+  const rows = runProjection(
+    assumptions({
+      currentAge: 65,
+      retirementAge: 65,
+      planningHorizonEndAge: 67,
+      initialBalance: 1_000_000,
+      currentAnnualIncome: 0,
+      annualContributionRate: 0,
+      annualRaiseRate: 0,
+      annualReturnRate: 0.07,
+      inflationRate: 0.025,
+      withdrawalRateInRetirement: 0.04,
+    }),
+  );
+
+  it('runs the flat-inflation spending chain, year by year', () => {
+    // Year 0: w = 1_000_000 * 0.04 = 40_000; ending = 1_000_000 * 1.07 - 40_000 = 1_030_000.
+    expect(rows[0].annualWithdrawal).toBeCloseTo(40_000, 6);
+    expect(rows[0].endingBalance).toBeCloseTo(1_030_000, 6);
+
+    // Year 1: w = 40_000 * 1.025 = 41_000; ending = 1_030_000 * 1.07 - 41_000
+    //         = 1_102_100 - 41_000 = 1_061_100.
+    expect(rows[1].annualWithdrawal).toBeCloseTo(41_000, 6);
+    expect(rows[1].endingBalance).toBeCloseTo(1_061_100, 6);
+
+    // Year 2: w = 41_000 * 1.025 = 42_025; ending = 1_061_100 * 1.07 - 42_025
+    //         = 1_135_377 - 42_025 = 1_093_352.
+    expect(rows[2].annualWithdrawal).toBeCloseTo(42_025, 6);
+    expect(rows[2].endingBalance).toBeCloseTo(1_093_352, 6);
+  });
+
+  it('shows no trace of 1966-1968 realised CPI, which is what a leak would look like', () => {
+    // Had the historical series leaked in, year 1 would spend 40_000 * 1.0277 = 41_108 and
+    // year 2 would spend 41_108 * 1.0419 = 42_830.43.
+    expect(rows[1].annualWithdrawal).not.toBeCloseTo(41_108, 2);
+    expect(rows[2].annualWithdrawal).not.toBeCloseTo(42_830.43, 2);
+  });
+});
+
 describe('FIN-55: external formula validation — deterministic scenario A (30 -> 65 accumulation)', () => {
   // 30 -> 65, $50k start, $80k income, 15% contribution, 3% raises, 7% returns, 2.5%
   // inflation, 4% withdrawal in retirement, 100-year horizon.

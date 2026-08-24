@@ -86,7 +86,7 @@ export const computeIncome: PipelineStage = (state, input) => {
  *
  * Retirement only: the first retirement year withdraws
  * `balanceAtStartOfFirstRetirementYear * withdrawalRateInRetirement`, and every year after
- * inflates the prior withdrawal by `inflationRate`.
+ * inflates the prior withdrawal by this period's inflation rate.
  */
 export const computeWithdrawals: PipelineStage = (state, input) => {
   const { assumptions, withdrawalStrategy } = input;
@@ -95,6 +95,28 @@ export const computeWithdrawals: PipelineStage = (state, input) => {
     return { ...state, annualWithdrawal: 0 };
   }
 
+  /**
+   * The period's own inflation when the caller knows it, the plan's flat assumption otherwise
+   * (FIN-65).
+   *
+   * The `??` fallback is load-bearing, not defensive coding — it is the whole scope fence
+   * between the two kinds of caller:
+   *
+   * - Monte Carlo's *historical* path sets `inflationForPeriod` to the realised CPI-U of the
+   *   very historical year it drew this period's return from. Pairing them is what the
+   *   safe-withdrawal-rate literature does (Bengen 1994, Trinity); leaving them unpaired ran
+   *   nominal 1970s returns against a placid invented 2.5% cost of living, which does not
+   *   merely bias the mean — it inverts the cohort ranking.
+   * - The deterministic projection (`runProjection`, the Plan tab) and Monte Carlo's GBM
+   *   branch have no historical year to key off, so they never set it and stay on
+   *   `assumptions.inflationRate`. The Plan tab pairing a user-chosen nominal return with a
+   *   user-chosen nominal inflator is internally consistent, and FIN-65 must not leak into it.
+   *
+   * `??` and not `||`: 1929's CPI-U is exactly 0.0000, which `||` would silently replace with
+   * the plan's rate.
+   */
+  const inflationRate = input.inflationForPeriod ?? assumptions.inflationRate;
+
   // `priorWithdrawal === null` is what marks the first retirement year, so this works
   // identically whether retirement is reached mid-projection or was already underway at
   // year 0. The first year rates `beginningBalance` — the balance at the *start* of the
@@ -102,7 +124,7 @@ export const computeWithdrawals: PipelineStage = (state, input) => {
   const requested =
     state.priorWithdrawal === null
       ? state.beginningBalance * assumptions.withdrawalRateInRetirement
-      : state.priorWithdrawal * (1 + assumptions.inflationRate);
+      : state.priorWithdrawal * (1 + inflationRate);
 
   const plan = withdrawalStrategy(state, requested);
 

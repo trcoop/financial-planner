@@ -14,6 +14,7 @@ import type {
   PortfolioValue,
   ProjectionErrorCode,
   ProjectionRow,
+  HistoricalYearInflation,
   HistoricalYearReturn,
   RandomSource,
   ReturnModel,
@@ -56,6 +57,7 @@ type PublicTypeSurface = {
   randomSource: RandomSource;
   trialConfig: TrialConfig;
   volatilityAssumptions: VolatilityAssumptions;
+  historicalYearInflation: HistoricalYearInflation;
   historicalYearReturn: HistoricalYearReturn;
   returnModel: ReturnModel;
 };
@@ -97,6 +99,9 @@ describe('public surface', () => {
     'createHistoricalReturnGenerator',
     'DEFAULT_BLOCK_LENGTH_YEARS',
     'HISTORICAL_ANNUAL_RETURNS',
+    // FIN-65: paired with HISTORICAL_ANNUAL_RETURNS — the Monte Carlo historical path draws
+    // a period's return and its cost-of-living increase from the same year.
+    'HISTORICAL_ANNUAL_INFLATION',
   ];
 
   it.each(runtimeExports)('re-exports %s', (name) => {

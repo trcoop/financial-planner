@@ -335,6 +335,68 @@ describe('computeWithdrawals', () => {
     expect(second.priorWithdrawal).toBeCloseTo(41_000, 6);
   });
 
+  /**
+   * FIN-65 change 1. `inflationForPeriod` is the seam that lets a Monte Carlo trial inflate
+   * spending at the SAME historical year's CPI as the return it drew for that period, rather
+   * than at a flat assumption. Everything about the fallback is deliberate — see the two
+   * tests below.
+   */
+  describe('inflationForPeriod (FIN-65)', () => {
+    it('inflates the prior withdrawal at inflationForPeriod when the caller supplies one', () => {
+      // 1942 CPI-U from HISTORICAL_ANNUAL_INFLATION: +10.88%. 40_000 * 1.1088 = 44_352.
+      const result = computeWithdrawals(
+        retiredState({ age: 68, year: 1, priorWithdrawal: 40_000, beginningBalance: 900_000, balance: 963_000 }),
+        retiredInput({ inflationForPeriod: 0.1088 }),
+      );
+
+      expect(result.priorWithdrawal).toBeCloseTo(44_352, 6);
+      expect(result.annualWithdrawal).toBeCloseTo(44_352, 6);
+    });
+
+    /**
+     * The scope fence for FIN-65. `runProjection` never sets `inflationForPeriod`, so the
+     * `??` fallback is what keeps the deterministic Plan tab — and the GBM Monte Carlo
+     * branch, which has no historical year to key off — on `assumptions.inflationRate`.
+     */
+    it('falls back to assumptions.inflationRate when inflationForPeriod is absent', () => {
+      // 40_000 * 1.025 (the plan's own 2.5%) = 41_000.
+      const result = computeWithdrawals(
+        retiredState({ age: 68, year: 1, priorWithdrawal: 40_000, beginningBalance: 900_000, balance: 963_000 }),
+        retiredInput(),
+      );
+
+      expect(result.priorWithdrawal).toBeCloseTo(41_000, 6);
+    });
+
+    it('leaves the FIRST retirement year rated off the balance, not inflated', () => {
+      // Year one is `beginningBalance * withdrawalRateInRetirement` regardless of any CPI:
+      // 1_000_000 * 4% = 40_000 even with 1942's 10.88% supplied.
+      const result = computeWithdrawals(retiredState(), retiredInput({ inflationForPeriod: 0.1088 }));
+
+      expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
+    });
+
+    it('honours a zero inflationForPeriod rather than treating it as absent', () => {
+      // `??` not `||`: 1929's CPI-U is exactly 0.0000, and `||` would silently substitute 2.5%.
+      const result = computeWithdrawals(
+        retiredState({ age: 68, year: 1, priorWithdrawal: 40_000, beginningBalance: 900_000, balance: 963_000 }),
+        retiredInput({ inflationForPeriod: 0 }),
+      );
+
+      expect(result.priorWithdrawal).toBeCloseTo(40_000, 6);
+    });
+
+    it('applies a deflationary inflationForPeriod, shrinking the spending need', () => {
+      // 1932 CPI-U: -10.53%. 40_000 * 0.8947 = 35_788.
+      const result = computeWithdrawals(
+        retiredState({ age: 68, year: 1, priorWithdrawal: 40_000, beginningBalance: 900_000, balance: 963_000 }),
+        retiredInput({ inflationForPeriod: -0.1053 }),
+      );
+
+      expect(result.priorWithdrawal).toBeCloseTo(35_788, 6);
+    });
+  });
+
   it('keeps withdrawing from an exhausted portfolio rather than clamping at zero', () => {
     const result = computeWithdrawals(
       retiredState({ age: 75, year: 8, priorWithdrawal: 12_000, beginningBalance: 5_000, balance: 5_350 }),

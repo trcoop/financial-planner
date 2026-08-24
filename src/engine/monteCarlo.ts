@@ -9,6 +9,7 @@
 import { InvalidProjectionInputError } from './errors';
 import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 import type { HistoricalYearReturn } from './historicalReturns';
+import { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
 import { runPeriod } from './pipeline';
 import { withdrawFullShortfall, zeroTax } from './strategies';
 import type {
@@ -448,6 +449,28 @@ export const createHistoricalReturnGenerator = (
   };
 };
 
+/**
+ * Year -> realised CPI-U, built once at module load rather than per period (FIN-65).
+ *
+ * A linear scan of a 98-entry array inside the trial loop would run 5,000 paths x 65 periods
+ * x ~49 comparisons for a lookup that never changes; the `performance` budget in
+ * `monteCarlo.test.ts` exists to catch exactly this class of per-period work.
+ */
+const INFLATION_BY_YEAR: ReadonlyMap<number, number> = new Map(
+  HISTORICAL_ANNUAL_INFLATION.map((entry) => [entry.year, entry.inflation]),
+);
+
+/**
+ * This historical year's realised CPI-U.
+ *
+ * `HISTORICAL_ANNUAL_INFLATION` is deliberately year-range-matched to
+ * {@link HISTORICAL_ANNUAL_RETURNS}, and `inflationData.test.ts` pins that, so every year the
+ * return generator can draw is present. Returning `undefined` for an unknown year rather than
+ * substituting a rate keeps a future mismatch visible as the plan's fixed inflation showing up
+ * in a historical trial, instead of a silently invented number.
+ */
+const inflationForYear = (year: number): number | undefined => INFLATION_BY_YEAR.get(year);
+
 /** Everything a single simulated path needs beyond the plan, the events and its RNG. */
 export interface TrialConfig {
   allocation: PortfolioAllocation;
@@ -527,6 +550,17 @@ export const runMonteCarloTrial = (
       events,
       assumptions: plan,
       returnForPeriod,
+      // FIN-65: the same historical year supplies both this period's nominal return and this
+      // period's cost-of-living increase. Because the CPI lookup is keyed off the year the
+      // return generator already drew, inflation follows the same 5-year bootstrap blocks as
+      // returns for free — no second sampler, no second RNG draw (which would also have
+      // shifted every existing seeded expectation for unrelated reasons), and no way for the
+      // two series to drift apart.
+      //
+      // Left `undefined` on the GBM branch, which has no historical year to key off; that
+      // path falls back to `plan.inflationRate` inside `computeWithdrawals`, as does the
+      // deterministic projection. See that stage's comment on the `??`.
+      inflationForPeriod: historicalYear ? inflationForYear(historicalYear.year) : undefined,
       withdrawalStrategy,
       taxCalculator,
     });

@@ -21,8 +21,24 @@ import {
 } from './monteCarlo';
 import type { TrialConfig } from './monteCarlo';
 import { withdrawFullShortfall, zeroTax } from './strategies';
-import { pipelineStages } from './pipeline';
-import type { PeriodState, PipelineStage, PlanAssumptions } from './types';
+import { pipelineStages, runPeriod } from './pipeline';
+import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
+import { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
+import type { PeriodState, PipelineStage, PlanAssumptions, ProjectionRow } from './types';
+
+/** This year's S&P 500 total return from our own Damodaran table. */
+const yearStockReturn = (year: number): number => {
+  const entry = HISTORICAL_ANNUAL_RETURNS.find((candidate) => candidate.year === year);
+  if (entry === undefined) throw new Error(`no return data for ${year}`);
+  return entry.stockReturn;
+};
+
+/** This year's realised CPI-U from our own Minneapolis Fed table. */
+const yearCpi = (year: number): number => {
+  const entry = HISTORICAL_ANNUAL_INFLATION.find((candidate) => candidate.year === year);
+  if (entry === undefined) throw new Error(`no CPI data for ${year}`);
+  return entry.inflation;
+};
 
 const assumptions = (overrides: Partial<PlanAssumptions> = {}): PlanAssumptions => ({
   currentAge: 35,
@@ -66,7 +82,10 @@ const referenceRunPeriod: PipelineStage = (state, input) => {
     ? 0
     : state.priorWithdrawal === null
       ? beginningBalance * plan.withdrawalRateInRetirement
-      : state.priorWithdrawal * (1 + plan.inflationRate);
+      : // FIN-65: mirrors `computeWithdrawals`' fallback exactly. This stand-in only stays
+        // useful as long as it is a faithful mirror of the real stage, so it takes the
+        // period's own inflation when Monte Carlo's historical path supplies one.
+        state.priorWithdrawal * (1 + (input.inflationForPeriod ?? plan.inflationRate));
   const sourced = input.withdrawalStrategy(state, requestedWithdrawal).amount;
   const taxOwed = input.taxCalculator(income, sourced, { age: state.age, year: state.year }).taxOwed;
 
@@ -1590,5 +1609,229 @@ describe('performance', () => {
     expect(result.meta.simulationCount).toBe(5_000);
     expect(result.percentiles.p50).toHaveLength(66);
     expect(elapsedMs).toBeLessThan(3_000);
+  });
+});
+
+/**
+ * FIN-65 change 1: inflation is sampled jointly with returns, from the same historical year.
+ *
+ * Before this change `computeWithdrawals` inflated retirement spending at a flat 2.5% while
+ * `applyGrowth` was fed NOMINAL historical returns that already carried whatever inflation
+ * that year actually had — half a nominal model and half a real one. The bias is not
+ * symmetric noise: it inverts the cohort ranking, flattering exactly the high-inflation
+ * cohorts (1966-1969) the safe-withdrawal-rate literature is built on.
+ *
+ * These tests deliberately do NOT run the block bootstrap. They walk history in chronological
+ * order, so the expectation is a property of the model and of our data tables rather than of
+ * one seed's draw order.
+ *
+ * ON THE EXPECTED VALUES: FIN-65 quotes $3.22M -> $117.5K (and ProjectionLab's $150.8K) for
+ * the 1966 cohort. Those were measured on ProjectionLab's return and CPI series through a
+ * local research harness that is not part of this repo. The figures below are derived
+ * independently from OUR OWN tables — Damodaran S&P 500 total returns
+ * (`HISTORICAL_ANNUAL_RETURNS`) and Minneapolis Fed CPI-U (`HISTORICAL_ANNUAL_INFLATION`) —
+ * a different series, so they neither do nor should match the ticket exactly. The ticket's
+ * numbers serve only as an order-of-magnitude cross-check: hundreds of thousands, not
+ * millions.
+ */
+describe('FIN-65: joint historical inflation, chronological cohorts', () => {
+  /** $1M, 4% ($40k) initial withdrawal, 30 years, 100% stocks, already retired, no taxes. */
+  const cohortPlan = assumptions({
+    currentAge: 65,
+    retirementAge: 65,
+    planningHorizonEndAge: 94,
+    initialBalance: 1_000_000,
+    currentAnnualIncome: 0,
+    annualContributionRate: 0,
+    annualRaiseRate: 0,
+    withdrawalRateInRetirement: 0.04,
+    inflationRate: 0.025,
+  });
+
+  /** Cumulative CPI-U over the cohort's own years, used to restate terminals in start-year dollars. */
+  const cumulativeInflation = (startYear: number, years: number): number => {
+    let factor = 1;
+    for (let offset = 0; offset < years; offset += 1) factor *= 1 + yearCpi(startYear + offset);
+    return factor;
+  };
+
+  /**
+   * Folds the REAL `runPeriod` over a fixed chronological run of history, 100% stocks.
+   * `useHistoricalInflation: false` reproduces the pre-FIN-65 behaviour by simply omitting
+   * `inflationForPeriod` — the same code path the deterministic Plan tab takes.
+   */
+  const runCohort = (
+    startYear: number,
+    years: number,
+    useHistoricalInflation: boolean,
+  ): { rows: readonly ProjectionRow[]; terminal: number; terminalInStartYearDollars: number } => {
+    let state = createInitialPeriodState(cohortPlan);
+
+    for (let offset = 0; offset < years; offset += 1) {
+      const year = startYear + offset;
+      state = runPeriod(state, {
+        events: [],
+        assumptions: cohortPlan,
+        returnForPeriod: yearStockReturn(year),
+        inflationForPeriod: useHistoricalInflation ? yearCpi(year) : undefined,
+        withdrawalStrategy: withdrawFullShortfall,
+        taxCalculator: zeroTax,
+      });
+      state = { ...state, age: state.age + 1, year: state.year + 1 };
+    }
+
+    return {
+      rows: state.rows,
+      terminal: state.balance,
+      terminalInStartYearDollars: state.balance / cumulativeInflation(startYear, years),
+    };
+  };
+
+  describe('the 1966 cohort — the canonical worst case in the SWR literature', () => {
+    it('spends the first three years exactly as the published recurrence says', () => {
+      const { rows } = runCohort(1966, 30, true);
+
+      // Year 1 (1966): the withdrawal is 4% of the START-of-year balance, no CPI involved.
+      //   w = 1_000_000 * 0.04 = 40_000
+      //   ending = 1_000_000 * (1 - 0.0997) - 40_000 = 900_300 - 40_000 = 860_300
+      expect(rows[0].annualWithdrawal).toBeCloseTo(40_000, 6);
+      expect(rows[0].endingBalance).toBeCloseTo(860_300, 6);
+
+      // Year 2 (1967): 1967 return +23.80%, 1967 CPI-U +2.77%.
+      //   w = 40_000 * 1.0277 = 41_108
+      //   ending = 860_300 * 1.238 - 41_108 = 1_065_051.40 - 41_108 = 1_023_943.40
+      expect(rows[1].annualWithdrawal).toBeCloseTo(41_108, 6);
+      expect(rows[1].endingBalance).toBeCloseTo(1_023_943.4, 4);
+
+      // Year 3 (1968): 1968 return +10.81%, 1968 CPI-U +4.19%.
+      //   w = 41_108 * 1.0419 = 42_830.4252
+      //   ending = 1_023_943.40 * 1.1081 - 42_830.4252 = 1_134_631.68154 - 42_830.4252
+      //          = 1_091_801.25634
+      expect(rows[2].annualWithdrawal).toBeCloseTo(42_830.4252, 4);
+      expect(rows[2].endingBalance).toBeCloseTo(1_091_801.25634, 3);
+    });
+
+    it('inflates spending at realised CPI, not 2.5%, so the 1970s cost what they cost', () => {
+      const withHistorical = runCohort(1966, 30, true);
+      const withFixed = runCohort(1966, 30, false);
+
+      // The ninth year, 1974. Fixed: 40_000 * 1.025^8 = 48_736.12. Realised CPI-U 1967-1974:
+      // 40_000 * 1.0277 * 1.0419 * 1.0546 * 1.0572 * 1.0438 * 1.0321 * 1.0622 * 1.1104
+      // = 60_676.72 — a quarter more spending, on the same portfolio, in the same years.
+      expect(withFixed.rows[8].annualWithdrawal).toBeCloseTo(40_000 * 1.025 ** 8, 6);
+      expect(withFixed.rows[8].annualWithdrawal).toBeCloseTo(48_736.12, 2);
+      expect(withHistorical.rows[8].annualWithdrawal).toBeCloseTo(
+        40_000 * [1967, 1968, 1969, 1970, 1971, 1972, 1973, 1974].reduce((acc, y) => acc * (1 + yearCpi(y)), 1),
+        6,
+      );
+      expect(withHistorical.rows[8].annualWithdrawal).toBeCloseTo(60_676.72, 2);
+    });
+
+    /**
+     * The headline regression. Terminal wealth after 30 years, restated in 1966 dollars by
+     * dividing out the cohort's own realised cumulative CPI-U (4.83774x over 1966-1995).
+     *
+     * Derived by folding the documented recurrence
+     *   ending_t = beginning_t * (1 + r_t) - w_t,  w_0 = 1_000_000 * 0.04,
+     *   w_t = w_(t-1) * (1 + cpi_t)
+     * over 1966-1995 of our own two tables — not by recording what the engine printed.
+     *
+     * Cross-check against the ticket (measured on ProjectionLab's different series):
+     * as-shipped $3.22M -> $117.5K real. Ours moves $1.396M -> $174.4K real: same direction,
+     * same order of magnitude, an 8.0x correction. A result still in the millions would mean
+     * joint sampling never reached the withdrawal stage.
+     */
+    it('falls from ~$1.40M to ~$174K in 1966 dollars once CPI is real', () => {
+      const withFixed = runCohort(1966, 30, false);
+      const withHistorical = runCohort(1966, 30, true);
+
+      expect(cumulativeInflation(1966, 30)).toBeCloseTo(4.83774, 5);
+
+      expect(withFixed.terminalInStartYearDollars).toBeCloseTo(1_395_595.52, 2);
+      expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(174_391.61, 2);
+      expect(withHistorical.terminal).toBeCloseTo(843_660.89, 2);
+
+      // The order-of-magnitude fence the ticket asks for: hundreds of thousands, not millions.
+      expect(withHistorical.terminalInStartYearDollars).toBeGreaterThan(100_000);
+      expect(withHistorical.terminalInStartYearDollars).toBeLessThan(1_000_000);
+    });
+  });
+
+  /**
+   * The control. 1994-2023 realised cumulative CPI-U is 2.10880x, and a flat 2.5% over 30
+   * years bakes in 1.025^30 = 2.09757x. The two coincide, so this is the cohort the old model
+   * already got right, and joint sampling must leave it essentially where it was. If this one
+   * moves materially, the wiring is wrong rather than the fix working.
+   */
+  it('barely moves the 1994 cohort, whose realised CPI matches the 2.5% assumption', () => {
+    const withFixed = runCohort(1994, 30, false);
+    const withHistorical = runCohort(1994, 30, true);
+
+    expect(cumulativeInflation(1994, 30)).toBeCloseTo(2.1088, 4);
+    expect(1.025 ** 30).toBeCloseTo(2.09757, 5);
+
+    expect(withFixed.terminalInStartYearDollars).toBeCloseTo(4_672_296.5, 1);
+    expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(4_696_186.32, 1);
+
+    const relativeMove =
+      Math.abs(withHistorical.terminalInStartYearDollars - withFixed.terminalInStartYearDollars) /
+      withFixed.terminalInStartYearDollars;
+    expect(relativeMove).toBeLessThan(0.01);
+  });
+});
+
+/**
+ * FIN-65 change 1, the wiring: `runMonteCarloTrial` must hand each period the CPI-U of the
+ * very year whose return it drew. Keying the lookup off the drawn year is what makes
+ * inflation follow the same 5-year bootstrap blocks as returns automatically — no second
+ * sampler, no second RNG draw, no way for the two series to desynchronise.
+ */
+describe('FIN-65: runMonteCarloTrial passes the drawn year inflation', () => {
+  /** `draw` pinned to 0 always selects block start index 0 — 1928-1932, repeatedly. */
+  const alwaysFirstBlock = (): number => 0;
+
+  const capturingStep =
+    (seen: Array<{ ret: number; inflation: number | undefined }>): PipelineStage =>
+    (state, input) => {
+      seen.push({ ret: input.returnForPeriod, inflation: input.inflationForPeriod });
+      return referenceRunPeriod(state, input);
+    };
+
+  it('supplies the same historical year CPI as the return it drew, block for block', () => {
+    const seen: Array<{ ret: number; inflation: number | undefined }> = [];
+    const plan = assumptions({ currentAge: 65, retirementAge: 65, planningHorizonEndAge: 74 });
+
+    runMonteCarloTrial(plan, [], alwaysFirstBlock, {
+      allocation: { stocksPercent: 100, bondsPercent: 0 },
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      runPeriodFn: capturingStep(seen),
+    });
+
+    // Ten periods = the 1928-1932 block drawn twice.
+    const expectedYears = [1928, 1929, 1930, 1931, 1932, 1928, 1929, 1930, 1931, 1932];
+    expect(seen).toHaveLength(expectedYears.length);
+    expect(seen.map((period) => period.ret)).toEqual(expectedYears.map((year) => yearStockReturn(year)));
+    expect(seen.map((period) => period.inflation)).toEqual(expectedYears.map((year) => yearCpi(year)));
+  });
+
+  it('leaves inflationForPeriod undefined on the GBM branch, which has no historical year', () => {
+    const seen: Array<{ ret: number; inflation: number | undefined }> = [];
+    const plan = assumptions({ currentAge: 65, retirementAge: 65, planningHorizonEndAge: 69 });
+
+    runMonteCarloTrial(plan, [], createSeededRandom(11), {
+      allocation: allocation70_30,
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      returnModel: 'gbm',
+      runPeriodFn: capturingStep(seen),
+    });
+
+    expect(seen).toHaveLength(5);
+    for (const period of seen) {
+      expect(period.inflation).toBeUndefined();
+    }
   });
 });
