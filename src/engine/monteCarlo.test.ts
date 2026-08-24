@@ -1669,6 +1669,11 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
    * Folds the REAL `runPeriod` over a fixed chronological run of history, 100% stocks.
    * `useHistoricalInflation: false` reproduces the pre-FIN-65 behaviour by simply omitting
    * `inflationForPeriod` — the same code path the deterministic Plan tab takes.
+   *
+   * The CPI handed to period `offset` is the PRIOR year's (FIN-65 change 3), which is what
+   * `runMonteCarloTrial` does on an unbroken chronological run. The first period gets
+   * `undefined`: it has no prior year, and its withdrawal is `rate x beginningBalance`, which
+   * never reads an inflation rate.
    */
   const runCohort = (
     startYear: number,
@@ -1683,7 +1688,8 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
         events: [],
         assumptions: cohortPlan,
         returnForPeriod: yearStockReturn(year),
-        inflationForPeriod: useHistoricalInflation ? yearCpi(year) : undefined,
+        inflationForPeriod:
+          useHistoricalInflation && offset > 0 ? yearCpi(year - 1) : undefined,
         withdrawalStrategy: withdrawFullShortfall,
         taxCalculator: zeroTax,
       });
@@ -1702,7 +1708,8 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
       const { rows } = runCohort(1966, 30, true);
 
       // The recurrence is `ending = (beginning - w) * (1 + r)` — FIN-65 change 2's
-      // start-of-year withdrawal, per Bengen (1994) and Trinity.
+      // start-of-year withdrawal, per Bengen (1994) and Trinity — with each withdrawal
+      // indexed by the PRIOR year's realised CPI (change 3).
 
       // Year 1 (1966): the withdrawal is 4% of the START-of-year balance, no CPI involved.
       //   w = 1_000_000 * 0.04 = 40_000
@@ -1710,34 +1717,36 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
       expect(rows[0].annualWithdrawal).toBeCloseTo(40_000, 6);
       expect(rows[0].endingBalance).toBeCloseTo(864_288, 6);
 
-      // Year 2 (1967): 1967 return +23.80%, 1967 CPI-U +2.77%.
-      //   w = 40_000 * 1.0277 = 41_108
-      //   ending = (864_288 - 41_108) * 1.238 = 823_180 * 1.238 = 1_019_096.84
-      expect(rows[1].annualWithdrawal).toBeCloseTo(41_108, 6);
-      expect(rows[1].endingBalance).toBeCloseTo(1_019_096.84, 4);
+      // Year 2 (1967): 1967 return +23.80%, indexed by 1966's CPI-U +3.17%.
+      //   w = 40_000 * 1.0317 = 41_268
+      //   ending = (864_288 - 41_268) * 1.238 = 823_020 * 1.238 = 1_018_898.76
+      expect(rows[1].annualWithdrawal).toBeCloseTo(41_268, 6);
+      expect(rows[1].endingBalance).toBeCloseTo(1_018_898.76, 4);
 
-      // Year 3 (1968): 1968 return +10.81%, 1968 CPI-U +4.19%.
-      //   w = 41_108 * 1.0419 = 42_830.4252
-      //   ending = (1_019_096.84 - 42_830.4252) * 1.1081 = 976_266.4148 * 1.1081
-      //          = 1_081_800.81424
-      expect(rows[2].annualWithdrawal).toBeCloseTo(42_830.4252, 4);
-      expect(rows[2].endingBalance).toBeCloseTo(1_081_800.81424, 3);
+      // Year 3 (1968): 1968 return +10.81%, indexed by 1967's CPI-U +2.77%.
+      //   w = 41_268 * 1.0277 = 42_411.1236
+      //   ending = (1_018_898.76 - 42_411.1236) * 1.1081 = 976_487.6364 * 1.1081
+      //          = 1_082_045.94989484
+      expect(rows[2].annualWithdrawal).toBeCloseTo(42_411.1236, 4);
+      expect(rows[2].endingBalance).toBeCloseTo(1_082_045.94989, 3);
     });
 
     it('inflates spending at realised CPI, not 2.5%, so the 1970s cost what they cost', () => {
       const withHistorical = runCohort(1966, 30, true);
       const withFixed = runCohort(1966, 30, false);
 
-      // The ninth year, 1974. Fixed: 40_000 * 1.025^8 = 48_736.12. Realised CPI-U 1967-1974:
-      // 40_000 * 1.0277 * 1.0419 * 1.0546 * 1.0572 * 1.0438 * 1.0321 * 1.0622 * 1.1104
-      // = 60_676.72 — a quarter more spending, on the same portfolio, in the same years.
+      // The ninth year, 1974. Fixed: 40_000 * 1.025^8 = 48_736.12. Prior-year realised CPI-U,
+      // so the eight indexing years are 1966-1973 (change 3 shifted this window back one from
+      // the 1967-1974 change 1 used):
+      // 40_000 * 1.0317 * 1.0277 * 1.0419 * 1.0546 * 1.0572 * 1.0438 * 1.0321 * 1.0622
+      // = 56_376.24 — 16% more spending, on the same portfolio, in the same years.
       expect(withFixed.rows[8].annualWithdrawal).toBeCloseTo(40_000 * 1.025 ** 8, 6);
       expect(withFixed.rows[8].annualWithdrawal).toBeCloseTo(48_736.12, 2);
       expect(withHistorical.rows[8].annualWithdrawal).toBeCloseTo(
-        40_000 * [1967, 1968, 1969, 1970, 1971, 1972, 1973, 1974].reduce((acc, y) => acc * (1 + yearCpi(y)), 1),
+        40_000 * [1966, 1967, 1968, 1969, 1970, 1971, 1972, 1973].reduce((acc, y) => acc * (1 + yearCpi(y)), 1),
         6,
       );
-      expect(withHistorical.rows[8].annualWithdrawal).toBeCloseTo(60_676.72, 2);
+      expect(withHistorical.rows[8].annualWithdrawal).toBeCloseTo(56_376.24, 2);
     });
 
     /**
@@ -1746,25 +1755,31 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
      *
      * Derived by folding the documented recurrence
      *   ending_t = (beginning_t - w_t) * (1 + r_t),  w_0 = 1_000_000 * 0.04,
-     *   w_t = w_(t-1) * (1 + cpi_t)
+     *   w_t = w_(t-1) * (1 + cpi_(t-1))
      * over 1966-1995 of our own two tables — not by recording what the engine printed.
      *
      * Cross-check against the ticket (measured on ProjectionLab's different series):
      * as-shipped $3.22M -> $117.5K real, and Bengen's own model on that series lands at
-     * -$157.8K. Ours moves $1.170M -> -$208.7K: same direction, and now on the same side of
+     * -$157.8K. Ours moves $1.170M -> -$86.6K: same direction, and now on the same side of
      * zero as Bengen, which is the point — the 1966 retiree taking a 4% initial withdrawal
      * indexed to *realised* CPI does not comfortably survive 30 years. A result still in the
      * millions would mean joint sampling never reached the withdrawal stage.
+     *
+     * Change 3 (prior-year indexing) moved this from -$208,720.19 real / -$1,009,733.57
+     * nominal to the figures below: one year less compounding on every withdrawal, worth
+     * ~$590K nominal on a $1M portfolio over these 30 years. The nominal figure now equals
+     * `runBengen`'s to the cent — see the year-by-year oracle below, which is the test that
+     * actually pins the convention.
      */
-    it('falls from ~$1.17M to ~-$209K in 1966 dollars once CPI is real', () => {
+    it('falls from ~$1.17M to ~-$87K in 1966 dollars once CPI is real', () => {
       const withFixed = runCohort(1966, 30, false);
       const withHistorical = runCohort(1966, 30, true);
 
       expect(cumulativeInflation(1966, 30)).toBeCloseTo(4.83774, 5);
 
       expect(withFixed.terminalInStartYearDollars).toBeCloseTo(1_169_969.88, 2);
-      expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(-208_720.19, 2);
-      expect(withHistorical.terminal).toBeCloseTo(-1_009_733.57, 2);
+      expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(-86_579.92, 2);
+      expect(withHistorical.terminal).toBeCloseTo(-418_850.97, 2);
 
       // The order-of-magnitude fence the ticket asks for: hundreds of thousands either side of
       // zero, never millions.
@@ -1785,8 +1800,10 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
     expect(cumulativeInflation(1994, 30)).toBeCloseTo(2.1088, 4);
     expect(1.025 ** 30).toBeCloseTo(2.09757, 5);
 
+    // Change 3 moved the historical figure from $4,313,484.97 to $4,306,063.02 — still a
+    // fraction of a percent from the fixed-rate run, which is the whole point of this control.
     expect(withFixed.terminalInStartYearDollars).toBeCloseTo(4_283_578.76, 1);
-    expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(4_313_484.97, 1);
+    expect(withHistorical.terminalInStartYearDollars).toBeCloseTo(4_306_063.02, 1);
 
     const relativeMove =
       Math.abs(withHistorical.terminalInStartYearDollars - withFixed.terminalInStartYearDollars) /
@@ -1796,12 +1813,19 @@ describe('FIN-65: joint historical inflation, chronological cohorts', () => {
 });
 
 /**
- * FIN-65 change 1, the wiring: `runMonteCarloTrial` must hand each period the CPI-U of the
- * very year whose return it drew. Keying the lookup off the drawn year is what makes
- * inflation follow the same 5-year bootstrap blocks as returns automatically — no second
- * sampler, no second RNG draw, no way for the two series to desynchronise.
+ * FIN-65 change 1 + change 3, the wiring: `runMonteCarloTrial` must hand each period the
+ * CPI-U of the historical year drawn in the PREVIOUS period.
+ *
+ * Change 1 keyed the lookup off the year drawn for the *current* period. Change 3 lags it,
+ * because Bengen (1994) and Trinity index a year's withdrawal to the prior year's realised
+ * CPI: a retiree setting their 1967 budget in January 1967 does not yet know 1967's
+ * inflation. See `runMonteCarloTrial`'s comment for why the lag follows the sampled path
+ * rather than the calendar.
+ *
+ * Either way the CPI comes from the same block bootstrap the returns came from — no second
+ * sampler and no second RNG draw.
  */
-describe('FIN-65: runMonteCarloTrial passes the drawn year inflation', () => {
+describe('FIN-65: runMonteCarloTrial passes the prior drawn year inflation', () => {
   /** `draw` pinned to 0 always selects block start index 0 — 1928-1932, repeatedly. */
   const alwaysFirstBlock = (): number => 0;
 
@@ -1812,7 +1836,7 @@ describe('FIN-65: runMonteCarloTrial passes the drawn year inflation', () => {
       return referenceRunPeriod(state, input);
     };
 
-  it('supplies the same historical year CPI as the return it drew, block for block', () => {
+  it('lags the CPI one period along the sampled path, across the block seam', () => {
     const seen: Array<{ ret: number; inflation: number | undefined }> = [];
     const plan = assumptions({ currentAge: 65, retirementAge: 65, planningHorizonEndAge: 74 });
 
@@ -1828,7 +1852,20 @@ describe('FIN-65: runMonteCarloTrial passes the drawn year inflation', () => {
     const expectedYears = [1928, 1929, 1930, 1931, 1932, 1928, 1929, 1930, 1931, 1932];
     expect(seen).toHaveLength(expectedYears.length);
     expect(seen.map((period) => period.ret)).toEqual(expectedYears.map((year) => yearStockReturn(year)));
-    expect(seen.map((period) => period.inflation)).toEqual(expectedYears.map((year) => yearCpi(year)));
+
+    // The CPI series is the drawn-year series shifted one period later. Period 0 gets
+    // `undefined` — it has no previous period, and its withdrawal is `rate x balance` with no
+    // indexing at all, so nothing can consume it.
+    //
+    // Period 5 is the block seam and the reason this reading was chosen over "the calendar
+    // year before the drawn year". Period 5 draws 1928 again; the calendar reading would want
+    // 1927, which exists in NEITHER of our tables (both start at 1928). The path reading asks
+    // instead what this simulated retiree lived through last period — 1932 — which is always
+    // a year the path actually sampled.
+    expect(seen.map((period) => period.inflation)).toEqual([
+      undefined,
+      ...[1928, 1929, 1930, 1931, 1932, 1928, 1929, 1930, 1931].map((year) => yearCpi(year)),
+    ]);
   });
 
   it('leaves inflationForPeriod undefined on the GBM branch, which has no historical year', () => {
@@ -1848,5 +1885,178 @@ describe('FIN-65: runMonteCarloTrial passes the drawn year inflation', () => {
     for (const period of seen) {
       expect(period.inflation).toBeUndefined();
     }
+  });
+});
+
+/**
+ * FIN-65 change 3: the strongest oracle on this branch.
+ *
+ * WHAT THIS TEST IS FOR. Every other FIN-65 test checks a terminal value, an ordering or a
+ * wiring detail. A terminal value is a single number, and a single number can be matched by a
+ * model that is wrong in compensating ways — the off-by-one this change fixes survived a
+ * green suite precisely because nothing compared our path to a published one year by year.
+ * This test pins our engine to Bengen (1994) at EVERY year's withdrawal and EVERY year's
+ * ending balance, across five cohorts. If someone later re-indexes the withdrawal to the
+ * current year, moves the withdrawal back to the end of the year, or lets the plan's flat
+ * `inflationRate` leak into the historical path, this fails and names the year it broke.
+ *
+ * INDEPENDENCE. `bengenPath` below is written from the published method, not from our engine:
+ * withdraw `rate * initialBalance` at the START of year 1, invest the remainder for the year,
+ * and index each subsequent withdrawal by the PRIOR year's realised CPI — the retiree setting
+ * a 1967 budget in January 1967 does not yet know 1967's inflation. It shares no code with
+ * `pipeline.ts` and calls nothing from it. (The research harness that first proved this
+ * hypothesis is gitignored and absent from CI, so it is deliberately reimplemented here
+ * rather than imported.)
+ *
+ * NO RNG. Our side runs the real `runMonteCarloTrial` — the production path, including the
+ * lag logic — with `blockLengthYears: 1` and a scripted `draw` that walks consecutive
+ * calendar years. At block length 1 each period's draw selects one historical year outright,
+ * so the path is an unbroken chronological run and the two candidate readings of "prior year"
+ * coincide. That is the case Bengen defines, and it is the case this test pins.
+ */
+describe('FIN-65: matches Bengen year by year, not just at the terminal', () => {
+  const BENGEN_COHORTS = [1966, 1929, 1937, 1973, 1994];
+  const INITIAL_BALANCE = 1_000_000;
+  const WITHDRAWAL_RATE = 0.04;
+  const HORIZON_YEARS = 30;
+
+  interface BengenYear {
+    withdrawal: number;
+    endingBalance: number;
+  }
+
+  /**
+   * Bengen (1994) / Trinity, implemented from the published formula. NOT our engine.
+   *
+   *   w_0     = initialBalance * rate
+   *   end_t   = (begin_t - w_t) * (1 + r_t)
+   *   w_(t+1) = w_t * (1 + cpi_t)      <- the prior-year indexing this change is about
+   */
+  const bengenPath = (
+    returns: readonly number[],
+    inflation: readonly number[],
+    years: number,
+  ): BengenYear[] => {
+    const path: BengenYear[] = [];
+    let balance = INITIAL_BALANCE;
+    let withdrawal = INITIAL_BALANCE * WITHDRAWAL_RATE;
+
+    for (let t = 0; t < years; t += 1) {
+      balance = (balance - withdrawal) * (1 + returns[t]);
+      path.push({ withdrawal, endingBalance: balance });
+      withdrawal *= 1 + inflation[t];
+    }
+
+    return path;
+  };
+
+  /**
+   * Our production trial, walked down a chosen chronological run of history.
+   *
+   * `inflationRate` is set to a deliberately absurd 10% — nowhere near the 2.5% the rest of
+   * the suite uses, and nowhere near any of these cohorts' realised CPI. The historical path
+   * must never consult it, so if any period falls back to `assumptions.inflationRate` the
+   * withdrawal series diverges immediately and loudly. This is also how the first period's
+   * `undefined` is verified inert rather than assumed: period 0 is handed no CPI at all, and
+   * a 10% fallback would still leave year 1 matching (the opening withdrawal is
+   * `rate x balance`) while blowing up year 2.
+   */
+  const oursChronological = (
+    startYear: number,
+    years: number,
+  ): Array<{ withdrawal: number; endingBalance: number }> => {
+    const plan = assumptions({
+      currentAge: 65,
+      retirementAge: 65,
+      planningHorizonEndAge: 65 + years - 1,
+      initialBalance: INITIAL_BALANCE,
+      currentAnnualIncome: 0,
+      annualContributionRate: 0,
+      annualRaiseRate: 0,
+      withdrawalRateInRetirement: WITHDRAWAL_RATE,
+      inflationRate: 0.1,
+    });
+
+    const startIndex = HISTORICAL_ANNUAL_RETURNS.findIndex((row) => row.year === startYear);
+    expect(startIndex).toBeGreaterThanOrEqual(0);
+
+    // `createHistoricalReturnGenerator` picks a block start with
+    // `Math.floor(draw() * (maxStart + 1))`; at blockLength 1, maxStart + 1 is the table
+    // length, so `(index + 0.5) / length` selects `index` outright, one year per period.
+    let period = 0;
+    const scriptedDraw = (): number =>
+      (startIndex + period++ + 0.5) / HISTORICAL_ANNUAL_RETURNS.length;
+
+    const captured: Array<{ withdrawal: number; endingBalance: number }> = [];
+    const capturingStep: PipelineStage = (state, input) => {
+      const next = runPeriod(state, input);
+      captured.push({ withdrawal: next.annualWithdrawal, endingBalance: next.balance });
+      return next;
+    };
+
+    runMonteCarloTrial(plan, [], scriptedDraw, {
+      allocation: { stocksPercent: 100, bondsPercent: 0 },
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      returnModel: 'historical',
+      blockLengthYears: 1,
+      runPeriodFn: capturingStep,
+    });
+
+    return captured;
+  };
+
+  it.each(BENGEN_COHORTS)(
+    'reproduces Bengen every year of the %i cohort, withdrawal and balance',
+    (startYear) => {
+      const years = Array.from({ length: HORIZON_YEARS }, (_unused, offset) => startYear + offset);
+      const expected = bengenPath(
+        years.map((year) => yearStockReturn(year)),
+        years.map((year) => yearCpi(year)),
+        HORIZON_YEARS,
+      );
+      const actual = oursChronological(startYear, HORIZON_YEARS);
+
+      expect(actual).toHaveLength(HORIZON_YEARS);
+
+      for (let t = 0; t < HORIZON_YEARS; t += 1) {
+        // Tight tolerance: these are two float folds of the same arithmetic in the same
+        // order, so they agree far beyond 6 decimal places. Anything looser would let a real
+        // convention change hide.
+        expect(
+          actual[t].withdrawal,
+          `${startYear} cohort, year ${t + 1} (${years[t]}) withdrawal`,
+        ).toBeCloseTo(expected[t].withdrawal, 6);
+        expect(
+          actual[t].endingBalance,
+          `${startYear} cohort, year ${t + 1} (${years[t]}) ending balance`,
+        ).toBeCloseTo(expected[t].endingBalance, 6);
+      }
+    },
+  );
+
+  /**
+   * The terminal figures the year-by-year comparison implies, spelled out so a reader can see
+   * what these cohorts actually do and cross-check them by hand.
+   *
+   * Derived by folding `bengenPath` over our own tables (Damodaran S&P 500 total returns and
+   * Minneapolis Fed CPI-U), NOT by recording engine output. 1966 and 1929 — the two cohorts
+   * the safe-withdrawal-rate literature treats as the worst cases — run out of money; a 4%
+   * initial withdrawal indexed to realised inflation does not survive either.
+   */
+  it('lands where the published method says, cohort by cohort', () => {
+    const terminals = new Map(
+      BENGEN_COHORTS.map((startYear) => [
+        startYear,
+        oursChronological(startYear, HORIZON_YEARS)[HORIZON_YEARS - 1].endingBalance,
+      ]),
+    );
+
+    expect(terminals.get(1966)).toBeCloseTo(-418_850.97, 2);
+    expect(terminals.get(1929)).toBeCloseTo(-1_334_200.93, 2);
+    expect(terminals.get(1937)).toBeCloseTo(2_416_346.19, 2);
+    expect(terminals.get(1973)).toBeCloseTo(1_293_045.76, 2);
+    expect(terminals.get(1994)).toBeCloseTo(9_080_639.91, 2);
   });
 });

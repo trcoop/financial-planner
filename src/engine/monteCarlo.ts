@@ -468,6 +468,10 @@ const INFLATION_BY_YEAR: ReadonlyMap<number, number> = new Map(
  * return generator can draw is present. Returning `undefined` for an unknown year rather than
  * substituting a rate keeps a future mismatch visible as the plan's fixed inflation showing up
  * in a historical trial, instead of a silently invented number.
+ *
+ * Callers pass the year drawn in the PREVIOUS period, never `drawnYear - 1` — see
+ * {@link runMonteCarloTrial}. That is what keeps every lookup inside the table: 1928 is the
+ * first year of both, so `1928 - 1` has no entry, while a previously-drawn year always does.
  */
 const inflationForYear = (year: number): number | undefined => INFLATION_BY_YEAR.get(year);
 
@@ -532,6 +536,12 @@ export const runMonteCarloTrial = (
   let state = createInitialPeriodState(plan);
   const balances: number[] = [];
 
+  /**
+   * The historical year drawn in the PREVIOUS period, whose CPI-U indexes this period's
+   * withdrawal (FIN-65 change 3). `null` for the first period, which has no previous one.
+   */
+  let priorHistoricalYear: HistoricalYearReturn | null = null;
+
   for (let year = 0; year < periodCount; year += 1) {
     const historicalYear = nextHistoricalYear?.();
     const returnForPeriod = historicalYear
@@ -550,22 +560,40 @@ export const runMonteCarloTrial = (
       events,
       assumptions: plan,
       returnForPeriod,
-      // FIN-65: the same historical year supplies both this period's nominal return and this
-      // period's cost-of-living increase. Because the CPI lookup is keyed off the year the
-      // return generator already drew, inflation follows the same 5-year bootstrap blocks as
-      // returns for free — no second sampler, no second RNG draw (which would also have
-      // shifted every existing seeded expectation for unrelated reasons), and no way for the
-      // two series to drift apart.
+      // FIN-65: the drawn historical years supply both the nominal returns and the
+      // cost-of-living increases, so the two series come from one sampler — no second
+      // sampler, no second RNG draw (which would also have shifted every existing seeded
+      // expectation for unrelated reasons), and no way for them to drift apart.
       //
-      // Left `undefined` on the GBM branch, which has no historical year to key off; that
-      // path falls back to `plan.inflationRate` inside `computeWithdrawals`, as does the
-      // deterministic projection. See that stage's comment on the `??`.
-      inflationForPeriod: historicalYear ? inflationForYear(historicalYear.year) : undefined,
+      // The CPI is lagged one period (change 3). Bengen (1994) and Trinity index a year's
+      // withdrawal to the PRIOR year's realised CPI, because a retiree setting their 1967
+      // budget in January 1967 does not yet know what 1967's inflation will be. Change 1
+      // originally used the current drawn year, which put the 1966 cohort's 30-year terminal
+      // ~$590K below Bengen's on a $1M portfolio; lagging it reproduces Bengen exactly.
+      //
+      // WHICH prior year, though — two readings diverge at a bootstrap block seam:
+      //   (a) the calendar year before the drawn year (`year - 1`), or
+      //   (b) the year drawn in the previous PERIOD, i.e. the lag follows the sampled path.
+      // This is (b), and it is a modelling choice rather than an implementation detail. On an
+      // unbroken chronological run the two are identical, so both reproduce Bengen on the
+      // case the tests pin; they part company only at a seam. (b) wins there because the
+      // simulated retiree's budget should follow the inflation this PATH lived through, not a
+      // calendar year the path never visited — and because (a) is not even well defined at
+      // the edge: a block starting at 1928 would need 1927, which is in neither table.
+      //
+      // Left `undefined` on the GBM branch, which has no historical year to key off, and on
+      // the first period, which has no previous one. Both fall back to `plan.inflationRate`
+      // inside `computeWithdrawals`, as does the deterministic projection — see that stage's
+      // comment on the `??`. The first-period fallback is inert either way: the opening
+      // retirement withdrawal is `withdrawalRateInRetirement * beginningBalance`, which never
+      // reads an inflation rate at all.
+      inflationForPeriod: priorHistoricalYear ? inflationForYear(priorHistoricalYear.year) : undefined,
       withdrawalStrategy,
       taxCalculator,
     });
     balances.push(state.balance);
     state = { ...state, age: state.age + 1, year: state.year + 1 };
+    priorHistoricalYear = historicalYear ?? null;
   }
 
   return balances;
