@@ -337,58 +337,6 @@ export const DEFAULT_RETURN_ASSUMPTIONS: ReturnAssumptions = { stocks: 0.115, bo
 export const DEFAULT_CORRELATION = -0.2;
 
 /**
- * Portfolio variance from per-asset volatility, allocation weight, and correlation:
- * `var = w_s^2*sigma_s^2 + w_b^2*sigma_b^2 + 2*w_s*w_b*rho*sigma_s*sigma_b`. The standard
- * two-asset variance formula — used by {@link expectedPortfolioReturn} to size the volatility
- * drag between the blended arithmetic mean and the growth an investor actually experiences.
- */
-const portfolioVariance = (
-  allocation: PortfolioAllocation,
-  volatility: VolatilityAssumptions,
-  correlation: number,
-): number => {
-  const stockWeight = allocation.stocksPercent / 100;
-  const bondWeight = allocation.bondsPercent / 100;
-
-  return (
-    stockWeight ** 2 * volatility.stocks ** 2 +
-    bondWeight ** 2 * volatility.bonds ** 2 +
-    2 * stockWeight * bondWeight * correlation * volatility.stocks * volatility.bonds
-  );
-};
-
-/**
- * FIN-64 (plan/stress-test consistency): the deterministic Tier 1 projection's single
- * compounding rate, derived from the same stock/bond return, volatility, allocation, and
- * correlation inputs the Monte Carlo stress test uses — rather than a separately-chosen
- * number — so the two views can't quote different growth assumptions for the same plan.
- *
- * Blends the arithmetic means by allocation weight (`{@link blendedPortfolioReturn}`), then
- * applies the standard variance-drag approximation, `geometricMean ≈ arithmeticMean -
- * variance/2`, that converts an arithmetic mean into the compounding (geometric) rate an
- * investor actually experiences — the same relationship {@link gbmPeriodReturn} applies
- * per-draw inside the Monte Carlo engine, just computed once here as a closed form instead of
- * simulated. Without this, Tier 1 compounds the raw undragged arithmetic mean every year,
- * which overstates growth (a 70/30 portfolio's ~9.5% arithmetic blend compounds to unrealistic
- * decades-out balances without the ~0.9 points of drag this subtracts).
- */
-export const expectedPortfolioReturn = (
-  allocation: PortfolioAllocation,
-  returnAssumptions: ReturnAssumptions,
-  volatilityAssumptions: VolatilityAssumptions,
-  correlation: number = DEFAULT_CORRELATION,
-): number => {
-  const arithmeticBlend = blendedPortfolioReturn(
-    allocation,
-    returnAssumptions.stocks,
-    returnAssumptions.bonds,
-  );
-  const variance = portfolioVariance(allocation, volatilityAssumptions, correlation);
-
-  return arithmeticBlend - variance / 2;
-};
-
-/**
  * One period's portfolio return: a correlated GBM draw per asset class (via
  * {@link correlatedNormals}, fixed correlation `correlation`), blended by allocation weight.
  * Consumes four uniform draws — two per Box-Muller deviate.

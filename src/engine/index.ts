@@ -60,7 +60,6 @@ export {
   createRandomSeed,
   createSeededRandom,
   blendedPortfolioReturn,
-  expectedPortfolioReturn,
   runMonteCarloTrial,
   runMonteCarloTrials,
   validateAllocation,

@@ -80,7 +80,8 @@ describe('FIN-64 calibration: default assumptions hit the 90-95% safe-withdrawal
  * Measured against ProjectionLab (their shipped engine, deterministic mode, research/pl-reference):
  * they apply the user's assumptions raw, giving 4.32% real against a 4.0% withdrawal — a +0.32pp
  * margin, and a plan that grows slightly in today's dollars across a 35-year retirement. We now
- * sit at +0.30pp on the same basis. The prior `expectedPortfolioReturn` call double-counted
+ * sit at +0.30pp on the same basis. The prior `expectedPortfolioReturn` call (since deleted)
+ * double-counted
  * volatility drag: it converts an arithmetic mean to a geometric one, but the advanced-form
  * return input is already read as a compound rate, and SAFE_WITHDRAWAL_RATES is itself
  * calibrated against realised historical compound returns.

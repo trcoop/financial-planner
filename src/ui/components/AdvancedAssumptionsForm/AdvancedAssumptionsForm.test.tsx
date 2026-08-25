@@ -95,7 +95,7 @@ describe('AdvancedAssumptionsForm', () => {
   // A prior version of this suite asserted DEFAULT_ADVANCED_VALUES.annualReturnPercent/
   // bondReturnPercent equal DEFAULT_RETURN_ASSUMPTIONS.stocks/bonds, to guard the two from
   // drifting apart. That invariant is gone by design (FIN-64): these UI defaults feed only the
-  // Tier 1 deterministic Plan (drag-adjusted via `expectedPortfolioReturn`), while the Monte
+  // Tier 1 deterministic Plan (blended via `blendedPortfolioReturn`), while the Monte
   // Carlo stress test's default `returnModel: 'historical'` block-bootstraps real 1928-2025
   // returns and never reads these fields at all — see `DEFAULT_ADVANCED_VALUES`'s doc comment.
   // `src/ui/calibration.test.ts`'s FIN-64 suite is the thing that actually guards the 90-95%

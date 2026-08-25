@@ -32,7 +32,8 @@ export function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptio
     planningHorizonEndAge: PLANNING_HORIZON_END_AGE,
     annualRaiseRate: advanced.annualRaisePercent / 100,
     // FIN-65: the stock/bond blend at allocation weight, and nothing else. This previously ran
-    // through `expectedPortfolioReturn`, which subtracts a variance-drag term to convert an
+    // through a variance-drag helper (`expectedPortfolioReturn`, deleted in FIN-65 along with
+    // its private `portfolioVariance`), which subtracted a drag term to convert an
     // ARITHMETIC mean into a geometric one. That double-counted: the advanced form's return
     // inputs are read as compound rates (as ProjectionLab's equivalent fields are — their
     // deterministic engine applies the user's assumptions raw, measured in
