@@ -100,6 +100,8 @@ describe('public surface', () => {
     'DEFAULT_CORRELATION',
     'DEFAULT_RETURN_ASSUMPTIONS',
     'expectedPortfolioReturn',
+    // FIN-65: the Plan tab's compounding rate — the drag-free blend, see `toAssumptions`.
+    'blendedPortfolioReturn',
     'createHistoricalReturnGenerator',
     'DEFAULT_BLOCK_LENGTH_YEARS',
     'HISTORICAL_ANNUAL_RETURNS',

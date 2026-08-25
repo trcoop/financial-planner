@@ -59,6 +59,7 @@ export {
   createHistoricalReturnGenerator,
   createRandomSeed,
   createSeededRandom,
+  blendedPortfolioReturn,
   expectedPortfolioReturn,
   runMonteCarloTrial,
   runMonteCarloTrials,

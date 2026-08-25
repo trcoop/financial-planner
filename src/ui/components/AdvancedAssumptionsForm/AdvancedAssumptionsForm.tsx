@@ -12,9 +12,12 @@ import styles from './AdvancedAssumptionsForm.module.css'
 export interface AdvancedAssumptionValues {
   /** Plain percentage (e.g. 3 for 3%), not a 0-1 fraction — matches the field's display. */
   annualRaisePercent: number
-  /** Stocks' expected (arithmetic) return. FIN-64: feeds only the Tier 1 Plan projection's
-   * single compounding rate (blended with `bondReturnPercent` by `stocksAllocationPercent` and
-   * drag-adjusted via `expectedPortfolioReturn`) — see `useProjectionState.ts`. The Tier 2
+  /** Stocks' expected COMPOUND (geometric) return — the rate an investor actually experiences,
+   * which is how a user reads "expected annual return" and how ProjectionLab's equivalent field
+   * behaves. FIN-64: feeds only the Tier 1 Plan projection's single compounding rate (blended
+   * with `bondReturnPercent` by `stocksAllocationPercent` via `blendedPortfolioReturn`) — see
+   * `useProjectionState.ts`. FIN-65 removed a variance-drag adjustment that had been applied on
+   * top of it; the field was already geometric, so the drag double-counted. The Tier 2
    * Monte Carlo stress test does not read this; its default `returnModel: 'historical'`
    * block-bootstraps real 1928-2025 returns instead (see `DEFAULT_RETURN_ASSUMPTIONS`'s doc
    * comment in `src/engine/monteCarlo.ts`), by design — a forward-looking, conservative return
@@ -24,12 +27,12 @@ export interface AdvancedAssumptionValues {
   inflationPercent: number
   withdrawalRatePercent: number
   /** The stock/bond mix (FIN-56) used both by `runMonteCarloTrials`' allocation and (FIN-64) by
-   * the Tier 1 projection's `expectedPortfolioReturn` blend. Bonds = `100 -
+   * the Tier 1 projection's `blendedPortfolioReturn` blend. Bonds = `100 -
    * stocksAllocationPercent`, so this one field fully determines the `PortfolioAllocation`
    * passed to both — see `App.tsx` and `useProjectionState.ts`. */
   stocksAllocationPercent: number
-  /** Bonds' expected (arithmetic) return (FIN-57), same treatment as `annualReturnPercent`
-   * (FIN-64): feeds only the Tier 1 projection's blended, drag-adjusted compounding rate — not
+  /** Bonds' expected COMPOUND (geometric) return (FIN-57), same treatment as
+   * `annualReturnPercent` (FIN-64/65): feeds only the Tier 1 projection's blended rate — not
    * the Monte Carlo stress test, which block-bootstraps real historical returns instead. */
   bondReturnPercent: number
 }
@@ -67,8 +70,11 @@ interface AdvancedAssumptionsFormProps {
 /** Advanced-assumption defaults per FIN-10's spec. Planning horizon is a call-site default
  * per FIN-19 — not user input for the MVP. */
 /**
- * FIN-64: stocks 8%/bonds 4% (Tier 1 only, drag-adjusted via `expectedPortfolioReturn` at the
- * 70/30 default allocation) and a 3.9% withdrawal rate.
+ * FIN-64: stocks 8%/bonds 4% (Tier 1 only, blended via `blendedPortfolioReturn` at the 70/30
+ * default allocation) and a 3.9% withdrawal rate. FIN-65: no volatility-drag adjustment is
+ * applied on top — these are already compound rates, so 70/30 gives 6.8% nominal / 4.195% real
+ * against 2.5% inflation, comfortably above the 3.9% withdrawal. `calibration.test.ts` pins
+ * that margin; without it the Plan chart drained from the first year of retirement.
  *
  * The two tiers deliberately use different return bases now. Tier 1's raw historical average
  * (~11.5%/5%, matching `DEFAULT_RETURN_ASSUMPTIONS` in `src/engine/monteCarlo.ts`) compounded a

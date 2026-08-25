@@ -2,9 +2,8 @@ import { useMemo, useRef } from 'react'
 import {
   runProjection,
   toTodaysDollarRows,
-  expectedPortfolioReturn,
+  blendedPortfolioReturn,
   InvalidProjectionInputError,
-  DEFAULT_VOLATILITY_ASSUMPTIONS,
   type PlanAssumptions,
 } from '../../engine'
 import { isAdvancedInputValid, isCoreInputValid } from '../components'
@@ -32,13 +31,20 @@ export function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptio
     annualContributionRate: core.annualContributionRatePercent / 100,
     planningHorizonEndAge: PLANNING_HORIZON_END_AGE,
     annualRaiseRate: advanced.annualRaisePercent / 100,
-    // FIN-64: the same stock/bond blend, allocation, and volatility the stress test uses, drag-
-    // adjusted to a realistic compounding rate — not the raw arithmetic stock return — so the
-    // Plan chart and the stress test never quote different growth assumptions for one plan.
-    annualReturnRate: expectedPortfolioReturn(
+    // FIN-65: the stock/bond blend at allocation weight, and nothing else. This previously ran
+    // through `expectedPortfolioReturn`, which subtracts a variance-drag term to convert an
+    // ARITHMETIC mean into a geometric one. That double-counted: the advanced form's return
+    // inputs are read as compound rates (as ProjectionLab's equivalent fields are — their
+    // deterministic engine applies the user's assumptions raw, measured in
+    // `research/pl-reference`), and `safeWithdrawalRates.ts` is calibrated against realised
+    // historical compound returns. Discounting an already-geometric number and then comparing
+    // it to an undiscounted one put the default plan 0.58pp/yr underwater at its own "safe"
+    // withdrawal rate — a Plan chart draining from year one beside a 90% success badge.
+    // `calibration.test.ts` pins the invariant: real return >= the published withdrawal rate.
+    annualReturnRate: blendedPortfolioReturn(
       allocation,
-      { stocks: advanced.annualReturnPercent / 100, bonds: advanced.bondReturnPercent / 100 },
-      DEFAULT_VOLATILITY_ASSUMPTIONS,
+      advanced.annualReturnPercent / 100,
+      advanced.bondReturnPercent / 100,
     ),
     inflationRate: advanced.inflationPercent / 100,
     withdrawalRateInRetirement: advanced.withdrawalRatePercent / 100,
