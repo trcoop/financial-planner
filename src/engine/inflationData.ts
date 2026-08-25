@@ -14,6 +14,14 @@
  * of the year being simulated — and it is what stops the engine from running nominal returns
  * against a flat, invented inflation assumption.
  *
+ * Verifying a single year against published one-decimal index levels does NOT work: 32.4/31.5
+ * for 1966 carries about +/-0.3pp of rounding error, which is wider than the disagreements such a
+ * check is trying to resolve. The series was instead validated in aggregate -- compounding all 98
+ * rates gives 18.496x, so the 1927 index of 17.4 lands at 321.8 against an actual 2025 annual
+ * average near 320 (0.6% drift over 98 years), at a 3.02%/yr CAGR. Note also that ProjectionLab
+ * reports 1966 as 3.46% and 1932 as -10.27% because they use December-to-December CPI; this table
+ * is annual-average, so per-year differences against them are a convention difference, not an error.
+ *
  * 98 years, 1928-2025 inclusive. Static and bundled — no network fetch at runtime (this
  * project takes zero network calls after page load, per `CLAUDE.md`).
  */

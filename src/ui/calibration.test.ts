@@ -77,27 +77,54 @@ describe('FIN-64 calibration: default assumptions hit the 90-95% safe-withdrawal
  * withdrawal rate. So the check is `realReturn(annualReturnRate, inflationRate) >= rate`, plus
  * the end-to-end consequence — real terminal balance not below the real balance at retirement.
  *
- * Measured against ProjectionLab (their shipped engine, deterministic mode, research/pl-reference):
- * they apply the user's assumptions raw, giving 4.32% real against a 4.0% withdrawal — a +0.32pp
- * margin, and a plan that grows slightly in today's dollars across a 35-year retirement. We now
- * sit at +0.30pp on the same basis. The prior `expectedPortfolioReturn` call (since deleted)
- * double-counted
- * volatility drag: it converts an arithmetic mean to a geometric one, but the advanced-form
- * return input is already read as a compound rate, and SAFE_WITHDRAWAL_RATES is itself
- * calibrated against realised historical compound returns.
+ * Cross-checked against ProjectionLab in August 2026 by driving their shipped worker bundle
+ * directly (deterministic mode, i.e. `isMonteCarlo: false`) and reading back the growth rates it
+ * applied. It applied the configured assumptions with no volatility-drag adjustment: 4.32% real
+ * against a 4.0% withdrawal, a +0.32pp margin, and a plan that grows slightly in today's dollars
+ * across a 35-year retirement. We now sit at +0.30pp on the same basis.
+ *
+ * That check is NOT reproducible from this repo: it ran against a local, gitignored copy of a
+ * third-party bundle under `research/` (never committed — no ProjectionLab code is vendored
+ * here). Treat the figures above as a recorded external observation, not something CI verifies.
+ * What CI verifies is the assertions below, which stand on their own model-derived reasoning.
+ *
+ * The prior `expectedPortfolioReturn` call (since deleted) double-counted volatility drag: it
+ * converts an arithmetic mean to a geometric one, but the advanced-form return input is already
+ * read as a compound rate, and SAFE_WITHDRAWAL_RATES is itself calibrated against realised
+ * historical compound returns.
  */
 describe('FIN-65: the deterministic Plan tab holds its real value at the published safe withdrawal rates', () => {
+  // Note this assertion does NOT vary with `years`: the real return is a function of the
+  // allocation and the return/inflation inputs alone. Only `ratePercent` moves it, so the
+  // per-horizon end-to-end check below is what actually exercises the horizon.
   it.each(SAFE_WITHDRAWAL_RATES)(
-    'real return covers the $ratePercent% withdrawal for a $years-year retirement',
+    'real return covers the $ratePercent% withdrawal published for $years years',
+    ({ ratePercent }) => {
+      const plan = toAssumptions(DEFAULT_CORE_VALUES, {
+        ...DEFAULT_ADVANCED_VALUES,
+        withdrawalRatePercent: ratePercent,
+      })
+
+      expect(realReturn(plan.annualReturnRate, plan.inflationRate)).toBeGreaterThanOrEqual(
+        ratePercent / 100,
+      )
+    },
+  )
+
+  // The horizon-sensitive half: actually run the projection over each published retirement
+  // length and check the portfolio still has its real value at the end. This is the assertion
+  // that would catch a drain whose per-year bleed is too small to show up in the rate check.
+  it.each(SAFE_WITHDRAWAL_RATES)(
+    'holds its real value across a $years-year retirement at $ratePercent%',
     ({ years, ratePercent }) => {
       const plan = toAssumptions(
         { ...DEFAULT_CORE_VALUES, retirementAge: PLANNING_HORIZON_END_AGE - years },
         { ...DEFAULT_ADVANCED_VALUES, withdrawalRatePercent: ratePercent },
       )
+      const rows = toTodaysDollarRows(runProjection(plan), plan.inflationRate)
+      const atRetirement = rows[plan.retirementAge - plan.currentAge].beginningBalance
 
-      expect(realReturn(plan.annualReturnRate, plan.inflationRate)).toBeGreaterThanOrEqual(
-        ratePercent / 100,
-      )
+      expect(rows[rows.length - 1].endingBalance).toBeGreaterThanOrEqual(atRetirement)
     },
   )
 

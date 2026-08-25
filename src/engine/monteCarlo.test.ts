@@ -2313,3 +2313,132 @@ describe('real-dollar percentiles', () => {
     });
   });
 });
+
+/**
+ * FIN-65 change 3 turns on ranking each fan in its OWN units: the real fan sorts paths by their
+ * deflated balances, not by their nominal ones. Under the block bootstrap every path draws its
+ * own inflation sequence, so a path can finish rich in future dollars and middling in today's —
+ * the two orderings genuinely disagree, and the cheaper "rank once, deflate the answer" shortcut
+ * silently reports the wrong path's balance. The suite had no test that could tell the two apart
+ * (a review mutation swapping the order passed all 352), so these pin it.
+ */
+describe('FIN-65: the real percentile fan is ranked in real units, not deflated after ranking', () => {
+  const seed = 20260825;
+  const simulationCount = 200;
+  const fanAllocation = { stocksPercent: 70, bondsPercent: 30 };
+  const fanPlan = assumptions({ currentAge: 60, retirementAge: 65, planningHorizonEndAge: 95 });
+
+  /**
+   * Replays the same trials `runMonteCarloTrials` runs internally — same seed, one shared RNG
+   * stream, same config defaults — so the individual paths behind its percentiles are available
+   * to compute the expected answer from the model rather than from what the code printed.
+   */
+  const replayPaths = (): TrialPath[] => {
+    const draw = createSeededRandom(seed);
+    return Array.from({ length: simulationCount }, () =>
+      runMonteCarloTrial(fanPlan, [], draw, {
+        allocation: fanAllocation,
+        volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+        returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+        correlation: DEFAULT_CORRELATION,
+        returnModel: 'historical',
+      }),
+    );
+  };
+
+  const runFan = () =>
+    runMonteCarloTrials(fanPlan, fanAllocation, DEFAULT_VOLATILITY_ASSUMPTIONS, [], {
+      seed,
+      simulationCount,
+      returnModel: 'historical',
+    });
+
+  /** Nearest-rank median, matching {@link nearestRankIndex}: index `ceil(n/2) - 1` ascending. */
+  const medianOf = (values: number[]) =>
+    [...values].sort((a, b) => a - b)[Math.ceil(simulationCount / 2) - 1];
+
+  it('reports the median of the deflated balances, not the deflated median balance', () => {
+    const paths = replayPaths();
+    const finalYear = paths[0].balances.length - 1;
+
+    const deflatedFinals = paths.map((path) => toTodaysDollars(path)[finalYear]);
+    const rankedInRealUnits = medianOf(deflatedFinals);
+
+    expect(runFan().percentiles.real.p50[finalYear]).toBeCloseTo(rankedInRealUnits, 6);
+  });
+
+  it('disagrees with ranking nominally and deflating afterwards (so the test above discriminates)', () => {
+    const paths = replayPaths();
+    const finalYear = paths[0].balances.length - 1;
+
+    // The shortcut: find the path that is median in FUTURE dollars, then deflate that one path.
+    const nominalFinals = paths.map((path) => path.balances[finalYear]);
+    const medianNominal = medianOf(nominalFinals);
+    const medianNominalPath = paths.find((path) => path.balances[finalYear] === medianNominal);
+    const rankedNominallyThenDeflated =
+      medianNominal / (medianNominalPath as TrialPath).inflationIndex[finalYear];
+
+    const deflatedFinals = paths.map((path) => toTodaysDollars(path)[finalYear]);
+    const rankedInRealUnits = medianOf(deflatedFinals);
+
+    // If these ever coincided the assertion above would pass under either implementation, and
+    // the mutation it exists to kill would survive again.
+    expect(rankedNominallyThenDeflated).not.toBeCloseTo(rankedInRealUnits, 2);
+  });
+
+  it('picks a different path for the real median than for the nominal median', () => {
+    const paths = replayPaths();
+    const finalYear = paths[0].balances.length - 1;
+
+    const byNominal = [...paths].sort(
+      (a, b) => a.balances[finalYear] - b.balances[finalYear],
+    )[Math.ceil(simulationCount / 2) - 1];
+    const byReal = [...paths].sort(
+      (a, b) => toTodaysDollars(a)[finalYear] - toTodaysDollars(b)[finalYear],
+    )[Math.ceil(simulationCount / 2) - 1];
+
+    expect(byReal).not.toBe(byNominal);
+  });
+});
+
+/**
+ * FIN-65 change 4 treats zero as ruin, not just negative: a portfolio that lands exactly on
+ * zero is spent, and the next year's "good return" must not resurrect it. A review mutation
+ * loosening `state.balance <= 0` to `< 0` survived the whole suite, because every existing ruin
+ * test overshoots into the negative. Landing exactly on zero needs an injected stage to arrange.
+ */
+describe('FIN-65: a balance of exactly zero counts as ruin', () => {
+  /** Runs the real period math, then pins the balance to exactly 0.0 in one chosen year. */
+  const zeroAtYear = (target: number): PipelineStage => {
+    return (state, input) => {
+      const yearIndex = state.rows.length;
+      const next = runPeriod(state, input);
+      return yearIndex === target ? { ...next, balance: 0 } : next;
+    };
+  };
+
+  const runToZero = (target: number) =>
+    runMonteCarloTrial(
+      assumptions({ currentAge: 60, retirementAge: 65, planningHorizonEndAge: 80 }),
+      [],
+      createSeededRandom(4242),
+      {
+        allocation: { stocksPercent: 70, bondsPercent: 30 },
+        volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+        returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+        correlation: DEFAULT_CORRELATION,
+        returnModel: 'historical',
+        runPeriodFn: zeroAtYear(target),
+      },
+    );
+
+  it('records the ruin year when the balance lands exactly on zero', () => {
+    expect(runToZero(7).ruinPeriod).toBe(7);
+  });
+
+  it('keeps zero absorbing afterwards, so later growth cannot resurrect the plan', () => {
+    const path = runToZero(7);
+
+    expect(path.balances.slice(7).every((balance) => balance === 0)).toBe(true);
+  });
+});

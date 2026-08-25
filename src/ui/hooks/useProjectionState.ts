@@ -35,9 +35,11 @@ export function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptio
     // through a variance-drag helper (`expectedPortfolioReturn`, deleted in FIN-65 along with
     // its private `portfolioVariance`), which subtracted a drag term to convert an
     // ARITHMETIC mean into a geometric one. That double-counted: the advanced form's return
-    // inputs are read as compound rates (as ProjectionLab's equivalent fields are — their
-    // deterministic engine applies the user's assumptions raw, measured in
-    // `research/pl-reference`), and `safeWithdrawalRates.ts` is calibrated against realised
+    // inputs are read as compound rates (as ProjectionLab's equivalent fields are — driving
+    // their shipped worker bundle in deterministic mode showed it applying the configured
+    // assumptions with no drag adjustment; see the note in `calibration.test.ts` on why that
+    // observation is not reproducible from this repo), and `safeWithdrawalRates.ts` is
+    // calibrated against realised
     // historical compound returns. Discounting an already-geometric number and then comparing
     // it to an undiscounted one put the default plan 0.58pp/yr underwater at its own "safe"
     // withdrawal rate — a Plan chart draining from year one beside a 90% success badge.

@@ -60,11 +60,17 @@ export interface ProjectionRow {
   /** Dollars contributed this year. Always 0 in retirement. */
   annualContribution: number;
   /**
-   * Dollars earned from investment returns: `beginningBalance * returnForPeriod`.
+   * Dollars earned from investment returns:
+   * `(beginningBalance - annualWithdrawal) * returnForPeriod`.
+   *
+   * Net of the withdrawal, not on the opening balance: FIN-65 change 2 moved
+   * `computeWithdrawals` ahead of `applyGrowth`, so a retiree's spending leaves the
+   * portfolio at the start of the year and only the remainder compounds. That is the
+   * convention the published safe-withdrawal-rate studies use.
    *
    * Deliberately stated against the period's return rather than
    * `assumptions.annualReturnRate`: this same row type is the per-path output of Monte
-   * Carlo, where the multiplier is that period's GBM draw. The deterministic projection
+   * Carlo, where the multiplier is that period's draw. The deterministic projection
    * is the case where `returnForPeriod` happens to equal `annualReturnRate` every year.
    */
   investmentReturn: number;
@@ -87,16 +93,16 @@ export type PlanEvent =
 /**
  * State threaded from one period to the next by the fold.
  *
- * `beginningBalance` and `investmentReturn` are working fields, not carried history:
- * `applyGrowth` carries them forward into the state it returns, alongside a `balance` set
- * to the post-growth value, and `recordPeriod` reads them back when constructing the row.
- * Without them, neither value is recoverable by the time the last stage runs (ERD §4,
- * round 2 review).
+ * `beginningBalance` and `investmentReturn` are working fields, not carried history.
+ * `snapshotBeginningBalance` records the opening balance (it was split out of `applyGrowth`
+ * in FIN-65 change 2, so that the withdrawal stage can run in between); `applyGrowth` sets
+ * `investmentReturn` alongside a `balance` set to the post-growth value; and `recordPeriod`
+ * reads both back when constructing the row. Without them, neither value is recoverable by
+ * the time the last stage runs (ERD §4, round 2 review).
  *
  * Every stage returns a new state rather than mutating the one it was given — see
- * {@link PipelineStage}. Where `applyGrowth`'s own doc in `pipeline.ts` says it
- * "snapshots" `beginningBalance` and "overwrites" `balance`, that describes the value
- * flow, not in-place assignment.
+ * {@link PipelineStage}. Where those stages' own docs in `pipeline.ts` speak of
+ * "snapshotting" or "overwriting", that describes the value flow, not in-place assignment.
  */
 export interface PeriodState {
   age: number;

@@ -618,11 +618,15 @@ export const runMonteCarloTrial = (
     }
     const balance = ruinPeriod === null ? state.balance : 0;
 
-    // The clamp must be applied to the fold's carried state too, or the next period would
-    // grow and withdraw from the unclamped negative and the balances would diverge from the
-    // path we just reported. `rows` is patched for the same reason: it is the same year's
-    // ending balance, and the two disagreeing is exactly the kind of split-brain a later
-    // reader would trust the wrong half of.
+    // Both writes below are defensive, and a FIN-65 review confirmed no current assertion can
+    // observe either one: `ruinPeriod` already forces every later reported balance to zero, so
+    // leaving the carried state negative would not move `balances`, and nothing in the Monte
+    // Carlo path ever reads `state.rows` back. They are kept anyway because `runPeriodFn`,
+    // `withdrawalStrategy` and `taxCalculator` are all caller-injectable and receive this state:
+    // handing an injected stage a negative balance that contradicts the zero we just reported
+    // is the kind of split-brain a later reader would trust the wrong half of. Treat them as an
+    // invariant on the state, not as behaviour under test — do not "simplify" them away on the
+    // strength of a green suite alone.
     state = { ...state, balance };
     const lastRow = state.rows[state.rows.length - 1];
     if (lastRow !== undefined && lastRow.endingBalance !== balance) {
