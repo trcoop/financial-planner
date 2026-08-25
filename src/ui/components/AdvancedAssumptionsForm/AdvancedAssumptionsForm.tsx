@@ -1,3 +1,5 @@
+import { realReturn } from '../../../engine'
+import { formatPercent } from '../../utils/format'
 import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
 import { NumberField } from '../NumberField/NumberField'
 import { Tooltip } from '../Tooltip/Tooltip'
@@ -127,6 +129,15 @@ export function AdvancedAssumptionsForm({ values, onChange }: AdvancedAssumption
                   </ul>
                 </Tooltip>
               </div>
+            )}
+            {(field.key === 'annualReturnPercent' || field.key === 'bondReturnPercent') && (
+              // FIN-65 change 3. Everything the app displays is now in today's dollars, so a
+              // 7% assumption produces a chart that grows at ~4.4%. Without the real rate
+              // stated next to the input, that reads as a bug rather than as the point.
+              <span className={styles.realReturnHint}>
+                {formatPercent(realReturn(values[field.key] / 100, values.inflationPercent / 100) * 100)}{' '}
+                after inflation
+              </span>
             )}
             {field.key === 'annualReturnPercent' && (
               <div className={styles.tooltipSlot}>

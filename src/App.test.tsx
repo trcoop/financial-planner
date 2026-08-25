@@ -61,7 +61,12 @@ vi.mock('./workers', () => ({
       emitComplete: () => {
         const result = {
           successRate: 87,
-          percentiles: { p10: [1, 2], p50: [3, 4], p90: [5, 6] },
+          // Distinct fans so an assertion about the chart cannot pass on the wrong one
+          // (FIN-65 change 3 — the Stress Test chart plots `real`).
+          percentiles: {
+            real: { p10: [1, 2], p50: [3, 4], p90: [5, 6] },
+            nominal: { p10: [10, 20], p50: [30, 40], p90: [50, 60] },
+          },
           meta: { simulationCount: 1000, stockVolatility: 0.15, bondVolatility: 0.06, allocation: { stocks: 70, bonds: 30 } },
         }
         listeners.forEach((listener) => listener({ status: 'complete', result }))
@@ -122,10 +127,10 @@ describe('App shell', () => {
     render(<App />)
     expect(screen.getByRole('tab', { name: 'Projection' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toBeInTheDocument()
-    expect(screen.getByText('Projected balance at 65')).toBeInTheDocument()
+    expect(screen.getByText("Projected balance at 65 (today's dollars)")).toBeInTheDocument()
     expect(screen.getByText('Chance of success')).toBeInTheDocument()
     expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
-    expect(screen.getByRole('figure', { name: 'Investment balance by year' })).toBeInTheDocument()
+    expect(screen.getByRole('figure', { name: "Investment balance by year (today's dollars)" })).toBeInTheDocument()
     // ProjectionTable is removed from the render tree (FIN-26) — no <table> should render.
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
@@ -147,10 +152,10 @@ describe('App shell', () => {
   it('keeps the projection chart and stress test panel both mounted across tab switches (no recompute on switch)', async () => {
     const user = userEvent.setup()
     render(<App />)
-    const figureBefore = screen.getByRole('figure', { name: 'Investment balance by year' })
+    const figureBefore = screen.getByRole('figure', { name: "Investment balance by year (today's dollars)" })
     await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
-    const figureAfter = screen.getByRole('figure', { name: 'Investment balance by year' })
+    const figureAfter = screen.getByRole('figure', { name: "Investment balance by year (today's dollars)" })
     expect(figureAfter).toBe(figureBefore)
   })
 

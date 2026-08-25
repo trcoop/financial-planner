@@ -177,3 +177,58 @@ export const runProjection = (assumptions: PlanAssumptions, events: PlanEvent[] 
 
   return state.rows;
 };
+
+/**
+ * Restates a nominal projection in today's dollars (FIN-65 change 3).
+ *
+ * `runProjection` compounds `annualReturnRate` as a nominal return, so its output is future
+ * dollars: over a 65-year horizon at 2.5% inflation the price level roughly quintuples, and
+ * a headline "$5M at 100" is about $1M of today's groceries. Presenting that number without
+ * saying so is the single biggest way a projection misleads, so the display layer deflates —
+ * exactly the split ProjectionLab uses (simulate nominal, deflate at display), which lets the
+ * nominal series stay available for a future toggle rather than being thrown away.
+ *
+ * Every field in a row is divided by the same price level, the one at the END of that year.
+ * That choice is what preserves `endingBalance = beginningBalance - annualWithdrawal +
+ * investmentReturn + annualContribution`, which the year-detail panel shows as a breakdown a
+ * reader can add up. The alternative — deflating `beginningBalance` by the START-of-year
+ * level, so that it equals the previous row's real ending balance — is equally defensible on
+ * its own terms and breaks that identity by a year of inflation. Both cannot hold at once;
+ * the breakdown adding up is the one a reader will actually check.
+ *
+ * Note the consequence for `annualWithdrawal`: retirement withdrawals are indexed to
+ * inflation, so in real terms they are flat by construction. That flat line is the correct
+ * number to display and carries no information about the plan.
+ */
+export const toTodaysDollarRows = (
+  rows: readonly ProjectionRow[],
+  inflationRate: number,
+): ProjectionRow[] =>
+  rows.map((row, year) => {
+    const priceLevel = (1 + inflationRate) ** (year + 1);
+
+    return {
+      ...row,
+      beginningBalance: row.beginningBalance / priceLevel,
+      annualContribution: row.annualContribution / priceLevel,
+      investmentReturn: row.investmentReturn / priceLevel,
+      annualWithdrawal: row.annualWithdrawal / priceLevel,
+      endingBalance: row.endingBalance / priceLevel,
+    };
+  });
+
+/**
+ * The Fisher relation: what a nominal return is worth once inflation is taken out.
+ *
+ *   real = (1 + nominal) / (1 + inflation) - 1
+ *
+ * Not `nominal - inflation`. The subtraction is close enough to pass a glance (4.5% vs 4.39%
+ * at 7% and 2.5%) and wrong enough to matter compounded over a planning horizon.
+ *
+ * Exposed so the UI can show the real return alongside the nominal one the user types
+ * (FIN-65 change 3). Once balances are displayed in today's dollars, "7% return" and a chart
+ * that grows at ~4.4% look contradictory unless the real rate is stated somewhere the user
+ * can see it.
+ */
+export const realReturn = (nominalRate: number, inflationRate: number): number =>
+  (1 + nominalRate) / (1 + inflationRate) - 1;

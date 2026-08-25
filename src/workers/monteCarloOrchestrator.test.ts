@@ -54,7 +54,10 @@ const allocation = { stocksPercent: 70, bondsPercent: 30 };
 
 const fakeResult: MonteCarloResult = {
   successRate: 87,
-  percentiles: { p10: [1], p50: [2], p90: [3] },
+  percentiles: {
+    real: { p10: [1], p50: [2], p90: [3] },
+    nominal: { p10: [10], p50: [20], p90: [30] },
+  },
   meta: { simulationCount: 1000, stockVolatility: 0.15, bondVolatility: 0.06, allocation: { stocks: 70, bonds: 30 } },
 };
 

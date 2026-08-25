@@ -136,7 +136,7 @@ function App() {
                 <div className="statTiles">
                   <StatTile label="Current investment balance" value={formatCurrency(coreValues.initialBalance)} />
                   <StatTile
-                    label={`Projected balance at ${coreValues.retirementAge}`}
+                    label={`Projected balance at ${coreValues.retirementAge} (today's dollars)`}
                     value={projectedBalanceAtRetirement !== undefined ? formatCurrency(projectedBalanceAtRetirement) : '—'}
                   />
                   <StatTile
@@ -157,7 +157,10 @@ function App() {
                   <PercentileLineChart
                     rows={planChartRows}
                     series={PLAN_SERIES}
-                    title="Investment balance by year"
+                    // FIN-65 change 3: `rows` arrives already deflated from
+                    // `useProjectionState`, so the unit belongs in the title where the reader
+                    // sees it — matching the Stress Test tab's chart.
+                    title="Investment balance by year (today's dollars)"
                     onSelectRow={handleSelectPlanRow}
                     defaultSelectedYear={retirementRow?.year}
                     retirementAge={coreValues.retirementAge}

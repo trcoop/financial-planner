@@ -1,6 +1,7 @@
 import { useMemo, useRef } from 'react'
 import {
   runProjection,
+  toTodaysDollarRows,
   expectedPortfolioReturn,
   InvalidProjectionInputError,
   DEFAULT_VOLATILITY_ASSUMPTIONS,
@@ -80,8 +81,18 @@ export function useProjectionState(
       return lastValidResult.current
     }
     try {
+      const planAssumptions = toAssumptions(debouncedCoreValues, debouncedAdvancedValues)
       const result: ProjectionResult = {
-        rows: runProjection(toAssumptions(debouncedCoreValues, debouncedAdvancedValues)),
+        // FIN-65 change 3. Deflated once, here, rather than at each display site: the Plan
+        // tab's chart, its "projected balance at retirement" tile and the year-detail panel
+        // all read `rows`, and the failure mode worth designing out is half of one tab
+        // showing future dollars while the other half shows today's. The Stress Test tab
+        // renders its own fan in today's dollars for the same reason, so the two tabs report
+        // comparable numbers for the same plan.
+        rows: toTodaysDollarRows(
+          runProjection(planAssumptions),
+          planAssumptions.inflationRate,
+        ),
         error: undefined,
       }
       lastValidResult.current = result

@@ -17,9 +17,10 @@ import {
   runMonteCarloTrial,
   runMonteCarloTrials,
   standardNormal,
+  toTodaysDollars,
   validateAllocation,
 } from './monteCarlo';
-import type { TrialConfig } from './monteCarlo';
+import type { TrialConfig, TrialPath } from './monteCarlo';
 import { withdrawFullShortfall, zeroTax } from './strategies';
 import { pipelineStages, runPeriod } from './pipeline';
 import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
@@ -401,43 +402,52 @@ describe('extractPercentiles', () => {
 });
 
 describe('computeSuccessRate', () => {
-  it('reports 100 when every path stays non-negative through the horizon', () => {
-    expect(
-      computeSuccessRate([
-        [100, 200, 0],
-        [50, 25, 10],
-      ]),
-    ).toBe(100);
+  /**
+   * Builds a path the way the engine would: ruin is the first year the balance is spent, and
+   * from FIN-65 change 4 zero absorbs, so everything after it is zero too. Deriving the
+   * marker here rather than hand-setting it keeps these fixtures honest — a path cannot claim
+   * to be solvent while showing a broke balance.
+   */
+  const pathFrom = (balances: number[]) => {
+    const ruinPeriod = balances.findIndex((balance) => balance <= 0);
+    return {
+      balances: balances.map((balance, i) => (ruinPeriod !== -1 && i >= ruinPeriod ? 0 : balance)),
+      inflationIndex: balances.map((_unused, i) => 1.025 ** (i + 1)),
+      ruinPeriod: ruinPeriod === -1 ? null : ruinPeriod,
+    };
+  };
+
+  it('reports 100 when every path stays solvent through the horizon', () => {
+    expect(computeSuccessRate([pathFrom([100, 200, 300]), pathFrom([50, 25, 10])])).toBe(100);
   });
 
-  it('reports 0 when every path goes negative at some point', () => {
-    expect(
-      computeSuccessRate([
-        [100, -1, 500],
-        [-0.01, 25, 10],
-      ]),
-    ).toBe(0);
+  it('reports 0 when every path runs dry at some point', () => {
+    expect(computeSuccessRate([pathFrom([100, -1, 500]), pathFrom([-0.01, 25, 10])])).toBe(0);
   });
 
-  it('counts a path that only goes negative in its final year as a failure', () => {
-    expect(
-      computeSuccessRate([
-        [100, 200, -5],
-        [100, 200, 5],
-      ]),
-    ).toBe(50);
+  it('counts a path that only runs dry in its final year as a failure', () => {
+    expect(computeSuccessRate([pathFrom([100, 200, -5]), pathFrom([100, 200, 5])])).toBe(50);
+  });
+
+  /**
+   * Exhausting the portfolio exactly is still exhausting it — Bengen counts a plan that ends
+   * at $0 as a failure, not a photo finish. Worth pinning explicitly because the pre-change-4
+   * predicate was `balance >= 0`, which called this a success.
+   */
+  it('counts a path that lands on exactly zero as a failure', () => {
+    expect(computeSuccessRate([pathFrom([100, 0]), pathFrom([100, 200])])).toBe(50);
   });
 
   it('rounds a half-percent to the nearest whole percent', () => {
-    const balancesByPath = Array.from({ length: 1000 }, (_unused, path) => [path < 875 ? 1 : -1]);
+    const paths = Array.from({ length: 1000 }, (_unused, path) => pathFrom([path < 875 ? 1 : -1]));
 
-    expect(computeSuccessRate(balancesByPath)).toBe(88);
+    expect(computeSuccessRate(paths)).toBe(88);
   });
 
   it('rounds down when the fraction is below the half-percent', () => {
-    const balancesByPath = Array.from({ length: 1000 }, (_unused, path) => [path < 874 ? 1 : -1]);
+    const paths = Array.from({ length: 1000 }, (_unused, path) => pathFrom([path < 874 ? 1 : -1]));
 
-    expect(computeSuccessRate(balancesByPath)).toBe(87);
+    expect(computeSuccessRate(paths)).toBe(87);
   });
 });
 
@@ -705,7 +715,7 @@ describe('runMonteCarloTrial', () => {
   it('returns one ending balance per projected year, inclusive of both endpoints', () => {
     const plan = assumptions({ currentAge: 35, planningHorizonEndAge: 100 });
 
-    const balances = runMonteCarloTrial(plan, [], draw(), trialConfig());
+    const { balances } = runMonteCarloTrial(plan, [], draw(), trialConfig());
 
     expect(balances).toHaveLength(66);
   });
@@ -713,7 +723,7 @@ describe('runMonteCarloTrial', () => {
   it('returns a single balance when the horizon is the current age', () => {
     const plan = assumptions({ currentAge: 100, retirementAge: 67, planningHorizonEndAge: 100 });
 
-    expect(runMonteCarloTrial(plan, [], draw(), trialConfig())).toHaveLength(1);
+    expect(runMonteCarloTrial(plan, [], draw(), trialConfig()).balances).toHaveLength(1);
   });
 
   it('threads each period’s ending balance into the next period', () => {
@@ -723,7 +733,7 @@ describe('runMonteCarloTrial', () => {
       return referenceRunPeriod(state, input);
     };
 
-    const balances = runMonteCarloTrial(
+    const { balances } = runMonteCarloTrial(
       assumptions({ planningHorizonEndAge: 39 }),
       [],
       draw(),
@@ -843,7 +853,7 @@ describe('runMonteCarloTrial', () => {
     const draw = createSeededRandom(1234);
 
     const paths = Array.from({ length: 1000 }, () =>
-      runMonteCarloTrial(plan, [], draw, trialConfig()).join(),
+      runMonteCarloTrial(plan, [], draw, trialConfig()).balances.join(),
     );
 
     expect(new Set(paths).size).toBe(1000);
@@ -861,7 +871,9 @@ describe('runMonteCarloTrials', () => {
     const result = runMonteCarloTrials(assumptions(), allocation70_30, undefined, [], options());
 
     expect(Object.keys(result).sort()).toEqual(['meta', 'percentiles', 'successRate']);
-    expect(Object.keys(result.percentiles).sort()).toEqual(['p10', 'p50', 'p90']);
+    expect(Object.keys(result.percentiles).sort()).toEqual(['nominal', 'real']);
+    expect(Object.keys(result.percentiles.nominal).sort()).toEqual(['p10', 'p50', 'p90']);
+    expect(Object.keys(result.percentiles.real).sort()).toEqual(['p10', 'p50', 'p90']);
     expect(Object.keys(result.meta).sort()).toEqual([
       'allocation',
       'bondVolatility',
@@ -914,7 +926,7 @@ describe('runMonteCarloTrials', () => {
         options({ simulationCount: 200, returnModel: 'gbm' }),
       );
 
-      return percentiles.p90[65] - percentiles.p10[65];
+      return percentiles.nominal.p90[65] - percentiles.nominal.p10[65];
     };
 
     expect(spread(0.3)).toBeGreaterThan(spread(0.05));
@@ -929,9 +941,11 @@ describe('runMonteCarloTrials', () => {
       options({ simulationCount: 50 }),
     );
 
-    expect(result.percentiles.p10).toHaveLength(66);
-    expect(result.percentiles.p50).toHaveLength(66);
-    expect(result.percentiles.p90).toHaveLength(66);
+    for (const fan of [result.percentiles.real, result.percentiles.nominal]) {
+      expect(fan.p10).toHaveLength(66);
+      expect(fan.p50).toHaveLength(66);
+      expect(fan.p90).toHaveLength(66);
+    }
   });
 
   it('returns identical results for the same seed', () => {
@@ -980,9 +994,13 @@ describe('runMonteCarloTrials', () => {
         options({ seed, simulationCount: 200 }),
       );
 
-      for (let year = 0; year < percentiles.p50.length; year += 1) {
-        expect(percentiles.p10[year]).toBeLessThanOrEqual(percentiles.p50[year]);
-        expect(percentiles.p50[year]).toBeLessThanOrEqual(percentiles.p90[year]);
+      // Both fans, because they are ranked independently: real is not a rescaling of
+      // nominal, so nominal satisfying the ordering says nothing about real.
+      for (const fan of [percentiles.real, percentiles.nominal]) {
+        for (let year = 0; year < fan.p50.length; year += 1) {
+          expect(fan.p10[year]).toBeLessThanOrEqual(fan.p50[year]);
+          expect(fan.p50[year]).toBeLessThanOrEqual(fan.p90[year]);
+        }
       }
     }
   });
@@ -1107,7 +1125,7 @@ describe('runMonteCarloTrials', () => {
 
       expect(calls).toBe(60);
       // The probe grows the balance every period, so no path can be flat at its start value.
-      expect(result.percentiles.p50[5]).not.toBe(100_000);
+      expect(result.percentiles.nominal.p50[5]).not.toBe(100_000);
     } finally {
       mutableStages.splice(0, mutableStages.length, ...realStages);
     }
@@ -1151,7 +1169,7 @@ describe('degenerate inputs', () => {
       { seed: 5, simulationCount: 20, runPeriodFn: referenceRunPeriod },
     );
 
-    expect(result.percentiles.p50).toHaveLength(1);
+    expect(result.percentiles.nominal.p50).toHaveLength(1);
   });
 
   it.each([
@@ -1322,7 +1340,7 @@ describe('accuracy against deterministic reference figures', () => {
     const draw = createSeededRandom(seed);
     let total = 0;
     for (let path = 0; path < paths; path += 1) {
-      const balances = runMonteCarloTrial(plan, [], draw, trialConfig());
+      const { balances } = runMonteCarloTrial(plan, [], draw, trialConfig());
       total += balances[balances.length - 1];
     }
     return total / paths;
@@ -1559,7 +1577,7 @@ describe('FIN-55: pure-GBM isolation against the analytic lognormal median', () 
     };
 
     return Array.from({ length: simulationCount }, () => {
-      const balances = runMonteCarloTrial(isolationPlan, [], draw, config);
+      const { balances } = runMonteCarloTrial(isolationPlan, [], draw, config);
       return balances[balances.length - 1];
     });
   };
@@ -1617,7 +1635,7 @@ describe('performance', () => {
     const elapsedMs = performance.now() - startedAt;
 
     expect(result.meta.simulationCount).toBe(5_000);
-    expect(result.percentiles.p50).toHaveLength(66);
+    expect(result.percentiles.nominal.p50).toHaveLength(66);
     expect(elapsedMs).toBeLessThan(3_000);
   });
 });
@@ -1931,6 +1949,13 @@ describe('FIN-65: matches Bengen year by year, not just at the terminal', () => 
    *   w_0     = initialBalance * rate
    *   end_t   = (begin_t - w_t) * (1 + r_t)
    *   w_(t+1) = w_t * (1 + cpi_t)      <- the prior-year indexing this change is about
+   *
+   * Left unclamped on purpose, so it stays a transcription of the published arithmetic and
+   * nothing else. Bengen's own output for a failed cohort is the YEAR the portfolio was
+   * exhausted, not the negative number this fold keeps producing afterwards — which is
+   * exactly what FIN-65 change 4 fixes on our side. The comparison below therefore runs
+   * against this reference up to the year of exhaustion, and asserts our own absorbing-zero
+   * behaviour after it.
    */
   const bengenPath = (
     returns: readonly number[],
@@ -1951,6 +1976,20 @@ describe('FIN-65: matches Bengen year by year, not just at the terminal', () => 
   };
 
   /**
+   * The year each cohort is exhausted, folded out of `bengenPath` over our own tables — the
+   * first year its ending balance reaches zero, 1-based, or `null` for a cohort that lasts
+   * the full 30. 1966 and 1929 are the safe-withdrawal literature's canonical worst cases,
+   * and a 4% initial withdrawal indexed to realised inflation survives neither.
+   */
+  const RUIN_YEAR: Record<number, number | null> = {
+    1966: 29,
+    1929: 22,
+    1937: null,
+    1973: null,
+    1994: null,
+  };
+
+  /**
    * Our production trial, walked down a chosen chronological run of history.
    *
    * `inflationRate` is set to a deliberately absurd 10% — nowhere near the 2.5% the rest of
@@ -1964,7 +2003,7 @@ describe('FIN-65: matches Bengen year by year, not just at the terminal', () => 
   const oursChronological = (
     startYear: number,
     years: number,
-  ): Array<{ withdrawal: number; endingBalance: number }> => {
+  ): { captured: Array<{ withdrawal: number; endingBalance: number }>; path: TrialPath } => {
     const plan = assumptions({
       currentAge: 65,
       retirementAge: 65,
@@ -1994,7 +2033,7 @@ describe('FIN-65: matches Bengen year by year, not just at the terminal', () => 
       return next;
     };
 
-    runMonteCarloTrial(plan, [], scriptedDraw, {
+    const path = runMonteCarloTrial(plan, [], scriptedDraw, {
       allocation: { stocksPercent: 100, bondsPercent: 0 },
       volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
       returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
@@ -2004,7 +2043,7 @@ describe('FIN-65: matches Bengen year by year, not just at the terminal', () => 
       runPeriodFn: capturingStep,
     });
 
-    return captured;
+    return { captured, path };
   };
 
   it.each(BENGEN_COHORTS)(
@@ -2016,11 +2055,16 @@ describe('FIN-65: matches Bengen year by year, not just at the terminal', () => 
         years.map((year) => yearCpi(year)),
         HORIZON_YEARS,
       );
-      const actual = oursChronological(startYear, HORIZON_YEARS);
+      const { captured: actual, path } = oursChronological(startYear, HORIZON_YEARS);
 
       expect(actual).toHaveLength(HORIZON_YEARS);
 
-      for (let t = 0; t < HORIZON_YEARS; t += 1) {
+      // Up to and including the year of exhaustion the two must agree exactly; after it the
+      // published fold keeps compounding a negative balance and we do not (change 4).
+      const ruinYear = RUIN_YEAR[startYear];
+      const comparable = ruinYear ?? HORIZON_YEARS;
+
+      for (let t = 0; t < comparable; t += 1) {
         // Tight tolerance: these are two float folds of the same arithmetic in the same
         // order, so they agree far beyond 6 decimal places. Anything looser would let a real
         // convention change hide.
@@ -2033,6 +2077,18 @@ describe('FIN-65: matches Bengen year by year, not just at the terminal', () => 
           `${startYear} cohort, year ${t + 1} (${years[t]}) ending balance`,
         ).toBeCloseTo(expected[t].endingBalance, 6);
       }
+
+      if (ruinYear === null) {
+        expect(path.ruinPeriod, `${startYear} cohort should survive 30 years`).toBeNull();
+        return;
+      }
+
+      // `RUIN_YEAR` is 1-based; `ruinPeriod` indexes from 0.
+      expect(path.ruinPeriod, `${startYear} cohort year of exhaustion`).toBe(ruinYear - 1);
+      expect(expected[ruinYear - 1].endingBalance).toBeLessThanOrEqual(0);
+      path.balances.slice(ruinYear - 1).forEach((balance, offset) => {
+        expect(balance, `${startYear} cohort, year ${ruinYear + offset} after exhaustion`).toBe(0);
+      });
     },
   );
 
@@ -2049,14 +2105,211 @@ describe('FIN-65: matches Bengen year by year, not just at the terminal', () => 
     const terminals = new Map(
       BENGEN_COHORTS.map((startYear) => [
         startYear,
-        oursChronological(startYear, HORIZON_YEARS)[HORIZON_YEARS - 1].endingBalance,
+        oursChronological(startYear, HORIZON_YEARS).path.balances[HORIZON_YEARS - 1],
       ]),
     );
 
-    expect(terminals.get(1966)).toBeCloseTo(-418_850.97, 2);
-    expect(terminals.get(1929)).toBeCloseTo(-1_334_200.93, 2);
+    // The three cohorts that survive carry the published fold's terminal balance through
+    // unchanged — the clamp is inert on a path that never runs dry, which is half of what
+    // makes it safe to add.
     expect(terminals.get(1937)).toBeCloseTo(2_416_346.19, 2);
     expect(terminals.get(1973)).toBeCloseTo(1_293_045.76, 2);
     expect(terminals.get(1994)).toBeCloseTo(9_080_639.91, 2);
+
+    // The two that fail end at zero, not at the -$418K and -$1.33M the unclamped fold
+    // reports. Those figures were never a retiree's experience: they are what you get by
+    // continuing to withdraw from an account that has nothing in it, and letting a good
+    // return year deepen the hole. Bengen's answer for these cohorts is a year, not a number.
+    expect(terminals.get(1966)).toBe(0);
+    expect(terminals.get(1929)).toBe(0);
+  });
+});
+
+
+/**
+ * FIN-65 changes 3 and 4: a trial hands back the CPI path it actually lived through, and a
+ * ruined path stops at zero instead of folding on into ever-larger negatives.
+ *
+ * Every expectation here is derived from the model — the CPI table, the definition of a
+ * cumulative price index, and the absorbing-state rule — never from what the engine prints.
+ */
+describe('trial path: inflation index and ruin', () => {
+  /**
+   * Steers the shipped trial down a chronological run of history with no RNG. At
+   * `blockLengthYears: 1` the block picker is one `draw()` per period, so successive
+   * bucket midpoints march the sampler through the table in order. This drives the
+   * production sampler, not a replica of it.
+   */
+  const scriptedDraw = (startYear: number) => {
+    const start = HISTORICAL_ANNUAL_RETURNS.findIndex((entry) => entry.year === startYear);
+    if (start === -1) throw new Error(`no return data for ${startYear}`);
+    let call = 0;
+    return () => (start + call++ + 0.5) / HISTORICAL_ANNUAL_RETURNS.length;
+  };
+
+  const historicalConfig = (): TrialConfig =>
+    trialConfig({ returnModel: 'historical', blockLengthYears: 1 });
+
+  it('reports a cumulative CPI index built from the years it actually drew', () => {
+    const startYear = 1966;
+    const plan = assumptions({ currentAge: 60, retirementAge: 60, planningHorizonEndAge: 64 });
+
+    const path = runMonteCarloTrial(plan, [], scriptedDraw(startYear), historicalConfig());
+
+    // A price index is the running product of each period's realised CPI — the year that
+    // period drew, NOT the lagged year that indexes its withdrawal. Both series come from
+    // the same draws and must not be conflated.
+    let level = 1;
+    const expected = path.inflationIndex.map((_, offset) => {
+      level *= 1 + yearCpi(startYear + offset);
+      return level;
+    });
+
+    expect(path.inflationIndex.length).toBeGreaterThan(0);
+    path.inflationIndex.forEach((actual, i) => {
+      expect(actual).toBeCloseTo(expected[i], 10);
+    });
+  });
+
+  it("falls back to the plan's fixed inflation rate on the GBM branch, which draws no year", () => {
+    const plan = assumptions({ currentAge: 60, planningHorizonEndAge: 63, inflationRate: 0.025 });
+
+    const path = runMonteCarloTrial(plan, [], createSeededRandom(7), trialConfig());
+
+    expect(path.inflationIndex.length).toBeGreaterThan(0);
+    path.inflationIndex.forEach((level, i) => {
+      expect(level).toBeCloseTo(1.025 ** (i + 1), 10);
+    });
+  });
+
+  /**
+   * The defect this guards: a bankrupt path used to keep "withdrawing" from a negative
+   * balance, so a good return year made it *more* negative. Zero has to absorb.
+   */
+  it('clamps a ruined path at zero and holds it there for every later period', () => {
+    const plan = assumptions({
+      currentAge: 60,
+      retirementAge: 60,
+      planningHorizonEndAge: 75,
+      initialBalance: 10_000,
+      withdrawalRateInRetirement: 0.9,
+    });
+
+    const path = runMonteCarloTrial(plan, [], createSeededRandom(3), trialConfig());
+
+    expect(path.ruinPeriod).not.toBeNull();
+    expect(Math.min(...path.balances)).toBeGreaterThanOrEqual(0);
+    path.balances.slice(path.ruinPeriod as number).forEach((balance) => {
+      expect(balance).toBe(0);
+    });
+  });
+
+  it('leaves ruinPeriod null and never clamps a path that stays solvent', () => {
+    const plan = assumptions({
+      currentAge: 60,
+      retirementAge: 90,
+      planningHorizonEndAge: 70,
+      initialBalance: 1_000_000,
+    });
+
+    const path = runMonteCarloTrial(plan, [], createSeededRandom(3), trialConfig());
+
+    expect(path.ruinPeriod).toBeNull();
+    expect(Math.min(...path.balances)).toBeGreaterThan(0);
+  });
+
+  /**
+   * Clamping must not change how many draws a trial consumes. `runMonteCarloTrials` shares
+   * one RNG stream across every path, so a ruined trial that returned early would shift
+   * every path after it — silently changing results that have nothing to do with ruin.
+   */
+  it('consumes the same number of draws whether or not the path ruins', () => {
+    const horizon = { currentAge: 60, retirementAge: 60, planningHorizonEndAge: 75 };
+    const count = (initialBalance: number, withdrawalRateInRetirement: number) => {
+      let draws = 0;
+      const source = createSeededRandom(11);
+      const counting = () => {
+        draws += 1;
+        return source();
+      };
+      runMonteCarloTrial(
+        assumptions({ ...horizon, initialBalance, withdrawalRateInRetirement }),
+        [],
+        counting,
+        trialConfig(),
+      );
+      return draws;
+    };
+
+    expect(count(10_000, 0.9)).toBe(count(10_000_000, 0.01));
+  });
+});
+
+describe('computeSuccessRate with clamped paths', () => {
+  const pathOf = (balances: number[], ruinPeriod: number | null) => ({
+    balances,
+    inflationIndex: balances.map((_, i) => 1.025 ** (i + 1)),
+    ruinPeriod,
+  });
+
+  /**
+   * The trap in FIN-65 change 4. Success used to be inferred from the *sign* of the balance.
+   * Clamping ruined paths to zero makes every balance non-negative, so a sign check would
+   * now report 100% success on a portfolio that went bankrupt. Ruin has to be a recorded
+   * fact, not something re-derived from the numbers that clamping erased.
+   */
+  it('counts a clamped-to-zero path as a failure even though no balance is negative', () => {
+    const paths = [pathOf([100, 0, 0], 1), pathOf([100, 120, 140], null)];
+
+    expect(paths.every((path) => path.balances.every((balance) => balance >= 0))).toBe(true);
+    expect(computeSuccessRate(paths)).toBe(50);
+  });
+
+  it('reports 100% when no path ever ruined', () => {
+    expect(computeSuccessRate([pathOf([1, 2], null), pathOf([3, 4], null)])).toBe(100);
+  });
+
+  it('reports 0% when every path ruined', () => {
+    expect(computeSuccessRate([pathOf([1, 0], 1), pathOf([2, 0], 1)])).toBe(0);
+  });
+});
+
+/**
+ * FIN-65 change 3's correctness trap. Each path lives through its own CPI sequence, so a
+ * percentile *line* has no single inflation series it could be deflated by after the fact —
+ * and paths re-rank under deflation, so real p50 is not deflated nominal p50.
+ */
+describe('real-dollar percentiles', () => {
+  it('deflates each path by its own index before ranking, so paths may re-rank', () => {
+    // One period, two paths. Nominally A leads; after each is deflated by the inflation IT
+    // lived through, B leads. Ranking nominally and deflating the line afterwards inverts it.
+    const pathA = { balances: [300], inflationIndex: [3], ruinPeriod: null }; // real 100
+    const pathB = { balances: [200], inflationIndex: [1], ruinPeriod: null }; // real 200
+
+    const real = extractPercentiles([pathA, pathB].map(toTodaysDollars));
+
+    expect(real.p90).toEqual([200]);
+    expect(real.p10).toEqual([100]);
+
+    // The wrong construction, for contrast: rank nominally, then deflate the line. It picks
+    // A as the top path and reports a different number entirely.
+    const nominal = extractPercentiles([pathA.balances, pathB.balances]);
+    expect(nominal.p90).toEqual([300]);
+  });
+
+  it('exposes both views from one run, with real below nominal under positive inflation', () => {
+    const plan = assumptions({ currentAge: 60, planningHorizonEndAge: 70 });
+
+    const result = runMonteCarloTrials(plan, allocation70_30, undefined, [], {
+      seed: 42,
+      simulationCount: 50,
+      runPeriodFn: referenceRunPeriod,
+      returnModel: 'gbm',
+    });
+
+    expect(result.percentiles.real.p50).toHaveLength(result.percentiles.nominal.p50.length);
+    result.percentiles.real.p50.forEach((real, i) => {
+      expect(real).toBeLessThan(result.percentiles.nominal.p50[i]);
+    });
   });
 });

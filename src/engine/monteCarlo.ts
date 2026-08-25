@@ -139,6 +139,53 @@ export const blendedPortfolioReturn = (
 /** One simulated path's ending balance for each projected year, index 0 being the current age. */
 export type PathBalances = readonly number[];
 
+/**
+ * Everything one simulated path knows about itself. Nominal balances, the price level it
+ * lived through, and whether it went broke.
+ *
+ * The three travel together because they are only meaningful together (FIN-65 change 3).
+ * Each path draws its own historical sequence, so each has its OWN realised inflation — a
+ * single run has as many CPI series as it has paths, and there is no run-level series that
+ * could deflate a percentile line after the fact. Deflation has to happen per path, before
+ * anything is ranked. `ruinPeriod` has to be carried for the same reason: change 4 clamps a
+ * broke path to zero, which erases the negative balances ruin used to be inferred from.
+ */
+export interface TrialPath {
+  /** Nominal (future-dollar) ending balance per year, index 0 being `currentAge`. */
+  balances: PathBalances;
+  /**
+   * Cumulative price level at the END of each year, relative to today = 1. `balances[i] /
+   * inflationIndex[i]` is that year's balance in today's dollars.
+   */
+  inflationIndex: readonly number[];
+  /**
+   * Index of the first year this path's balance hit zero, or `null` if it never did. Zero is
+   * absorbing, so every later balance is zero too.
+   */
+  ruinPeriod: number | null;
+}
+
+/**
+ * Restates a path's nominal balances in today's dollars, deflating each year by the price
+ * level THAT path lived through.
+ *
+ * Must be applied before {@link extractPercentiles}, never after: percentile lines are built
+ * cross-sectionally, so deflating the finished line would divide a p50 assembled from many
+ * different paths by one arbitrary path's inflation. Paths also re-rank under deflation — a
+ * nominally larger balance earned through harsher inflation can be the smaller one in real
+ * terms — so real p50 is genuinely not deflated nominal p50.
+ */
+export const toTodaysDollars = (path: TrialPath): number[] =>
+  path.balances.map((balance, year) => balance / path.inflationIndex[year]);
+
+/** The percentile fan in both units, from a single run (FIN-65 change 3). */
+export interface PercentileViews {
+  /** Today's dollars — what the UI shows by default. */
+  real: PercentilePaths;
+  /** Future dollars, as simulated. Retained for a future nominal-view toggle. */
+  nominal: PercentilePaths;
+}
+
 /** The percentile fan the UI plots, one value per year (ERD §4). */
 export interface PercentilePaths {
   p10: number[];
@@ -179,23 +226,28 @@ export const extractPercentiles = (balancesByPath: readonly PathBalances[]): Per
 };
 
 /**
- * Share of paths that never went negative, as a whole percentage 0-100 (ERD §5).
+ * Share of paths that never ran dry, as a whole percentage 0-100 (ERD §5).
  *
- * "Never negative" is checked against every year's ending balance: a plan that recovers by
- * the horizon after running dry mid-retirement is still a failed plan.
+ * Reads `ruinPeriod` rather than the sign of any balance. This is load-bearing, not a
+ * refactor: before FIN-65 change 4 a broke path kept withdrawing into ever-deeper negatives,
+ * and success was `path.every((balance) => balance >= 0)`. Change 4 clamps ruin at zero, so
+ * that predicate is now true of EVERY path and would report a reassuring 100% on a batch
+ * where every single portfolio went bankrupt. Ruin is recorded when it happens because the
+ * evidence for it no longer survives in the numbers.
+ *
+ * Ruin at any point is terminal: a plan that recovers by the horizon after running dry
+ * mid-retirement is still a failed plan — and under the absorbing clamp it cannot recover.
  */
-export const computeSuccessRate = (balancesByPath: readonly PathBalances[]): number => {
+export const computeSuccessRate = (paths: readonly TrialPath[]): number => {
   // No paths means nothing succeeded. `runMonteCarloTrials` rejects an empty batch before
   // reaching here, but the naked division would otherwise hand the UI a NaN success rate.
-  if (balancesByPath.length === 0) {
+  if (paths.length === 0) {
     return 0;
   }
 
-  const successes = balancesByPath.filter((path) =>
-    path.every((balance) => balance >= 0),
-  ).length;
+  const successes = paths.filter((path) => path.ruinPeriod === null).length;
 
-  return Math.round((100 * successes) / balancesByPath.length);
+  return Math.round((100 * successes) / paths.length);
 };
 
 /**
@@ -519,7 +571,7 @@ export const runMonteCarloTrial = (
   events: PlanEvent[],
   draw: RandomSource,
   config: TrialConfig,
-): number[] => {
+): TrialPath => {
   const step = config.runPeriodFn ?? runPeriod;
   const withdrawalStrategy = config.withdrawalStrategy ?? withdrawFullShortfall;
   const taxCalculator = config.taxCalculator ?? zeroTax;
@@ -535,6 +587,23 @@ export const runMonteCarloTrial = (
 
   let state = createInitialPeriodState(plan);
   const balances: number[] = [];
+
+  /**
+   * Cumulative price level at the end of each period, today = 1 (FIN-65 change 3). Built from
+   * the SAME drawn years as the returns, so a path's inflation is the inflation it actually
+   * lived through — the whole point of sampling returns and CPI jointly.
+   *
+   * Note this uses the CURRENT period's drawn year, not the lagged `priorHistoricalYear` the
+   * withdrawal indexes off. The two are different questions and must not be conflated:
+   * "how much had prices risen by the end of year N" is a fact about year N, while "what
+   * raise does this year's budget get" is a fact the retiree could only have known a year
+   * earlier. Sharing one variable between them was tempting and would have been wrong.
+   */
+  const inflationIndex: number[] = [];
+  let priceLevel = 1;
+
+  /** First period this path's balance hit zero — see {@link TrialPath.ruinPeriod}. */
+  let ruinPeriod: number | null = null;
 
   /**
    * The historical year drawn in the PREVIOUS period, whose CPI-U indexes this period's
@@ -591,12 +660,51 @@ export const runMonteCarloTrial = (
       withdrawalStrategy,
       taxCalculator,
     });
-    balances.push(state.balance);
+    // FIN-65 change 4. A portfolio cannot go below zero: once it is spent, it is spent, and
+    // the old behaviour — withdrawing from a negative balance, so a good return year made the
+    // hole DEEPER — produced chart tails in the negative millions that were an artifact of the
+    // arithmetic rather than anything a retiree could experience. Zero absorbs: once ruined,
+    // ruined, and later contributions cannot resurrect a plan that already failed.
+    if (ruinPeriod === null && state.balance <= 0) {
+      ruinPeriod = year;
+    }
+    const balance = ruinPeriod === null ? state.balance : 0;
+
+    // The clamp must be applied to the fold's carried state too, or the next period would
+    // grow and withdraw from the unclamped negative and the balances would diverge from the
+    // path we just reported. `rows` is patched for the same reason: it is the same year's
+    // ending balance, and the two disagreeing is exactly the kind of split-brain a later
+    // reader would trust the wrong half of.
+    state = { ...state, balance };
+    const lastRow = state.rows[state.rows.length - 1];
+    if (lastRow !== undefined && lastRow.endingBalance !== balance) {
+      state = {
+        ...state,
+        rows: [...state.rows.slice(0, -1), { ...lastRow, endingBalance: balance }],
+      };
+    }
+
+    balances.push(balance);
+
+    // Deliberately NOT `continue`-ing or breaking out once ruined. `runMonteCarloTrials`
+    // shares one RNG stream across every path in the batch, so a trial that stopped drawing
+    // early would shift every path after it — a change in one plan's bankruptcy would
+    // silently move percentiles that have nothing to do with it. A ruined path keeps
+    // stepping and keeps drawing; it just stays at zero.
+    // `inflationForYear` can miss: the return table and the CPI table are separate sources and
+    // need not span identical ranges. Falling back to the plan's assumed rate matches what
+    // `computeWithdrawals` does with the same gap, so the index and the withdrawals stay
+    // consistent rather than one silently treating a missing year as zero inflation.
+    const realisedInflation =
+      (historicalYear ? inflationForYear(historicalYear.year) : undefined) ?? plan.inflationRate;
+    priceLevel *= 1 + realisedInflation;
+    inflationIndex.push(priceLevel);
+
     state = { ...state, age: state.age + 1, year: state.year + 1 };
     priorHistoricalYear = historicalYear ?? null;
   }
 
-  return balances;
+  return { balances, inflationIndex, ruinPeriod };
 };
 
 /**
@@ -647,8 +755,16 @@ export interface MonteCarloOptions {
 export interface MonteCarloResult {
   /** Whole percent, 0-100. */
   successRate: number;
-  /** One value per projected year, `length === planningHorizonEndAge - currentAge + 1`. */
-  percentiles: PercentilePaths;
+  /**
+   * One value per projected year, `length === planningHorizonEndAge - currentAge + 1`, in
+   * both units.
+   *
+   * Split into `{ real, nominal }` rather than left as a bare fan (FIN-65 change 3) so that
+   * no display site can render a number without having said which dollars it is in. The
+   * break is intentional: the compiler enumerating every consumer is cheaper than one chart
+   * quietly plotting future dollars under a today's-dollars axis label.
+   */
+  percentiles: PercentileViews;
   meta: {
     simulationCount: number;
     stockVolatility: number;
@@ -723,13 +839,18 @@ export const runMonteCarloTrials = (
     taxCalculator: options.taxCalculator,
   };
 
-  const balancesByPath = Array.from({ length: simulationCount }, () =>
+  const paths = Array.from({ length: simulationCount }, () =>
     runMonteCarloTrial(plan, events, draw, config),
   );
 
   return {
-    successRate: computeSuccessRate(balancesByPath),
-    percentiles: extractPercentiles(balancesByPath),
+    successRate: computeSuccessRate(paths),
+    // Each fan is ranked in its own units. Deflating the nominal fan instead would be both
+    // cheaper and wrong — see {@link toTodaysDollars}.
+    percentiles: {
+      real: extractPercentiles(paths.map(toTodaysDollars)),
+      nominal: extractPercentiles(paths.map((path) => path.balances)),
+    },
     meta: {
       simulationCount,
       stockVolatility: volatilityAssumptions.stocks,

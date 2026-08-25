@@ -31,7 +31,13 @@ export {
  * boundary and folds from the same year-0 state — sharing them keeps the two entry points
  * from drifting on error codes or initial conditions.
  */
-export { createInitialPeriodState, runProjection, validatePlanAssumptions } from './projection';
+export {
+  createInitialPeriodState,
+  realReturn,
+  runProjection,
+  toTodaysDollarRows,
+  validatePlanAssumptions,
+} from './projection';
 
 export type {
   PeriodState,
@@ -69,11 +75,13 @@ export type {
   MonteCarloResult,
   PathBalances,
   PercentilePaths,
+  PercentileViews,
   PortfolioAllocation,
   RandomSource,
   ReturnAssumptions,
   ReturnModel,
   TrialConfig,
+  TrialPath,
   VolatilityAssumptions,
 } from './monteCarlo';
 

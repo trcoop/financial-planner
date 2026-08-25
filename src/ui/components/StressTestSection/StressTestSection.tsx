@@ -1,6 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { DEFAULT_RETURN_ASSUMPTIONS, DEFAULT_VOLATILITY_ASSUMPTIONS } from '../../../engine'
-import type { PercentilePaths, PlanAssumptions, PortfolioAllocation, ReturnAssumptions } from '../../../engine'
+import type { PercentileViews, PlanAssumptions, PortfolioAllocation, ReturnAssumptions } from '../../../engine'
 import { createMonteCarloOrchestrator } from '../../../workers'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
 import { formatCurrency, formatPercent } from '../../utils/format'
@@ -72,7 +72,7 @@ interface StressTestSectionProps {
    * consumes this anymore — kept as an optional, additive seam in case another consumer needs
    * the raw percentiles later.
    */
-  onPercentilesChange?: (percentiles: PercentilePaths | null) => void
+  onPercentilesChange?: (percentiles: PercentileViews | null) => void
   /**
    * FIN-48 integration seam: called whenever "inputs have changed since the last completed
    * run" flips, mirroring `onSuccessRateChange`/`onPercentilesChange`'s pattern. `true` from
@@ -107,7 +107,7 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
   const orchestrator = useMemo(() => injectedOrchestrator ?? createMonteCarloOrchestrator(), [injectedOrchestrator])
   const [state, setState] = useState<StressTestState>(() => orchestrator.getState())
   const [successRate, setSuccessRate] = useState<number | null>(null)
-  const [percentiles, setPercentiles] = useState<PercentilePaths | null>(null)
+  const [percentiles, setPercentiles] = useState<PercentileViews | null>(null)
   // FIN-48: "inputs changed since last completed run". Set true alongside the existing
   // cancel-on-input-change effect below, set false whenever a run completes.
   const [isStale, setIsStale] = useState(false)
@@ -189,14 +189,20 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
   const isRunning = state.status === 'running'
   const buttonLabel = isRunning ? 'Running stress test...' : 'Run stress test'
 
-  // Index-aligned mapping (ERD §6.3): percentiles.p10[i]/p50[i]/p90[i] correspond 1:1 with
-  // rows[i], both keyed 0..horizon by construction — same assumption `App.tsx` previously used
-  // to build the (now removed) Plan-tab band overlay.
-  const chartRows: LineChartRow[] | null = percentiles
+  // FIN-65 change 3: plot the REAL fan. A 66-year horizon at 2.5% inflation multiplies the
+  // price level by ~5x, so a nominal $5M at age 100 is about $1M of today's groceries — the
+  // nominal number is arithmetically correct and, presented on its own, wildly misleading
+  // about what the plan buys. `percentiles.nominal` carries the same run in future dollars for
+  // whenever a display toggle lands.
+  //
+  // Index-aligned mapping (ERD §6.3): p10[i]/p50[i]/p90[i] correspond 1:1 with rows[i], both
+  // keyed 0..horizon by construction.
+  const fan = percentiles?.real ?? null
+  const chartRows: LineChartRow[] | null = fan
     ? rows.map((row, i) => ({
         age: row.age,
         year: row.year,
-        values: { p10: percentiles.p10[i], p50: percentiles.p50[i], p90: percentiles.p90[i] },
+        values: { p10: fan.p10[i], p50: fan.p50[i], p90: fan.p90[i] },
       }))
     : null
 
@@ -239,7 +245,10 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
           <PercentileLineChart
             rows={chartRows}
             series={PERCENTILE_SERIES}
-            title="Simulated outcomes by year"
+            // FIN-65 change 3: the unit belongs in the title, not in a footnote. Every figure
+            // on this chart is deflated to today's purchasing power, and a reader who assumes
+            // otherwise misreads the whole plan by roughly 5x at the far end of the horizon.
+            title="Simulated outcomes by year (today's dollars)"
             retirementAge={assumptions.retirementAge}
             // Mirrors App.tsx's Plan-tab default so both tabs' sliders/markers start at the same
             // year rather than this one defaulting to index 0 (current age) — FIN-61.

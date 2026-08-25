@@ -33,9 +33,17 @@ const baseRows: ChartRow[] = [
   },
 ]
 
+/**
+ * The two fans are deliberately given different numbers (FIN-65 change 3). If they matched,
+ * every assertion about what the chart renders would pass whichever one the component
+ * plotted, and "shows today's dollars" would be untested.
+ */
 const fakeResult = {
   successRate: 87,
-  percentiles: { p10: [1], p50: [2], p90: [3] },
+  percentiles: {
+    real: { p10: [1], p50: [2], p90: [3] },
+    nominal: { p10: [10], p50: [20], p90: [30] },
+  },
   meta: { simulationCount: 1000, stockVolatility: 0.15, bondVolatility: 0.06, allocation: { stocks: 70, bonds: 30 } },
 }
 
@@ -425,7 +433,13 @@ describe('StressTestSection', () => {
       }
       orchestratorWithPrivateAccess.setState({
         status: 'complete',
-        result: { ...fakeResult, percentiles: { p10: [1, 2, 3], p50: [4, 5, 6], p90: [7, 8, 9] } },
+        result: {
+          ...fakeResult,
+          percentiles: {
+            real: { p10: [1, 2, 3], p50: [4, 5, 6], p90: [7, 8, 9] },
+            nominal: { p10: [10, 20, 30], p50: [40, 50, 60], p90: [70, 80, 90] },
+          },
+        },
       })
     })
 
@@ -434,6 +448,37 @@ describe('StressTestSection', () => {
     // retirementAge (67) is the middle row, not the last — this pins the retirement-year
     // default against silently regressing to "default to the last row".
     expect(screen.getByText('Age 67 · Year 33')).toBeInTheDocument()
+  })
+
+  /**
+   * FIN-65 change 3. The engine returns both fans; this pins which one reaches the screen.
+   * Without it the component could plot future dollars under a today's-dollars heading and
+   * every other test here would still pass — the two fans only differ by a scale factor, and
+   * nothing else asserts an actual rendered number.
+   */
+  it("renders the today's-dollars fan, not the nominal one", async () => {
+    const orchestrator = new FakeOrchestrator()
+    render(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
+
+    act(() => orchestrator.resolveRun())
+    const detail = await screen.findByLabelText('Selected year detail')
+
+    // fakeResult's real fan is 1/2/3; its nominal fan is 10/20/30.
+    expect(detail).toHaveTextContent('$1')
+    expect(detail).toHaveTextContent('$2')
+    expect(detail).toHaveTextContent('$3')
+    expect(detail).not.toHaveTextContent('$10')
+    expect(detail).not.toHaveTextContent('$20')
+    expect(detail).not.toHaveTextContent('$30')
+  })
+
+  it('labels the chart as today’s dollars so the axis is not read as future dollars', async () => {
+    const orchestrator = new FakeOrchestrator()
+    render(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
+
+    act(() => orchestrator.resolveRun())
+
+    expect(await screen.findByText(/today's dollars/i)).toBeInTheDocument()
   })
 
   it('exposes an imperative runStressTest handle so a parent can trigger a re-run without switching tabs', async () => {

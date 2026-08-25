@@ -20,3 +20,11 @@
 .tooltipSlot {
   margin-bottom: calc((2.5rem - 1.5rem) / 2);
 }
+
+/* FIN-65: a quiet secondary note under the return inputs, not a second label competing with
+   the field's own. */
+.realReturnHint {
+  grid-column: 1 / -1;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted, #6b7280);
+}
