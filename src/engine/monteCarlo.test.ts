@@ -2442,3 +2442,139 @@ describe('FIN-65: a balance of exactly zero counts as ruin', () => {
     expect(path.balances.slice(7).every((balance) => balance === 0)).toBe(true);
   });
 });
+
+/**
+ * Round 2 of the FIN-65 review found the deflator itself undefended: changing
+ * `toTodaysDollars` to divide every year by `inflationIndex[0]` instead of `inflationIndex[year]`
+ * passed the entire suite. The existing coverage could not see it because it used single-period
+ * paths, where those two indices are the same value by construction — and the percentile tests
+ * call `toTodaysDollars` to build their own expectations, so the oracle moved with the code.
+ *
+ * These use multi-period paths and hand-computed expectations that never call the function under
+ * test. Without them, a "simplification" to one price level would report an age-100 balance
+ * deflated by one year of inflation instead of sixty-five — roughly 5x too flattering, under a
+ * chart still titled "today's dollars".
+ */
+describe('FIN-65: toTodaysDollars deflates each year by that year price level', () => {
+  it('uses a per-year index, not the first year for the whole path', () => {
+    // 10%/yr for two years: the price level ends at 1.1 then 1.21. A flat $100 balance is
+    // therefore worth 100/1.1 = 90.909... then 100/1.21 = 82.644... in today's dollars.
+    const path = { balances: [100, 100], inflationIndex: [1.1, 1.21], ruinPeriod: null };
+
+    const real = toTodaysDollars(path);
+
+    expect(real[0]).toBeCloseTo(90.909090909, 6);
+    expect(real[1]).toBeCloseTo(82.644628099, 6);
+    // Deflating both years by inflationIndex[0] would leave the two equal — the whole point.
+    expect(real[1]).not.toBeCloseTo(real[0], 6);
+  });
+
+  it('keeps falling in real terms across a long path even when nominal is flat', () => {
+    const years = 40;
+    const index = Array.from({ length: years }, (_unused, i) => 1.03 ** (i + 1));
+    const path = { balances: Array(years).fill(1_000_000), inflationIndex: index, ruinPeriod: null };
+
+    const real = toTodaysDollars(path);
+
+    expect(real[years - 1]).toBeCloseTo(1_000_000 / 1.03 ** years, 6);
+    // ~3.26x erosion over 40 years at 3%. Deflating by the first year's index gives 1/1.03.
+    expect(real[years - 1]).toBeLessThan(real[0] / 3);
+  });
+});
+
+/**
+ * Round 2 found that "absorbing" was never distinguished from "clamped at zero": swapping the
+ * `ruinPeriod` gate for `Math.max(0, balance)` survived, because the existing ruin tests all run
+ * deep in drawdown where the two are identical. They only diverge while money is still flowing
+ * IN — a per-year clamp lets later contributions resurrect a plan that already failed.
+ */
+describe('FIN-65: ruin during accumulation is absorbing, not merely clamped', () => {
+  const ruinDuringAccumulation = (target: number) => {
+    const zeroAt: PipelineStage = (state, input) => {
+      const yearIndex = state.rows.length;
+      const next = runPeriod(state, input);
+      return yearIndex === target ? { ...next, balance: 0 } : next;
+    };
+
+    return runMonteCarloTrial(
+      // Still contributing 15% of income: `currentAge` is far below `retirementAge`.
+      assumptions({ currentAge: 35, retirementAge: 67, planningHorizonEndAge: 70 }),
+      [],
+      createSeededRandom(99),
+      {
+        allocation: { stocksPercent: 70, bondsPercent: 30 },
+        volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+        returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+        correlation: DEFAULT_CORRELATION,
+        returnModel: 'historical',
+        runPeriodFn: zeroAt,
+      },
+    );
+  };
+
+  it('does not let later contributions resurrect a plan that already failed', () => {
+    const path = ruinDuringAccumulation(3);
+
+    expect(path.ruinPeriod).toBe(3);
+    // Decades of contributions follow. Under a per-year clamp every one of these is positive.
+    expect(path.balances.slice(3).every((balance) => balance === 0)).toBe(true);
+  });
+
+  it('counts such a path as a failure, so the chart and the success rate agree', () => {
+    expect(computeSuccessRate([ruinDuringAccumulation(3)])).toBe(0);
+  });
+});
+
+/**
+ * Round 2 of the FIN-65 review disproved the claim that the post-ruin clamp on the carried state
+ * is unobservable. `runPeriodFn`, `withdrawalStrategy` and `taxCalculator` are documented
+ * `TrialConfig` fields and they receive this state directly, so a ruined path either hands them
+ * zero or hands them a balance that keeps compounding downward while the reported series says
+ * zero. A bracketed tax calculator or a guardrail withdrawal strategy would act on the difference.
+ */
+describe('FIN-65: a ruined path hands injected stages the clamped balance, not the negative one', () => {
+  /** Ruins during retirement at `target`, recording the balance each stage is handed. */
+  const observedBalances = (target: number) => {
+    const seen: number[] = [];
+    const spy: PipelineStage = (state, input) => {
+      seen.push(state.balance);
+      const yearIndex = state.rows.length;
+      const next = runPeriod(state, input);
+      return yearIndex === target ? { ...next, balance: 0 } : next;
+    };
+
+    const path = runMonteCarloTrial(
+      // Retired from the second period, so withdrawals keep pulling after ruin.
+      assumptions({ currentAge: 60, retirementAge: 61, planningHorizonEndAge: 78 }),
+      [],
+      createSeededRandom(7),
+      {
+        allocation: { stocksPercent: 70, bondsPercent: 30 },
+        volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+        returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+        correlation: DEFAULT_CORRELATION,
+        returnModel: 'historical',
+        runPeriodFn: spy,
+      },
+    );
+
+    return { seen, path };
+  };
+
+  it('never feeds an injected stage a negative balance after ruin', () => {
+    const { seen, path } = observedBalances(2);
+
+    expect(path.ruinPeriod).toBe(2);
+    // Without the carried-state clamp these run deeply negative for the rest of the horizon.
+    expect(seen.every((balance) => balance >= 0)).toBe(true);
+  });
+
+  it('agrees with the balance it reported for the same year', () => {
+    const { seen, path } = observedBalances(2);
+
+    // The stage for year N+1 opens on exactly what year N reported, for every year after ruin.
+    for (let year = 3; year < seen.length; year += 1) {
+      expect(seen[year]).toBe(path.balances[year - 1]);
+    }
+  });
+});

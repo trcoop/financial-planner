@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useProjectionState } from './useProjectionState'
+import { runProjection } from '../../engine'
+import { toAssumptions, useProjectionState } from './useProjectionState'
 import type { AdvancedAssumptionValues, CoreInputValues } from '../components'
 
 const CORE: CoreInputValues = {
@@ -231,5 +232,67 @@ describe('useProjectionState', () => {
     expect(result.current.rows).toEqual([])
     expect(result.current.projectedBalanceAtRetirement).toBeUndefined()
     expect(result.current.error).toBeDefined()
+  })
+})
+
+/**
+ * Round 2 of the FIN-65 review found both of this ticket's user-visible changes reverting
+ * without a single test failing. `App.test.tsx` asserts the LABELS — "Projected balance at 65
+ * (today's dollars)", the chart title — but nothing asserted the numbers underneath them were
+ * actually deflated, and nothing pinned that the Plan tab's return rate blends the two asset
+ * classes at all. Dropping either wiring shipped a confidently mislabelled chart: future dollars
+ * under a today's-dollars title (about 5x too high at age 100), or a 100%-bond portfolio quietly
+ * compounding the stock rate.
+ */
+describe('FIN-65 wiring: the Plan tab reports today\'s dollars at a blended rate', () => {
+  it('deflates the projection rows rather than passing through nominal ones', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+    const plan = toAssumptions(CORE, ADVANCED)
+    const nominal = runProjection(plan)
+    const year = nominal.length - 1
+
+    // `toTodaysDollarRows` divides year N by (1 + inflation)^(N+1) — derived from the model,
+    // not read back off the implementation.
+    const priceLevel = (1 + plan.inflationRate) ** (year + 1)
+
+    expect(result.current.rows[year].endingBalance).toBeCloseTo(
+      nominal[year].endingBalance / priceLevel,
+      6,
+    )
+    // Over a 65-year horizon at 2.5% the two differ ~5x. Guards against the deflation being
+    // dropped entirely, which is the mutation that previously survived the whole suite.
+    expect(result.current.rows[year].endingBalance).toBeLessThan(nominal[year].endingBalance / 4)
+  })
+
+  it('deflates the headline retirement tile too, not just the chart rows', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+    const plan = toAssumptions(CORE, ADVANCED)
+    const nominal = runProjection(plan)
+    const retirementYear = CORE.retirementAge - CORE.currentAge
+    const priceLevel = (1 + plan.inflationRate) ** (retirementYear + 1)
+
+    expect(result.current.projectedBalanceAtRetirement).toBeCloseTo(
+      nominal[retirementYear].endingBalance / priceLevel,
+      6,
+    )
+  })
+
+  it('blends the stock and bond returns at the allocation weight', () => {
+    const plan = toAssumptions(CORE, { ...ADVANCED, stocksAllocationPercent: 70 })
+
+    // 0.70 * 7% + 0.30 * 4.5% = 6.25%.
+    expect(plan.annualReturnRate).toBeCloseTo(0.0625, 10)
+  })
+
+  it('uses the bond return alone at 0% stocks, so the tab cannot quote a rate the portfolio has not got', () => {
+    const plan = toAssumptions(CORE, { ...ADVANCED, stocksAllocationPercent: 0 })
+
+    expect(plan.annualReturnRate).toBeCloseTo(ADVANCED.bondReturnPercent / 100, 10)
+  })
+
+  it('uses the stock return alone at 100% stocks', () => {
+    const plan = toAssumptions(CORE, { ...ADVANCED, stocksAllocationPercent: 100 })
+
+    expect(plan.annualReturnRate).toBeCloseTo(ADVANCED.annualReturnPercent / 100, 10)
   })
 })

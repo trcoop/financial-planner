@@ -51,4 +51,40 @@ describe('HISTORICAL_ANNUAL_INFLATION', () => {
   ])('reports %i CPI-U as %f', (year, expected) => {
     expect(HISTORICAL_ANNUAL_INFLATION.find((entry) => entry.year === year)?.inflation).toBe(expected);
   });
+
+  /**
+   * The spot-checks above pin five individual cells, but a wholesale rescale of the series
+   * would pass every one of them. A round-2 FIN-65 review also showed that compounding all 98
+   * rates and checking the endpoint proves less than it looks: because each rate is
+   * `index[Y]/index[Y-1] - 1`, the product telescopes exactly to `index[2025]/index[1927]`,
+   * so it validates the two endpoints and is structurally blind to every value in between —
+   * any pair of offsetting per-year errors passes unchanged.
+   *
+   * This reconstructs the price level year by year from a 1927 base of 17.4 and checks it
+   * against published BLS CPI-U annual averages at decade checkpoints. That IS an interior
+   * check: a corrupted year throws off every checkpoint after it.
+   */
+  it.each([
+    [1940, 14.0],
+    [1950, 24.1],
+    [1960, 29.6],
+    [1970, 38.8],
+    [1980, 82.4],
+    [1990, 130.7],
+    [2000, 172.2],
+    [2010, 218.056],
+    [2020, 258.811],
+    [2024, 313.689],
+  ])('reconstructs the %i price level to the published CPI-U index of %f', (year, published) => {
+    const BASE_1927 = 17.4;
+    let level = BASE_1927;
+    for (const entry of HISTORICAL_ANNUAL_INFLATION) {
+      if (entry.year > year) break;
+      level *= 1 + entry.inflation;
+    }
+
+    // Measured drift across all ten checkpoints is <= 0.03%; 0.05% leaves headroom for the
+    // published table's own rounding without admitting a real data error.
+    expect(Math.abs(level / published - 1), `${year}`).toBeLessThan(0.0005);
+  });
 });

@@ -31,7 +31,13 @@ export function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptio
     annualContributionRate: core.annualContributionRatePercent / 100,
     planningHorizonEndAge: PLANNING_HORIZON_END_AGE,
     annualRaiseRate: advanced.annualRaisePercent / 100,
-    // FIN-65: the stock/bond blend at allocation weight, and nothing else. This previously ran
+    // FIN-65: the stock/bond blend at allocation weight. Note this linear blend of two COMPOUND
+    // rates is itself an approximation: for an annually rebalanced portfolio the exact geometric
+    // return carries a diversification term, `[w*sd_s^2 + (1-w)*sd_b^2 - sd_p^2] / 2`, worth about
+    // +0.52pp/yr at the shipped defaults (70/30, 19.5%/7.7%, rho -0.2). Omitting it UNDERSTATES
+    // the true rebalanced return, so the Plan tab errs conservative — which is the direction to
+    // err in, given the failure this ticket fixed. Deliberate; do not "correct" it by reaching
+    // for a variance term again without re-reading the next paragraph. This previously ran
     // through a variance-drag helper (`expectedPortfolioReturn`, deleted in FIN-65 along with
     // its private `portfolioVariance`), which subtracted a drag term to convert an
     // ARITHMETIC mean into a geometric one. That double-counted: the advanced form's return

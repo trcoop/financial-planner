@@ -618,15 +618,17 @@ export const runMonteCarloTrial = (
     }
     const balance = ruinPeriod === null ? state.balance : 0;
 
-    // Both writes below are defensive, and a FIN-65 review confirmed no current assertion can
-    // observe either one: `ruinPeriod` already forces every later reported balance to zero, so
-    // leaving the carried state negative would not move `balances`, and nothing in the Monte
-    // Carlo path ever reads `state.rows` back. They are kept anyway because `runPeriodFn`,
-    // `withdrawalStrategy` and `taxCalculator` are all caller-injectable and receive this state:
-    // handing an injected stage a negative balance that contradicts the zero we just reported
-    // is the kind of split-brain a later reader would trust the wrong half of. Treat them as an
-    // invariant on the state, not as behaviour under test — do not "simplify" them away on the
-    // strength of a green suite alone.
+    // Neither write moves this trial's OWN output — `ruinPeriod` already forces every later
+    // reported balance to zero, and nothing here reads `state.rows` back. What they protect is
+    // the state handed to caller-injected stages: `runPeriodFn`, `withdrawalStrategy` and
+    // `taxCalculator` are all first-class `TrialConfig` fields, and they observe this state
+    // directly. Without the clamp a ruined path feeds them a balance that keeps compounding
+    // downward (measured: -$3,838,333 by the horizon on a plan that ruins at period 2) while
+    // the reported series says zero — a split-brain a real bracketed tax calculator or
+    // guardrail withdrawal strategy would act on. `rows` is patched for the same reason: it is
+    // the same year's ending balance, and the two disagreeing is the kind of contradiction a
+    // later reader would trust the wrong half of. Both are pinned by tests through the injected
+    // stage seam, so this is behaviour under test, not merely a convention.
     state = { ...state, balance };
     const lastRow = state.rows[state.rows.length - 1];
     if (lastRow !== undefined && lastRow.endingBalance !== balance) {
