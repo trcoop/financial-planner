@@ -1,6 +1,12 @@
 # Local-only working docs (specs, notes) — not committed
 docs/
 
+# Local-only investigative work: competitor teardowns, external formula
+# validation, reference data pulls. Kept on disk on purpose — it is what the
+# engine's calibration comments cite — but never committed. Nothing here is a
+# source of truth; durable specs live in Linear (see CLAUDE.md).
+research/
+
 # Local design work / MCP scratch output — not committed
 .design-work/
 .playwright-mcp/
