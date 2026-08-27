@@ -157,6 +157,83 @@ const advance = (state: PeriodState): PeriodState => ({ ...state, age: state.age
  *
  * @throws {InvalidProjectionInputError} if any assumption violates the contract in §6.
  */
+/**
+ * Clamps a ruined period to zero, and keeps it there (FIN-65 change 6).
+ *
+ * Applied by {@link runProjection} after each `runPeriod`, deliberately at the loop level
+ * rather than inside {@link withdrawFullShortfall}: `WithdrawalStrategy` is a caller-injected
+ * seam, and "a portfolio cannot hold less than nothing" is a property of the engine, not of
+ * whichever strategy happens to be plugged in. {@link runMonteCarloTrial} made the same call
+ * at the same layer at FIN-65 change 4, so the two engines stay structurally parallel.
+ *
+ * Three things happen in the year the money runs out, and the third is the one worth reading
+ * twice:
+ *
+ * 1. `balance` is floored at zero, and `ruined` latches so later periods cannot resurrect the
+ *    plan on a contribution or a good return year.
+ * 2. The recorded row's `endingBalance` is floored to match — `state.rows` IS this function's
+ *    output, so unlike the Monte Carlo case every later row needs it, not just this one.
+ * 3. The *withdrawal* is cut back to what the portfolio could actually fund, rather than
+ *    reporting the full requested draw. This is what keeps `beginningBalance -
+ *    annualWithdrawal + investmentReturn + annualContribution = endingBalance` true in the
+ *    ruin year — the identity {@link toTodaysDollarRows} is built around and the year-detail
+ *    panel renders as a breakdown a reader can add up. Flooring `endingBalance` alone would
+ *    leave that breakdown short by exactly the overshoot, in the single year a user is most
+ *    likely to click on. `investmentReturn` follows for the same reason: growth ran on
+ *    `beginningBalance - withdrawal`, which the cutback takes to zero.
+ *
+ * **The `ruined` latch is currently unreachable, and is kept on purpose.** Nothing in today's
+ * engine can resurrect a zeroed plan without it: `isRetired` is monotonic in age, so a period
+ * that withdraws can never be followed by one that contributes, and `0 * (1 + r)` is 0 for any
+ * return. Flooring each period independently would therefore produce identical output, and a
+ * mutation that removes the latch survives the suite — verified, not assumed. It stays because
+ * {@link applyLifeEvents} is a declared future stage that can credit money mid-projection (an
+ * inheritance, a property sale), and at that point "a contribution cannot revive a plan that
+ * already failed" becomes a live behavioural question rather than an arithmetic inevitability.
+ * `runMonteCarloTrial` answered it that way at FIN-65 change 4, where the shared-RNG structure
+ * makes its equivalent gate reachable and tested. Deleting this would silently pick the
+ * opposite answer for the Plan tab on the day life events land.
+ *
+ * `priorWithdrawal` is deliberately NOT cut back — it carries the inflation-indexed spending
+ * *need*, which keeps rising whether or not the portfolio can fund it. See
+ * {@link computeWithdrawals}.
+ */
+const clampRuin = (state: PeriodState, ruined: boolean): { state: PeriodState; ruined: boolean } => {
+  if (!ruined && state.balance > 0) {
+    return { state, ruined: false };
+  }
+
+  const lastRow = state.rows[state.rows.length - 1];
+  if (lastRow === undefined) {
+    return { state: { ...state, balance: 0 }, ruined: true };
+  }
+
+  // The shortfall is only meaningful in the year ruin actually happens; afterwards every
+  // component is already zero because the period opened on a zero balance.
+  const funded = Math.max(0, Math.min(lastRow.annualWithdrawal, lastRow.beginningBalance));
+
+  return {
+    state: {
+      ...state,
+      balance: 0,
+      rows: [
+        ...state.rows.slice(0, -1),
+        {
+          ...lastRow,
+          annualWithdrawal: funded,
+          // Derived, not recomputed from the period's rate: whatever growth ran on, the row
+          // must close on a zero ending balance. Solving the breakdown identity for the return
+          // gives this, and it reduces to exactly 0 in the ordinary retirement case (where the
+          // cutback takes `funded` to `beginningBalance` and there is no contribution).
+          investmentReturn: funded - lastRow.beginningBalance - lastRow.annualContribution,
+          endingBalance: 0,
+        },
+      ],
+    },
+    ruined: true,
+  };
+};
+
 export const runProjection = (assumptions: PlanAssumptions, events: PlanEvent[] = []): ProjectionRow[] => {
   validatePlanAssumptions(assumptions);
 
@@ -171,8 +248,12 @@ export const runProjection = (assumptions: PlanAssumptions, events: PlanEvent[] 
   };
 
   let state = createInitialPeriodState(assumptions);
+  let ruined = false;
   while (state.age <= assumptions.planningHorizonEndAge) {
-    state = advance(runPeriod(state, input));
+    state = runPeriod(state, input);
+    // FIN-65 change 6. A portfolio cannot go below zero, and zero absorbs. See `clampRuin`.
+    ({ state, ruined } = clampRuin(state, ruined));
+    state = advance(state);
   }
 
   return state.rows;
