@@ -2531,23 +2531,37 @@ describe('FIN-65: ruin during accumulation is absorbing, not merely clamped', ()
  * `TrialConfig` fields and they receive this state directly, so a ruined path either hands them
  * zero or hands them a balance that keeps compounding downward while the reported series says
  * zero. A bracketed tax calculator or a guardrail withdrawal strategy would act on the difference.
+ *
+ * Ruin is arranged here by OVERSHOOT — a 90% withdrawal rate that drives the balance through zero
+ * on its own — not by forcing the balance to zero. Round 3 caught that forcing it is exactly the
+ * case where the ruin-year clamp is a no-op (clamping 0 to 0), so a mutation restricting the clamp
+ * to later years survived. With a genuine overshoot the ruin year itself is a real clamp of
+ * -113,840 to 0.
  */
 describe('FIN-65: a ruined path hands injected stages the clamped balance, not the negative one', () => {
-  /** Ruins during retirement at `target`, recording the balance each stage is handed. */
-  const observedBalances = (target: number) => {
-    const seen: number[] = [];
+  /** Records the balance and last reported row each stage is handed, on a path that overshoots. */
+  const observed = () => {
+    const balancesSeen: number[] = [];
+    const rowEndingsSeen: number[] = [];
     const spy: PipelineStage = (state, input) => {
-      seen.push(state.balance);
-      const yearIndex = state.rows.length;
-      const next = runPeriod(state, input);
-      return yearIndex === target ? { ...next, balance: 0 } : next;
+      balancesSeen.push(state.balance);
+      const lastRow = state.rows[state.rows.length - 1];
+      if (lastRow !== undefined) rowEndingsSeen.push(lastRow.endingBalance);
+      return runPeriod(state, input);
     };
 
     const path = runMonteCarloTrial(
-      // Retired from the second period, so withdrawals keep pulling after ruin.
-      assumptions({ currentAge: 60, retirementAge: 61, planningHorizonEndAge: 78 }),
+      // Retired from the second period and spending 90% a year: the portfolio overshoots zero
+      // under its own arithmetic rather than being pinned there by the test.
+      assumptions({
+        currentAge: 60,
+        retirementAge: 61,
+        planningHorizonEndAge: 78,
+        initialBalance: 100_000,
+        withdrawalRateInRetirement: 0.9,
+      }),
       [],
-      createSeededRandom(7),
+      createSeededRandom(1),
       {
         allocation: { stocksPercent: 70, bondsPercent: 30 },
         volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
@@ -2558,23 +2572,40 @@ describe('FIN-65: a ruined path hands injected stages the clamped balance, not t
       },
     );
 
-    return { seen, path };
+    return { balancesSeen, rowEndingsSeen, path };
   };
 
-  it('never feeds an injected stage a negative balance after ruin', () => {
-    const { seen, path } = observedBalances(2);
+  it('ruins by overshooting zero, so the ruin year is a real clamp and not a no-op', () => {
+    const { path } = observed();
 
-    expect(path.ruinPeriod).toBe(2);
-    // Without the carried-state clamp these run deeply negative for the rest of the horizon.
-    expect(seen.every((balance) => balance >= 0)).toBe(true);
+    expect(path.ruinPeriod).not.toBeNull();
+    // The reported series is clamped from the ruin year onward...
+    expect(path.balances.slice(path.ruinPeriod as number).every((b) => b === 0)).toBe(true);
+    // ...and the year before it is still solvent, i.e. the path really did cross zero here.
+    expect(path.balances[(path.ruinPeriod as number) - 1]).toBeGreaterThan(0);
+  });
+
+  it('never feeds an injected stage a negative balance, including in the ruin year itself', () => {
+    const { balancesSeen } = observed();
+
+    // Without the carried-state clamp the stage after ruin is handed about -113,840, and it
+    // compounds downward from there for the rest of the horizon.
+    expect(balancesSeen.every((balance) => balance >= 0)).toBe(true);
+  });
+
+  it('never feeds an injected stage a row whose endingBalance contradicts the reported one', () => {
+    const { rowEndingsSeen } = observed();
+
+    // The `rows` patch, pinned separately from the balance clamp: round 3 found that deleting
+    // it alone survived the whole suite, because nothing read `state.rows` back.
+    expect(rowEndingsSeen.every((ending) => ending >= 0)).toBe(true);
   });
 
   it('agrees with the balance it reported for the same year', () => {
-    const { seen, path } = observedBalances(2);
+    const { balancesSeen, path } = observed();
 
-    // The stage for year N+1 opens on exactly what year N reported, for every year after ruin.
-    for (let year = 3; year < seen.length; year += 1) {
-      expect(seen[year]).toBe(path.balances[year - 1]);
+    for (let year = 1; year < balancesSeen.length; year += 1) {
+      expect(balancesSeen[year]).toBe(path.balances[year - 1]);
     }
   });
 });

@@ -75,6 +75,10 @@ describe('HISTORICAL_ANNUAL_INFLATION', () => {
     [2010, 218.056],
     [2020, 258.811],
     [2024, 313.689],
+    // The final cell of the table: pinned by nothing else (the Bengen cohorts stop at 2023), and
+    // the row most likely to be mistyped or revised on a data refresh. Verified against MIT IR's
+    // published CPI-U calendar-year series (2025 = 321.9, 2.63%; 2024 = 313.7; 2023 = 304.7).
+    [2025, 321.9],
   ])('reconstructs the %i price level to the published CPI-U index of %f', (year, published) => {
     const BASE_1927 = 17.4;
     let level = BASE_1927;
@@ -87,4 +91,5 @@ describe('HISTORICAL_ANNUAL_INFLATION', () => {
     // published table's own rounding without admitting a real data error.
     expect(Math.abs(level / published - 1), `${year}`).toBeLessThan(0.0005);
   });
+
 });
