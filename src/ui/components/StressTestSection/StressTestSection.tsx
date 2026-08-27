@@ -245,10 +245,9 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
           <PercentileLineChart
             rows={chartRows}
             series={PERCENTILE_SERIES}
-            // FIN-65 change 3: the unit belongs in the title, not in a footnote. Every figure
-            // on this chart is deflated to today's purchasing power, and a reader who assumes
-            // otherwise misreads the whole plan by roughly 5x at the far end of the horizon.
-            title="Simulated outcomes by year (today's dollars)"
+            // Deflated to today's purchasing power, like everything else the app shows — the
+            // unit is stated once under the tab bar in App.tsx rather than on each chart.
+            title="Simulated outcomes by year"
             retirementAge={assumptions.retirementAge}
             // Mirrors App.tsx's Plan-tab default so both tabs' sliders/markers start at the same
             // year rather than this one defaulting to index 0 (current age) — FIN-61.

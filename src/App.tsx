@@ -112,6 +112,14 @@ function App() {
     <div className="shell">
       <TopBar />
       <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+      {/* FIN-65 change 3: stated once, globally, rather than parenthesised onto each tile and
+        * chart title. Every figure the app displays is deflated — both tabs, the stat tiles,
+        * both charts and the year-detail panels — so it is a property of the whole app, and
+        * repeating it per-element read as a disclaimer rather than a unit. It sits directly
+        * under the tab bar so it is above the fold on both tabs and applies visibly to
+        * whichever one is open. Not `aria-hidden`: a screen-reader user needs the unit too,
+        * and it is the only place it is now stated. */}
+      <p className="unitsNote">All amounts in today's dollars</p>
       <div className="body">
         <Drawer label="Plan inputs">
           <CoreInputsForm values={coreValues} onChange={setCoreValues} />
@@ -136,7 +144,7 @@ function App() {
                 <div className="statTiles">
                   <StatTile label="Current investment balance" value={formatCurrency(coreValues.initialBalance)} />
                   <StatTile
-                    label={`Projected balance at ${coreValues.retirementAge} (today's dollars)`}
+                    label={`Projected balance at ${coreValues.retirementAge}`}
                     value={projectedBalanceAtRetirement !== undefined ? formatCurrency(projectedBalanceAtRetirement) : '—'}
                   />
                   <StatTile
@@ -157,10 +165,7 @@ function App() {
                   <PercentileLineChart
                     rows={planChartRows}
                     series={PLAN_SERIES}
-                    // FIN-65 change 3: `rows` arrives already deflated from
-                    // `useProjectionState`, so the unit belongs in the title where the reader
-                    // sees it — matching the Stress Test tab's chart.
-                    title="Investment balance by year (today's dollars)"
+                    title="Investment balance by year"
                     onSelectRow={handleSelectPlanRow}
                     defaultSelectedYear={retirementRow?.year}
                     retirementAge={coreValues.retirementAge}

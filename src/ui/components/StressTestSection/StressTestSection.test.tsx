@@ -472,14 +472,14 @@ describe('StressTestSection', () => {
     expect(detail).not.toHaveTextContent('$30')
   })
 
-  it('labels the chart as today’s dollars so the axis is not read as future dollars', async () => {
-    const orchestrator = new FakeOrchestrator()
-    render(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
-
-    act(() => orchestrator.resolveRun())
-
-    expect(await screen.findByText(/today's dollars/i)).toBeInTheDocument()
-  })
+  /*
+   * The "labels the chart as today's dollars" test that lived here was REMOVED, not deleted:
+   * the unit is no longer this component's to state. It is declared once, globally, under the
+   * tab bar in App.tsx — see the note there — so a test rendering this section in isolation
+   * cannot see it and would be asserting the wrong component's contract. The replacement lives
+   * in App.test.tsx ("FIN-65 change 3: the display unit is stated once, globally"), which also
+   * covers the half this one could not: that the note applies to BOTH tabs.
+   */
 
   it('exposes an imperative runStressTest handle so a parent can trigger a re-run without switching tabs', async () => {
     const orchestrator = new FakeOrchestrator()
