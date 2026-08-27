@@ -122,15 +122,31 @@ export function useProjectionState(
     }
   }, [debouncedCoreValues, debouncedAdvancedValues])
 
-  // Round-4 note on a naming collision worth not tripping over: this reports the retirement
-  // year's ENDING balance — the pot after that year's withdrawal and growth — while
-  // `src/ui/calibration.test.ts` uses the same year's `beginningBalance` for what it calls "the
-  // pot the retiree starts drawing from". Both are correct for what they measure, but the two
-  // files now attach the same English phrase to different quantities, and FIN-65 change 2
-  // widened the gap between them by a year of drawdown-plus-growth (the withdrawal now precedes
-  // the growth it used to follow). Ending is the right one here: it is the number the tile shows
-  // beside a chart whose retirement-year point is also an ending balance, and a tile that
-  // disagreed with the point directly above it would be the worse error.
+  // Reports the retirement year's ENDING balance. **Known confusing; decision deferred to
+  // FIN-69, do not silently "fix" it either way here.**
+  //
+  // The withdrawal is rated off that year's BEGINNING balance (Bengen/Trinity, FIN-65 change
+  // 2), so multiplying this tile by the withdrawal rate does not reproduce the withdrawal the
+  // year-detail panel shows for the same year — at the shipped defaults, $1,622,812 x 3.9% =
+  // $63,290 against an actual $61,665. Travis hit exactly that while exercising the FIN-65
+  // branch. This tile is also a year further along than its label implies: it is the balance
+  // at the END of the year you turn 65, not the pot you retire with.
+  //
+  // Left as-is deliberately. It predates FIN-65 — the tile has always reported the ending
+  // balance and the withdrawal has always been rated off the beginning one; change 2 altered
+  // the size of the gap, not its existence — so it is not a regression this branch should be
+  // carrying, and the fix is a real UX call rather than a typo. FIN-69 has the numbers, the
+  // three candidate quantities and why the obvious third one (row 64's ending balance) is a
+  // trap.
+  //
+  // An earlier draft of this comment argued the ending balance was correct because the tile
+  // should agree with the chart's data point directly above it. That reasoning is recorded
+  // here as contested, not as settled: nobody cross-checks a tile against a chart point by
+  // eye, and the one check a user demonstrably did run is the arithmetic one.
+  //
+  // Related and separate: `src/ui/calibration.test.ts` calls the retirement year's BEGINNING
+  // balance "the pot the retiree starts drawing from". Both files are correct about what they
+  // measure, but the same English phrase now names two quantities.
   const retirementRow = rows.find((row) => row.age >= debouncedCoreValues.retirementAge)
   const projectedBalanceAtRetirement = retirementRow?.endingBalance ?? rows.at(-1)?.endingBalance
 
