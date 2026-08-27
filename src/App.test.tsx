@@ -61,7 +61,12 @@ vi.mock('./workers', () => ({
       emitComplete: () => {
         const result = {
           successRate: 87,
-          percentiles: { p10: [1, 2], p50: [3, 4], p90: [5, 6] },
+          // Distinct fans so an assertion about the chart cannot pass on the wrong one
+          // (FIN-65 change 3 — the Stress Test chart plots `real`).
+          percentiles: {
+            real: { p10: [1, 2], p50: [3, 4], p90: [5, 6] },
+            nominal: { p10: [10, 20], p50: [30, 40], p90: [50, 60] },
+          },
           meta: { simulationCount: 1000, stockVolatility: 0.15, bondVolatility: 0.06, allocation: { stocks: 70, bonds: 30 } },
         }
         listeners.forEach((listener) => listener({ status: 'complete', result }))
@@ -539,5 +544,66 @@ describe('App shell responsive behavior', () => {
     render(<App />)
     const toggle = screen.getByRole('button', { name: /expand/i })
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  })
+})
+
+/**
+ * FIN-65 change 3: the display unit is stated once, globally.
+ *
+ * Every figure the app renders — both tabs' stat tiles, both charts, both year-detail panels —
+ * is deflated to today's purchasing power. That was originally parenthesised onto each tile
+ * label and chart title, which read as a repeated disclaimer rather than a unit (Travis,
+ * 2026-08-26). It now lives in one muted line under the tab bar.
+ *
+ * The risk that reintroduces is the reason this suite exists: with the unit stated in exactly
+ * one place, losing that one element leaves an app whose every number silently means something
+ * else — roughly 5x off at the far end of the horizon — with nothing on screen to contradict a
+ * reader who assumes nominal dollars. So the note's presence, its uniqueness, and its
+ * applicability to both tabs are all pinned, and the old per-element labels are pinned as
+ * absent so a future edit cannot quietly restore the duplication this replaced.
+ */
+describe("FIN-65 change 3: the display unit is stated once, globally", () => {
+  // This file opts out of RTL's automatic cleanup (it imports `describe`/`it` from vitest
+  // rather than using globals), so each describe wires its own — without it a previous test's
+  // App stays mounted and the "exactly once" assertion counts two of everything.
+  beforeEach(() => mockMatchMedia(true))
+  afterEach(() => cleanup())
+
+  it('states the unit under the tab bar', () => {
+    render(<App />)
+
+    expect(screen.getByText("All amounts in today's dollars")).toBeInTheDocument()
+  })
+
+  it('states it exactly once, not per tile and chart', () => {
+    render(<App />)
+
+    expect(screen.getAllByText(/today.s dollars/i)).toHaveLength(1)
+  })
+
+  it('keeps stating it on the Stress Test tab, which is deflated too', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('tab', { name: 'Stress Test' }))
+
+    expect(screen.getByRole('tab', { name: 'Stress Test' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText("All amounts in today's dollars")).toBeInTheDocument()
+  })
+
+  it('leaves the unit out of the tile label and the chart title', () => {
+    render(<App />)
+
+    expect(screen.getByText('Projected balance at 65')).toBeInTheDocument()
+    expect(screen.getByRole('figure', { name: 'Investment balance by year' })).toBeInTheDocument()
+  })
+
+  it('exposes the note as readable text, not a decoration screen readers skip', () => {
+    render(<App />)
+
+    // `getByText` would still find an `aria-hidden` node, and this is now the only place the
+    // unit is stated — so hiding it from assistive tech would leave those users with no unit
+    // at all rather than a redundant one.
+    expect(screen.getByText("All amounts in today's dollars")).not.toHaveAttribute('aria-hidden')
   })
 })

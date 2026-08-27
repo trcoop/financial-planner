@@ -95,7 +95,7 @@ describe('AdvancedAssumptionsForm', () => {
   // A prior version of this suite asserted DEFAULT_ADVANCED_VALUES.annualReturnPercent/
   // bondReturnPercent equal DEFAULT_RETURN_ASSUMPTIONS.stocks/bonds, to guard the two from
   // drifting apart. That invariant is gone by design (FIN-64): these UI defaults feed only the
-  // Tier 1 deterministic Plan (drag-adjusted via `expectedPortfolioReturn`), while the Monte
+  // Tier 1 deterministic Plan (blended via `blendedPortfolioReturn`), while the Monte
   // Carlo stress test's default `returnModel: 'historical'` block-bootstraps real 1928-2025
   // returns and never reads these fields at all — see `DEFAULT_ADVANCED_VALUES`'s doc comment.
   // `src/ui/calibration.test.ts`'s FIN-64 suite is the thing that actually guards the 90-95%
@@ -282,5 +282,33 @@ describe('AdvancedAssumptionsForm', () => {
       await user.keyboard('{Escape}')
       expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
     })
+  })
+})
+
+/**
+ * FIN-65 change 3. With balances displayed in today's dollars, a user who typed "7%" and
+ * watches the chart grow at ~4.4% has no way to reconcile the two unless the real rate is
+ * stated. These pin that it is derived live from BOTH inputs, not hard-coded.
+ */
+describe('real return hints', () => {
+  it("shows each return assumption's real rate, net of the inflation input", () => {
+    render(<AdvancedAssumptionsForm values={{ ...DEFAULT_VALUES, annualReturnPercent: 7, bondReturnPercent: 5, inflationPercent: 2.5 }} onChange={() => {}} />)
+
+    // (1.07 / 1.025) - 1 = 4.39%; (1.05 / 1.025) - 1 = 2.44%. Not 4.5% and 2.5%.
+    expect(screen.getByText('4.4% after inflation')).toBeInTheDocument()
+    expect(screen.getByText('2.4% after inflation')).toBeInTheDocument()
+  })
+
+  it('recomputes when the inflation assumption changes', () => {
+    render(<AdvancedAssumptionsForm values={{ ...DEFAULT_VALUES, annualReturnPercent: 7, inflationPercent: 5 }} onChange={() => {}} />)
+
+    // (1.07 / 1.05) - 1 = 1.90%
+    expect(screen.getByText('1.9% after inflation')).toBeInTheDocument()
+  })
+
+  it('shows a negative real return when inflation outruns the assumption', () => {
+    render(<AdvancedAssumptionsForm values={{ ...DEFAULT_VALUES, bondReturnPercent: 2, inflationPercent: 5 }} onChange={() => {}} />)
+
+    expect(screen.getByText('-2.9% after inflation')).toBeInTheDocument()
   })
 })

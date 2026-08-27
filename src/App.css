@@ -141,3 +141,14 @@
     flex: 1;
   }
 }
+
+/* FIN-65 change 3. The one place the app states its display unit — see the note in App.tsx.
+ * `flex-shrink: 0` for the same reason `.tabBar` and `.topBar` carry it (FIN-61): without it
+ * this row gets crushed to a sliver on mobile once `.shell`'s content exceeds the viewport. */
+.unitsNote {
+  flex-shrink: 0;
+  margin: 0;
+  padding: var(--space-2) var(--space-6) 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}

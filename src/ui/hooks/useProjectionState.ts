@@ -1,9 +1,9 @@
 import { useMemo, useRef } from 'react'
 import {
   runProjection,
-  expectedPortfolioReturn,
+  toTodaysDollarRows,
+  blendedPortfolioReturn,
   InvalidProjectionInputError,
-  DEFAULT_VOLATILITY_ASSUMPTIONS,
   type PlanAssumptions,
 } from '../../engine'
 import { isAdvancedInputValid, isCoreInputValid } from '../components'
@@ -31,13 +31,29 @@ export function toAssumptions(core: CoreInputValues, advanced: AdvancedAssumptio
     annualContributionRate: core.annualContributionRatePercent / 100,
     planningHorizonEndAge: PLANNING_HORIZON_END_AGE,
     annualRaiseRate: advanced.annualRaisePercent / 100,
-    // FIN-64: the same stock/bond blend, allocation, and volatility the stress test uses, drag-
-    // adjusted to a realistic compounding rate — not the raw arithmetic stock return — so the
-    // Plan chart and the stress test never quote different growth assumptions for one plan.
-    annualReturnRate: expectedPortfolioReturn(
+    // FIN-65: the stock/bond blend at allocation weight. Note this linear blend of two COMPOUND
+    // rates is itself an approximation: for an annually rebalanced portfolio the exact geometric
+    // return carries a diversification term, `[w*sd_s^2 + (1-w)*sd_b^2 - sd_p^2] / 2`, worth about
+    // +0.52pp/yr at the shipped defaults (70/30, 19.5%/7.7%, rho -0.2). Omitting it UNDERSTATES
+    // the true rebalanced return, so the Plan tab errs conservative — which is the direction to
+    // err in, given the failure this ticket fixed. Deliberate; do not "correct" it by reaching
+    // for a variance term again without re-reading the next paragraph. This previously ran
+    // through a variance-drag helper (`expectedPortfolioReturn`, deleted in FIN-65 along with
+    // its private `portfolioVariance`), which subtracted a drag term to convert an
+    // ARITHMETIC mean into a geometric one. That double-counted: the advanced form's return
+    // inputs are read as compound rates (as ProjectionLab's equivalent fields are — driving
+    // their shipped worker bundle in deterministic mode showed it applying the configured
+    // assumptions with no drag adjustment; see the note in `calibration.test.ts` on why that
+    // observation is not reproducible from this repo), and `safeWithdrawalRates.ts` is
+    // calibrated against realised
+    // historical compound returns. Discounting an already-geometric number and then comparing
+    // it to an undiscounted one put the default plan 0.58pp/yr underwater at its own "safe"
+    // withdrawal rate — a Plan chart draining from year one beside a 90% success badge.
+    // `calibration.test.ts` pins the invariant: real return >= the published withdrawal rate.
+    annualReturnRate: blendedPortfolioReturn(
       allocation,
-      { stocks: advanced.annualReturnPercent / 100, bonds: advanced.bondReturnPercent / 100 },
-      DEFAULT_VOLATILITY_ASSUMPTIONS,
+      advanced.annualReturnPercent / 100,
+      advanced.bondReturnPercent / 100,
     ),
     inflationRate: advanced.inflationPercent / 100,
     withdrawalRateInRetirement: advanced.withdrawalRatePercent / 100,
@@ -80,8 +96,18 @@ export function useProjectionState(
       return lastValidResult.current
     }
     try {
+      const planAssumptions = toAssumptions(debouncedCoreValues, debouncedAdvancedValues)
       const result: ProjectionResult = {
-        rows: runProjection(toAssumptions(debouncedCoreValues, debouncedAdvancedValues)),
+        // FIN-65 change 3. Deflated once, here, rather than at each display site: the Plan
+        // tab's chart, its "projected balance at retirement" tile and the year-detail panel
+        // all read `rows`, and the failure mode worth designing out is half of one tab
+        // showing future dollars while the other half shows today's. The Stress Test tab
+        // renders its own fan in today's dollars for the same reason, so the two tabs report
+        // comparable numbers for the same plan.
+        rows: toTodaysDollarRows(
+          runProjection(planAssumptions),
+          planAssumptions.inflationRate,
+        ),
         error: undefined,
       }
       lastValidResult.current = result
@@ -96,6 +122,31 @@ export function useProjectionState(
     }
   }, [debouncedCoreValues, debouncedAdvancedValues])
 
+  // Reports the retirement year's ENDING balance. **Known confusing; decision deferred to
+  // FIN-69, do not silently "fix" it either way here.**
+  //
+  // The withdrawal is rated off that year's BEGINNING balance (Bengen/Trinity, FIN-65 change
+  // 2), so multiplying this tile by the withdrawal rate does not reproduce the withdrawal the
+  // year-detail panel shows for the same year — at the shipped defaults, $1,622,812 x 3.9% =
+  // $63,290 against an actual $61,665. Travis hit exactly that while exercising the FIN-65
+  // branch. This tile is also a year further along than its label implies: it is the balance
+  // at the END of the year you turn 65, not the pot you retire with.
+  //
+  // Left as-is deliberately. It predates FIN-65 — the tile has always reported the ending
+  // balance and the withdrawal has always been rated off the beginning one; change 2 altered
+  // the size of the gap, not its existence — so it is not a regression this branch should be
+  // carrying, and the fix is a real UX call rather than a typo. FIN-69 has the numbers, the
+  // three candidate quantities and why the obvious third one (row 64's ending balance) is a
+  // trap.
+  //
+  // An earlier draft of this comment argued the ending balance was correct because the tile
+  // should agree with the chart's data point directly above it. That reasoning is recorded
+  // here as contested, not as settled: nobody cross-checks a tile against a chart point by
+  // eye, and the one check a user demonstrably did run is the arithmetic one.
+  //
+  // Related and separate: `src/ui/calibration.test.ts` calls the retirement year's BEGINNING
+  // balance "the pot the retiree starts drawing from". Both files are correct about what they
+  // measure, but the same English phrase now names two quantities.
   const retirementRow = rows.find((row) => row.age >= debouncedCoreValues.retirementAge)
   const projectedBalanceAtRetirement = retirementRow?.endingBalance ?? rows.at(-1)?.endingBalance
 

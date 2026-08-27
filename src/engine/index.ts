@@ -22,6 +22,7 @@ export {
   recordPeriod,
   runPeriod,
   runStages,
+  snapshotBeginningBalance,
 } from './pipeline';
 
 /**
@@ -30,7 +31,13 @@ export {
  * boundary and folds from the same year-0 state — sharing them keeps the two entry points
  * from drifting on error codes or initial conditions.
  */
-export { createInitialPeriodState, runProjection, validatePlanAssumptions } from './projection';
+export {
+  createInitialPeriodState,
+  realReturn,
+  runProjection,
+  toTodaysDollarRows,
+  validatePlanAssumptions,
+} from './projection';
 
 export type {
   PeriodState,
@@ -52,7 +59,7 @@ export {
   createHistoricalReturnGenerator,
   createRandomSeed,
   createSeededRandom,
-  expectedPortfolioReturn,
+  blendedPortfolioReturn,
   runMonteCarloTrial,
   runMonteCarloTrials,
   validateAllocation,
@@ -68,13 +75,18 @@ export type {
   MonteCarloResult,
   PathBalances,
   PercentilePaths,
+  PercentileViews,
   PortfolioAllocation,
   RandomSource,
   ReturnAssumptions,
   ReturnModel,
   TrialConfig,
+  TrialPath,
   VolatilityAssumptions,
 } from './monteCarlo';
 
 export { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 export type { HistoricalYearReturn } from './historicalReturns';
+
+export { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
+export type { HistoricalYearInflation } from './inflationData';

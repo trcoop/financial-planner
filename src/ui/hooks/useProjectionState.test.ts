@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useProjectionState } from './useProjectionState'
+import { runProjection } from '../../engine'
+import { toAssumptions, useProjectionState } from './useProjectionState'
 import type { AdvancedAssumptionValues, CoreInputValues } from '../components'
 
 const CORE: CoreInputValues = {
@@ -231,5 +232,157 @@ describe('useProjectionState', () => {
     expect(result.current.rows).toEqual([])
     expect(result.current.projectedBalanceAtRetirement).toBeUndefined()
     expect(result.current.error).toBeDefined()
+  })
+})
+
+/**
+ * Round 2 of the FIN-65 review found both of this ticket's user-visible changes reverting
+ * without a single test failing. `App.test.tsx` asserts the LABELS — "Projected balance at 65
+ * (today's dollars)", the chart title — but nothing asserted the numbers underneath them were
+ * actually deflated, and nothing pinned that the Plan tab's return rate blends the two asset
+ * classes at all. Dropping either wiring shipped a confidently mislabelled chart: future dollars
+ * under a today's-dollars title (about 5x too high at age 100), or a 100%-bond portfolio quietly
+ * compounding the stock rate.
+ */
+/**
+ * Row index 20 — age 55, mid-accumulation. The row the rate-varying tests below deflate.
+ *
+ * Round 5 of the review found them pinned at `rows.length - 1` instead, which made two of the
+ * three vacuous: `inflationPercent` indexes the retirement withdrawals as well as the deflator,
+ * so at 6% this plan runs dry at age 92, and `clampRuin` (FIN-65 change 6) then pins age 100 at
+ * exactly 0. `0` deflates to `0` under every deflator there is, so `0 ~= 0 / 1.06 ** 66` and
+ * `0 < positive` both held with the deflation deleted outright.
+ *
+ * Before retirement no withdrawal has been taken, so the nominal balance here is genuinely
+ * independent of the inflation rate and stays comfortably positive at all three rates in play
+ * (~$1.56M) — which is what makes it a fair comparison point. The tests assert both of those
+ * properties rather than trusting this comment.
+ */
+const SOLVENT_YEAR = 20
+
+describe('FIN-65 wiring: the Plan tab reports today\'s dollars at a blended rate', () => {
+  it('deflates the projection rows rather than passing through nominal ones', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+    const plan = toAssumptions(CORE, ADVANCED)
+    const nominal = runProjection(plan)
+    const year = nominal.length - 1
+
+    // `toTodaysDollarRows` divides year N by (1 + inflation)^(N+1) — derived from the model,
+    // not read back off the implementation.
+    const priceLevel = (1 + plan.inflationRate) ** (year + 1)
+
+    expect(result.current.rows[year].endingBalance).toBeCloseTo(
+      nominal[year].endingBalance / priceLevel,
+      6,
+    )
+    // Over a 65-year horizon at 2.5% the two differ ~5x. Guards against the deflation being
+    // dropped entirely, which is the mutation that previously survived the whole suite.
+    expect(result.current.rows[year].endingBalance).toBeLessThan(nominal[year].endingBalance / 4)
+  })
+
+  it('deflates the headline retirement tile too, not just the chart rows', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+    const plan = toAssumptions(CORE, ADVANCED)
+    const nominal = runProjection(plan)
+    const retirementYear = CORE.retirementAge - CORE.currentAge
+    const priceLevel = (1 + plan.inflationRate) ** (retirementYear + 1)
+
+    expect(result.current.projectedBalanceAtRetirement).toBeCloseTo(
+      nominal[retirementYear].endingBalance / priceLevel,
+      6,
+    )
+  })
+
+  /**
+   * Round-4 finding. The two tests above both derive their expected price level from `ADVANCED`,
+   * which sets `inflationPercent: 2.5` — so a deflator hardcoded to the literal `0.025` was
+   * indistinguishable from one that reads the user's value, and that mutation survived all 641
+   * tests. Inflation is an editable advanced field, so the mutant is reachable: it would leave
+   * the chart and the headline tile roughly 9.2x too high at 6% inflation and 2.6x too low at
+   * 1%, under a label that says today's dollars.
+   *
+   * The fix is a second rate, not new production code. `it.each` rather than one extra case so
+   * the pair straddles the fixture's 2.5% in both directions — a single higher rate would still
+   * pass under a deflator stuck at any value below it.
+   */
+  it.each([
+    [1, 0.01],
+    [6, 0.06],
+  ])(
+    'reads the inflation rate the user entered (%i percent), not the default the other tests happen to use',
+    (percent, rate) => {
+      const advanced = { ...ADVANCED, inflationPercent: percent }
+      const { result } = renderHook(() => useProjectionState(CORE, advanced, DEBOUNCE_MS))
+      const plan = toAssumptions(CORE, advanced)
+      const nominal = runProjection(plan)
+
+      expect(plan.inflationRate).toBeCloseTo(rate, 10)
+      // Pinned at SOLVENT_YEAR, not at the horizon: at 6% this plan runs dry and both sides of
+      // a horizon comparison are zero. See SOLVENT_YEAR's note.
+      expect(nominal[SOLVENT_YEAR].endingBalance).toBeGreaterThan(0)
+      expect(result.current.rows[SOLVENT_YEAR].endingBalance).toBeCloseTo(
+        nominal[SOLVENT_YEAR].endingBalance / (1 + rate) ** (SOLVENT_YEAR + 1),
+        6,
+      )
+
+      // And the tile, which reads the same rows but is the figure a user quotes back.
+      const retirementYear = CORE.retirementAge - CORE.currentAge
+      expect(result.current.projectedBalanceAtRetirement).toBeCloseTo(
+        nominal[retirementYear].endingBalance / (1 + rate) ** (retirementYear + 1),
+        6,
+      )
+    },
+  )
+
+  it('deflates the same nominal balance by more at a higher inflation rate', () => {
+    // The relationship the fixed-rate cases cannot see: two different user inputs must produce
+    // two different real numbers from one identical nominal one.
+    const advanced1 = { ...ADVANCED, inflationPercent: 1 }
+    const advanced6 = { ...ADVANCED, inflationPercent: 6 }
+    const at1 = renderHook(() => useProjectionState(CORE, advanced1, DEBOUNCE_MS))
+    const at6 = renderHook(() => useProjectionState(CORE, advanced6, DEBOUNCE_MS))
+
+    // The premise, asserted rather than assumed: same return rate, and — at SOLVENT_YEAR — the
+    // same nominal balance, so the only thing that can move the two real figures apart is the
+    // deflator. Both halves are needed. An earlier version of this test asserted neither and
+    // claimed in a comment that the whole nominal series was rate-independent; it is not, since
+    // `inflationRate` also indexes the retirement withdrawals.
+    expect(toAssumptions(CORE, advanced1).annualReturnRate).toBeCloseTo(
+      toAssumptions(CORE, advanced6).annualReturnRate,
+      10,
+    )
+    expect(runProjection(toAssumptions(CORE, advanced6))[SOLVENT_YEAR].endingBalance).toBeCloseTo(
+      runProjection(toAssumptions(CORE, advanced1))[SOLVENT_YEAR].endingBalance,
+      6,
+    )
+
+    const real1 = at1.result.current.rows[SOLVENT_YEAR].endingBalance
+    const real6 = at6.result.current.rows[SOLVENT_YEAR].endingBalance
+
+    // A ratio, not an inequality. `real6 < real1` is satisfied by any deflator that merely
+    // trends the right way — including several wrong ones — whereas dividing one deflated
+    // figure by the other cancels the shared nominal balance and leaves exactly the ratio of
+    // the two price levels, (1.06 / 1.01) ** (SOLVENT_YEAR + 1), with nothing else in it.
+    expect(real6).toBeGreaterThan(0)
+    expect(real1 / real6).toBeCloseTo((1.06 / 1.01) ** (SOLVENT_YEAR + 1), 6)
+  })
+
+  it('blends the stock and bond returns at the allocation weight', () => {
+    const plan = toAssumptions(CORE, { ...ADVANCED, stocksAllocationPercent: 70 })
+
+    // 0.70 * 7% + 0.30 * 4.5% = 6.25%.
+    expect(plan.annualReturnRate).toBeCloseTo(0.0625, 10)
+  })
+
+  it('uses the bond return alone at 0% stocks, so the tab cannot quote a rate the portfolio has not got', () => {
+    const plan = toAssumptions(CORE, { ...ADVANCED, stocksAllocationPercent: 0 })
+
+    expect(plan.annualReturnRate).toBeCloseTo(ADVANCED.bondReturnPercent / 100, 10)
+  })
+
+  it('uses the stock return alone at 100% stocks', () => {
+    const plan = toAssumptions(CORE, { ...ADVANCED, stocksAllocationPercent: 100 })
+
+    expect(plan.annualReturnRate).toBeCloseTo(ADVANCED.annualReturnPercent / 100, 10)
   })
 })

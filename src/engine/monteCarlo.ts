@@ -9,6 +9,7 @@
 import { InvalidProjectionInputError } from './errors';
 import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 import type { HistoricalYearReturn } from './historicalReturns';
+import { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
 import { runPeriod } from './pipeline';
 import { withdrawFullShortfall, zeroTax } from './strategies';
 import type {
@@ -138,6 +139,53 @@ export const blendedPortfolioReturn = (
 /** One simulated path's ending balance for each projected year, index 0 being the current age. */
 export type PathBalances = readonly number[];
 
+/**
+ * Everything one simulated path knows about itself. Nominal balances, the price level it
+ * lived through, and whether it went broke.
+ *
+ * The three travel together because they are only meaningful together (FIN-65 change 3).
+ * Each path draws its own historical sequence, so each has its OWN realised inflation — a
+ * single run has as many CPI series as it has paths, and there is no run-level series that
+ * could deflate a percentile line after the fact. Deflation has to happen per path, before
+ * anything is ranked. `ruinPeriod` has to be carried for the same reason: change 4 clamps a
+ * broke path to zero, which erases the negative balances ruin used to be inferred from.
+ */
+export interface TrialPath {
+  /** Nominal (future-dollar) ending balance per year, index 0 being `currentAge`. */
+  balances: PathBalances;
+  /**
+   * Cumulative price level at the END of each year, relative to today = 1. `balances[i] /
+   * inflationIndex[i]` is that year's balance in today's dollars.
+   */
+  inflationIndex: readonly number[];
+  /**
+   * Index of the first year this path's balance hit zero, or `null` if it never did. Zero is
+   * absorbing, so every later balance is zero too.
+   */
+  ruinPeriod: number | null;
+}
+
+/**
+ * Restates a path's nominal balances in today's dollars, deflating each year by the price
+ * level THAT path lived through.
+ *
+ * Must be applied before {@link extractPercentiles}, never after: percentile lines are built
+ * cross-sectionally, so deflating the finished line would divide a p50 assembled from many
+ * different paths by one arbitrary path's inflation. Paths also re-rank under deflation — a
+ * nominally larger balance earned through harsher inflation can be the smaller one in real
+ * terms — so real p50 is genuinely not deflated nominal p50.
+ */
+export const toTodaysDollars = (path: TrialPath): number[] =>
+  path.balances.map((balance, year) => balance / path.inflationIndex[year]);
+
+/** The percentile fan in both units, from a single run (FIN-65 change 3). */
+export interface PercentileViews {
+  /** Today's dollars — what the UI shows by default. */
+  real: PercentilePaths;
+  /** Future dollars, as simulated. Retained for a future nominal-view toggle. */
+  nominal: PercentilePaths;
+}
+
 /** The percentile fan the UI plots, one value per year (ERD §4). */
 export interface PercentilePaths {
   p10: number[];
@@ -178,23 +226,28 @@ export const extractPercentiles = (balancesByPath: readonly PathBalances[]): Per
 };
 
 /**
- * Share of paths that never went negative, as a whole percentage 0-100 (ERD §5).
+ * Share of paths that never ran dry, as a whole percentage 0-100 (ERD §5).
  *
- * "Never negative" is checked against every year's ending balance: a plan that recovers by
- * the horizon after running dry mid-retirement is still a failed plan.
+ * Reads `ruinPeriod` rather than the sign of any balance. This is load-bearing, not a
+ * refactor: before FIN-65 change 4 a broke path kept withdrawing into ever-deeper negatives,
+ * and success was `path.every((balance) => balance >= 0)`. Change 4 clamps ruin at zero, so
+ * that predicate is now true of EVERY path and would report a reassuring 100% on a batch
+ * where every single portfolio went bankrupt. Ruin is recorded when it happens because the
+ * evidence for it no longer survives in the numbers.
+ *
+ * Ruin at any point is terminal: a plan that recovers by the horizon after running dry
+ * mid-retirement is still a failed plan — and under the absorbing clamp it cannot recover.
  */
-export const computeSuccessRate = (balancesByPath: readonly PathBalances[]): number => {
+export const computeSuccessRate = (paths: readonly TrialPath[]): number => {
   // No paths means nothing succeeded. `runMonteCarloTrials` rejects an empty batch before
   // reaching here, but the naked division would otherwise hand the UI a NaN success rate.
-  if (balancesByPath.length === 0) {
+  if (paths.length === 0) {
     return 0;
   }
 
-  const successes = balancesByPath.filter((path) =>
-    path.every((balance) => balance >= 0),
-  ).length;
+  const successes = paths.filter((path) => path.ruinPeriod === null).length;
 
-  return Math.round((100 * successes) / balancesByPath.length);
+  return Math.round((100 * successes) / paths.length);
 };
 
 /**
@@ -282,58 +335,6 @@ export const DEFAULT_RETURN_ASSUMPTIONS: ReturnAssumptions = { stocks: 0.115, bo
  * they empirically do — the two assets moved as if in separate, unrelated worlds.
  */
 export const DEFAULT_CORRELATION = -0.2;
-
-/**
- * Portfolio variance from per-asset volatility, allocation weight, and correlation:
- * `var = w_s^2*sigma_s^2 + w_b^2*sigma_b^2 + 2*w_s*w_b*rho*sigma_s*sigma_b`. The standard
- * two-asset variance formula — used by {@link expectedPortfolioReturn} to size the volatility
- * drag between the blended arithmetic mean and the growth an investor actually experiences.
- */
-const portfolioVariance = (
-  allocation: PortfolioAllocation,
-  volatility: VolatilityAssumptions,
-  correlation: number,
-): number => {
-  const stockWeight = allocation.stocksPercent / 100;
-  const bondWeight = allocation.bondsPercent / 100;
-
-  return (
-    stockWeight ** 2 * volatility.stocks ** 2 +
-    bondWeight ** 2 * volatility.bonds ** 2 +
-    2 * stockWeight * bondWeight * correlation * volatility.stocks * volatility.bonds
-  );
-};
-
-/**
- * FIN-64 (plan/stress-test consistency): the deterministic Tier 1 projection's single
- * compounding rate, derived from the same stock/bond return, volatility, allocation, and
- * correlation inputs the Monte Carlo stress test uses — rather than a separately-chosen
- * number — so the two views can't quote different growth assumptions for the same plan.
- *
- * Blends the arithmetic means by allocation weight (`{@link blendedPortfolioReturn}`), then
- * applies the standard variance-drag approximation, `geometricMean ≈ arithmeticMean -
- * variance/2`, that converts an arithmetic mean into the compounding (geometric) rate an
- * investor actually experiences — the same relationship {@link gbmPeriodReturn} applies
- * per-draw inside the Monte Carlo engine, just computed once here as a closed form instead of
- * simulated. Without this, Tier 1 compounds the raw undragged arithmetic mean every year,
- * which overstates growth (a 70/30 portfolio's ~9.5% arithmetic blend compounds to unrealistic
- * decades-out balances without the ~0.9 points of drag this subtracts).
- */
-export const expectedPortfolioReturn = (
-  allocation: PortfolioAllocation,
-  returnAssumptions: ReturnAssumptions,
-  volatilityAssumptions: VolatilityAssumptions,
-  correlation: number = DEFAULT_CORRELATION,
-): number => {
-  const arithmeticBlend = blendedPortfolioReturn(
-    allocation,
-    returnAssumptions.stocks,
-    returnAssumptions.bonds,
-  );
-  const variance = portfolioVariance(allocation, volatilityAssumptions, correlation);
-
-  return arithmeticBlend - variance / 2;
-};
 
 /**
  * One period's portfolio return: a correlated GBM draw per asset class (via
@@ -448,6 +449,32 @@ export const createHistoricalReturnGenerator = (
   };
 };
 
+/**
+ * Year -> realised CPI-U, built once at module load rather than per period (FIN-65).
+ *
+ * A linear scan of a 98-entry array inside the trial loop would run 5,000 paths x 65 periods
+ * x ~49 comparisons for a lookup that never changes; the `performance` budget in
+ * `monteCarlo.test.ts` exists to catch exactly this class of per-period work.
+ */
+const INFLATION_BY_YEAR: ReadonlyMap<number, number> = new Map(
+  HISTORICAL_ANNUAL_INFLATION.map((entry) => [entry.year, entry.inflation]),
+);
+
+/**
+ * This historical year's realised CPI-U.
+ *
+ * `HISTORICAL_ANNUAL_INFLATION` is deliberately year-range-matched to
+ * {@link HISTORICAL_ANNUAL_RETURNS}, and `inflationData.test.ts` pins that, so every year the
+ * return generator can draw is present. Returning `undefined` for an unknown year rather than
+ * substituting a rate keeps a future mismatch visible as the plan's fixed inflation showing up
+ * in a historical trial, instead of a silently invented number.
+ *
+ * Callers pass the year drawn in the PREVIOUS period, never `drawnYear - 1` — see
+ * {@link runMonteCarloTrial}. That is what keeps every lookup inside the table: 1928 is the
+ * first year of both, so `1928 - 1` has no entry, while a previously-drawn year always does.
+ */
+const inflationForYear = (year: number): number | undefined => INFLATION_BY_YEAR.get(year);
+
 /** Everything a single simulated path needs beyond the plan, the events and its RNG. */
 export interface TrialConfig {
   allocation: PortfolioAllocation;
@@ -492,7 +519,7 @@ export const runMonteCarloTrial = (
   events: PlanEvent[],
   draw: RandomSource,
   config: TrialConfig,
-): number[] => {
+): TrialPath => {
   const step = config.runPeriodFn ?? runPeriod;
   const withdrawalStrategy = config.withdrawalStrategy ?? withdrawFullShortfall;
   const taxCalculator = config.taxCalculator ?? zeroTax;
@@ -508,6 +535,29 @@ export const runMonteCarloTrial = (
 
   let state = createInitialPeriodState(plan);
   const balances: number[] = [];
+
+  /**
+   * Cumulative price level at the end of each period, today = 1 (FIN-65 change 3). Built from
+   * the SAME drawn years as the returns, so a path's inflation is the inflation it actually
+   * lived through — the whole point of sampling returns and CPI jointly.
+   *
+   * Note this uses the CURRENT period's drawn year, not the lagged `priorHistoricalYear` the
+   * withdrawal indexes off. The two are different questions and must not be conflated:
+   * "how much had prices risen by the end of year N" is a fact about year N, while "what
+   * raise does this year's budget get" is a fact the retiree could only have known a year
+   * earlier. Sharing one variable between them was tempting and would have been wrong.
+   */
+  const inflationIndex: number[] = [];
+  let priceLevel = 1;
+
+  /** First period this path's balance hit zero — see {@link TrialPath.ruinPeriod}. */
+  let ruinPeriod: number | null = null;
+
+  /**
+   * The historical year drawn in the PREVIOUS period, whose CPI-U indexes this period's
+   * withdrawal (FIN-65 change 3). `null` for the first period, which has no previous one.
+   */
+  let priorHistoricalYear: HistoricalYearReturn | null = null;
 
   for (let year = 0; year < periodCount; year += 1) {
     const historicalYear = nextHistoricalYear?.();
@@ -527,14 +577,88 @@ export const runMonteCarloTrial = (
       events,
       assumptions: plan,
       returnForPeriod,
+      // FIN-65: the drawn historical years supply both the nominal returns and the
+      // cost-of-living increases, so the two series come from one sampler — no second
+      // sampler, no second RNG draw (which would also have shifted every existing seeded
+      // expectation for unrelated reasons), and no way for them to drift apart.
+      //
+      // The CPI is lagged one period (change 3). Bengen (1994) and Trinity index a year's
+      // withdrawal to the PRIOR year's realised CPI, because a retiree setting their 1967
+      // budget in January 1967 does not yet know what 1967's inflation will be. Change 1
+      // originally used the current drawn year, which put the 1966 cohort's 30-year terminal
+      // ~$590K below Bengen's on a $1M portfolio; lagging it reproduces Bengen exactly.
+      //
+      // WHICH prior year, though — two readings diverge at a bootstrap block seam:
+      //   (a) the calendar year before the drawn year (`year - 1`), or
+      //   (b) the year drawn in the previous PERIOD, i.e. the lag follows the sampled path.
+      // This is (b), and it is a modelling choice rather than an implementation detail. On an
+      // unbroken chronological run the two are identical, so both reproduce Bengen on the
+      // case the tests pin; they part company only at a seam. (b) wins there because the
+      // simulated retiree's budget should follow the inflation this PATH lived through, not a
+      // calendar year the path never visited — and because (a) is not even well defined at
+      // the edge: a block starting at 1928 would need 1927, which is in neither table.
+      //
+      // Left `undefined` on the GBM branch, which has no historical year to key off, and on
+      // the first period, which has no previous one. Both fall back to `plan.inflationRate`
+      // inside `computeWithdrawals`, as does the deterministic projection — see that stage's
+      // comment on the `??`. The first-period fallback is inert either way: the opening
+      // retirement withdrawal is `withdrawalRateInRetirement * beginningBalance`, which never
+      // reads an inflation rate at all.
+      inflationForPeriod: priorHistoricalYear ? inflationForYear(priorHistoricalYear.year) : undefined,
       withdrawalStrategy,
       taxCalculator,
     });
-    balances.push(state.balance);
+    // FIN-65 change 4. A portfolio cannot go below zero: once it is spent, it is spent, and
+    // the old behaviour — withdrawing from a negative balance, so a good return year made the
+    // hole DEEPER — produced chart tails in the negative millions that were an artifact of the
+    // arithmetic rather than anything a retiree could experience. Zero absorbs: once ruined,
+    // ruined, and later contributions cannot resurrect a plan that already failed.
+    if (ruinPeriod === null && state.balance <= 0) {
+      ruinPeriod = year;
+    }
+    const balance = ruinPeriod === null ? state.balance : 0;
+
+    // Neither write moves this trial's OWN output — `ruinPeriod` already forces every later
+    // reported balance to zero, and nothing here reads `state.rows` back. What they protect is
+    // the state handed to caller-injected stages: `runPeriodFn`, `withdrawalStrategy` and
+    // `taxCalculator` are all first-class `TrialConfig` fields, and they observe this state
+    // directly. Without the clamp a ruined path feeds them a balance that keeps compounding
+    // downward (measured: -$3,838,333 by the horizon on a plan that ruins at period 2) while
+    // the reported series says zero — a split-brain a real bracketed tax calculator or
+    // guardrail withdrawal strategy would act on. `rows` is patched for the same reason: it is
+    // the same year's ending balance, and the two disagreeing is the kind of contradiction a
+    // later reader would trust the wrong half of. Both are pinned by tests through the injected
+    // stage seam, so this is behaviour under test, not merely a convention.
+    state = { ...state, balance };
+    const lastRow = state.rows[state.rows.length - 1];
+    if (lastRow !== undefined && lastRow.endingBalance !== balance) {
+      state = {
+        ...state,
+        rows: [...state.rows.slice(0, -1), { ...lastRow, endingBalance: balance }],
+      };
+    }
+
+    balances.push(balance);
+
+    // Deliberately NOT `continue`-ing or breaking out once ruined. `runMonteCarloTrials`
+    // shares one RNG stream across every path in the batch, so a trial that stopped drawing
+    // early would shift every path after it — a change in one plan's bankruptcy would
+    // silently move percentiles that have nothing to do with it. A ruined path keeps
+    // stepping and keeps drawing; it just stays at zero.
+    // `inflationForYear` can miss: the return table and the CPI table are separate sources and
+    // need not span identical ranges. Falling back to the plan's assumed rate matches what
+    // `computeWithdrawals` does with the same gap, so the index and the withdrawals stay
+    // consistent rather than one silently treating a missing year as zero inflation.
+    const realisedInflation =
+      (historicalYear ? inflationForYear(historicalYear.year) : undefined) ?? plan.inflationRate;
+    priceLevel *= 1 + realisedInflation;
+    inflationIndex.push(priceLevel);
+
     state = { ...state, age: state.age + 1, year: state.year + 1 };
+    priorHistoricalYear = historicalYear ?? null;
   }
 
-  return balances;
+  return { balances, inflationIndex, ruinPeriod };
 };
 
 /**
@@ -585,8 +709,16 @@ export interface MonteCarloOptions {
 export interface MonteCarloResult {
   /** Whole percent, 0-100. */
   successRate: number;
-  /** One value per projected year, `length === planningHorizonEndAge - currentAge + 1`. */
-  percentiles: PercentilePaths;
+  /**
+   * One value per projected year, `length === planningHorizonEndAge - currentAge + 1`, in
+   * both units.
+   *
+   * Split into `{ real, nominal }` rather than left as a bare fan (FIN-65 change 3) so that
+   * no display site can render a number without having said which dollars it is in. The
+   * break is intentional: the compiler enumerating every consumer is cheaper than one chart
+   * quietly plotting future dollars under a today's-dollars axis label.
+   */
+  percentiles: PercentileViews;
   meta: {
     simulationCount: number;
     stockVolatility: number;
@@ -661,13 +793,18 @@ export const runMonteCarloTrials = (
     taxCalculator: options.taxCalculator,
   };
 
-  const balancesByPath = Array.from({ length: simulationCount }, () =>
+  const paths = Array.from({ length: simulationCount }, () =>
     runMonteCarloTrial(plan, events, draw, config),
   );
 
   return {
-    successRate: computeSuccessRate(balancesByPath),
-    percentiles: extractPercentiles(balancesByPath),
+    successRate: computeSuccessRate(paths),
+    // Each fan is ranked in its own units. Deflating the nominal fan instead would be both
+    // cheaper and wrong — see {@link toTodaysDollars}.
+    percentiles: {
+      real: extractPercentiles(paths.map(toTodaysDollars)),
+      nominal: extractPercentiles(paths.map((path) => path.balances)),
+    },
     meta: {
       simulationCount,
       stockVolatility: volatilityAssumptions.stocks,

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { InvalidProjectionInputError } from './errors';
 import type { ProjectionErrorCode } from './errors';
 import { pipelineStages } from './pipeline';
-import { runProjection } from './projection';
+import { realReturn, runProjection, toTodaysDollarRows } from './projection';
 import type { PipelineStage, PlanAssumptions, PlanEvent } from './types';
 
 /** The Story 1 PRD's happy-path assumptions, overridable per scenario. */
@@ -221,9 +221,13 @@ describe('acceptance: immediate retirement', () => {
     rows.forEach((row) => expect(row.annualContribution).toBe(0));
   });
 
-  it('reduces the grown balance by the withdrawal', () => {
-    expect(rows[0].endingBalance).toBeCloseTo(1_030_000, 6);
-    expect(rows[1].endingBalance).toBeCloseTo(1_061_100, 6);
+  it('grows what is left after the withdrawal, not the other way round', () => {
+    // FIN-65 change 2, `(beginning - withdrawal) * (1 + r)`:
+    //   year 0: (1_000_000 - 40_000) * 1.07 = 960_000 * 1.07 = 1_027_200
+    //   year 1: (1_027_200 - 41_000) * 1.07 = 986_200 * 1.07 = 1_055_234
+    // The old end-of-year model gave 1_030_000 and 1_061_100.
+    expect(rows[0].endingBalance).toBeCloseTo(1_027_200, 6);
+    expect(rows[1].endingBalance).toBeCloseTo(1_055_234, 6);
   });
 });
 
@@ -246,15 +250,20 @@ describe('acceptance: negative balance scenario', () => {
     expect(rows[29].age).toBe(89);
   });
 
-  it('lets the balance go negative', () => {
-    expect(rows[29].endingBalance).toBeLessThan(0);
+  // FIN-65 change 6 rebaseline. These three used to assert the opposite — that the balance went
+  // negative and was never floored — which was the Story 1 decision this ticket reverses.
+  // The acceptance criterion they exist to protect is unchanged and still holds above: the
+  // engine projects all 30 years rather than stopping when the money runs out. What changed
+  // is what it reports for the years after it does.
+  it('floors the balance at zero rather than letting it go negative', () => {
+    expect(rows[29].endingBalance).toBe(0);
   });
 
-  it('never resets or floors the balance once it is negative', () => {
-    const firstNegative = rows.findIndex((row) => row.endingBalance < 0);
+  it('stays at zero once exhausted, rather than compounding a deficit', () => {
+    const firstZero = rows.findIndex((row) => row.endingBalance === 0);
 
-    expect(firstNegative).toBeGreaterThan(0);
-    rows.slice(firstNegative).forEach((row) => expect(row.endingBalance).toBeLessThan(0));
+    expect(firstZero).toBeGreaterThan(0);
+    rows.slice(firstZero).forEach((row) => expect(row.endingBalance).toBe(0));
   });
 
   it('keeps producing finite, well-formed rows in the failure state', () => {
@@ -264,8 +273,11 @@ describe('acceptance: negative balance scenario', () => {
     });
   });
 
-  it('keeps inflating the withdrawal even after the portfolio is exhausted', () => {
-    expect(rows[29].annualWithdrawal).toBeGreaterThan(rows[0].annualWithdrawal);
+  it('reports no withdrawal at all once the portfolio is exhausted', () => {
+    // The inflation-indexed spending *need* still compounds internally — `priorWithdrawal`
+    // is deliberately left uncapped, see `clampRuin` — but the row reports what actually left
+    // the portfolio, and nothing can leave an empty one.
+    expect(rows[29].annualWithdrawal).toBe(0);
   });
 });
 
@@ -346,13 +358,19 @@ describe('acceptance: zero income and no contributions', () => {
   });
 
   it('grows the balance from investment returns alone', () => {
-    rows.forEach((row) => expect(row.investmentReturn).toBeCloseTo(row.beginningBalance * 0.06, 6));
+    // FIN-65 change 2: the year's return is earned on what remains after the withdrawal,
+    // so it is rated against `beginningBalance - annualWithdrawal`, not `beginningBalance`.
+    rows.forEach((row) =>
+      expect(row.investmentReturn).toBeCloseTo((row.beginningBalance - row.annualWithdrawal) * 0.06, 6),
+    );
   });
 
   it('withdraws correctly from year 0, inflation-adjusted after', () => {
+    // year 0 ending: (750_000 - 30_000) * 1.06 = 720_000 * 1.06 = 763_200.
+    // The old end-of-year model gave 765_000 (750_000 * 1.06 - 30_000).
     expect(rows[0].annualWithdrawal).toBeCloseTo(30_000, 6);
     expect(rows[1].annualWithdrawal).toBeCloseTo(30_750, 6);
-    expect(rows[0].endingBalance).toBeCloseTo(765_000, 6);
+    expect(rows[0].endingBalance).toBeCloseTo(763_200, 6);
   });
 });
 
@@ -482,6 +500,57 @@ describe('runProjection input validation', () => {
  * `runProjection`/`pipeline.ts` so a bug shared between the engine and its own test fixtures
  * cannot hide from this file.
  */
+/**
+ * FIN-65 scope fence. Change 1 makes the Monte Carlo historical path inflate spending at the
+ * drawn year's realised CPI-U. `runProjection` must be untouched by that: it pairs a
+ * user-chosen nominal return with a fixed nominal spending inflator, which is internally
+ * consistent, and it never sets `inflationForPeriod` — the `??` fallback in
+ * `computeWithdrawals` is what enforces it. Every figure below is hand-derivable from
+ * `assumptions.inflationRate` alone, so any leak of historical CPI into the deterministic
+ * projection fails here loudly.
+ */
+describe('FIN-65 scope fence: the deterministic projection stays on assumptions.inflationRate', () => {
+  // Already-retired: $1M, 7% flat return, 2.5% flat inflation, 4% withdrawal, 3 years.
+  const rows = runProjection(
+    assumptions({
+      currentAge: 65,
+      retirementAge: 65,
+      planningHorizonEndAge: 67,
+      initialBalance: 1_000_000,
+      currentAnnualIncome: 0,
+      annualContributionRate: 0,
+      annualRaiseRate: 0,
+      annualReturnRate: 0.07,
+      inflationRate: 0.025,
+      withdrawalRateInRetirement: 0.04,
+    }),
+  );
+
+  it('runs the flat-inflation spending chain, year by year', () => {
+    // `ending = (beginning - w) * 1.07` — FIN-65 change 2's start-of-year withdrawal.
+    // Year 0: w = 1_000_000 * 0.04 = 40_000; ending = 960_000 * 1.07 = 1_027_200.
+    expect(rows[0].annualWithdrawal).toBeCloseTo(40_000, 6);
+    expect(rows[0].endingBalance).toBeCloseTo(1_027_200, 6);
+
+    // Year 1: w = 40_000 * 1.025 = 41_000; ending = (1_027_200 - 41_000) * 1.07
+    //         = 986_200 * 1.07 = 1_055_234.
+    expect(rows[1].annualWithdrawal).toBeCloseTo(41_000, 6);
+    expect(rows[1].endingBalance).toBeCloseTo(1_055_234, 6);
+
+    // Year 2: w = 41_000 * 1.025 = 42_025; ending = (1_055_234 - 42_025) * 1.07
+    //         = 1_013_209 * 1.07 = 1_084_133.63.
+    expect(rows[2].annualWithdrawal).toBeCloseTo(42_025, 6);
+    expect(rows[2].endingBalance).toBeCloseTo(1_084_133.63, 6);
+  });
+
+  it('shows no trace of 1966-1968 realised CPI, which is what a leak would look like', () => {
+    // Had the historical series leaked in, year 1 would spend 40_000 * 1.0277 = 41_108 and
+    // year 2 would spend 41_108 * 1.0419 = 42_830.43.
+    expect(rows[1].annualWithdrawal).not.toBeCloseTo(41_108, 2);
+    expect(rows[2].annualWithdrawal).not.toBeCloseTo(42_830.43, 2);
+  });
+});
+
 describe('FIN-55: external formula validation — deterministic scenario A (30 -> 65 accumulation)', () => {
   // 30 -> 65, $50k start, $80k income, 15% contribution, 3% raises, 7% returns, 2.5%
   // inflation, 4% withdrawal in retirement, 100-year horizon.
@@ -542,10 +611,16 @@ describe('FIN-55: external formula validation — deterministic scenario A (30 -
 });
 
 describe('FIN-55: external formula validation — deterministic scenario B (already-retired-adjacent, high withdrawal)', () => {
-  // Age 60, retiring at 62 (already-retired-adjacent), high 20% withdrawal rate driving the
-  // balance negative. Confirms the deterministic engine does NOT clamp a negative balance —
-  // deliberately distinct from the separately-filed chart-rendering clamping bug, which is a
-  // UI display concern and untouched here.
+  // Age 60, retiring at 62 (already-retired-adjacent), high 20% withdrawal rate that exhausts
+  // the portfolio well inside the horizon.
+  //
+  // This header used to read: "Confirms the deterministic engine does NOT clamp a negative
+  // balance — deliberately distinct from the separately-filed chart-rendering clamping bug,
+  // which is a UI display concern and untouched here." FIN-65 change 6 moved the clamp into the
+  // engine, which is what that sentence said would not happen; the chart-only fix left the
+  // tooltip and the year-detail panel still quoting negative balances. Kept rather than deleted
+  // so the reversal is legible: the scenario's arithmetic below is unchanged, only the reported
+  // tail is.
   const rows = runProjection(
     assumptions({
       currentAge: 60,
@@ -573,27 +648,288 @@ describe('FIN-55: external formula validation — deterministic scenario B (alre
     );
   });
 
-  it('drives the balance negative and does NOT clamp it back to zero', () => {
-    const firstNegative = rows.findIndex((row) => row.endingBalance < 0);
+  it('runs dry at 66 — exactly exhausted — and clamps that year to zero', () => {
+    const firstZero = rows.findIndex((row) => row.endingBalance === 0);
 
-    expect(firstNegative).toBeGreaterThan(0);
-    expect(rows[firstNegative].age).toBe(67);
-    expect(rows[firstNegative].endingBalance).toBeCloseTo(-23_331.897801584084, 4);
+    expect(firstZero).toBeGreaterThan(0);
+
+    // 66, not the 67 this test named before FIN-65 change 6, and the difference is the point. At
+    // 66 the requested draw is *exactly* the opening balance, because both sides reduce to the
+    // same expression, `25_873.589906... * 1.03`: age 65 draws 25_873.589906 against a
+    // beginning balance of 51_747.179812 — twice its own draw, to the cent — so it closes on
+    // exactly one more year's worth, and age 66 indexes that same draw up by the 3% inflation
+    // rate. Identical expression, identical double, and the year closes on exactly 0. The old assertion searched for `endingBalance < 0` and zero is not negative,
+    // so it skipped the year the money actually ran out and reported the first year the
+    // deficit became visible instead. Treating exactly zero as ruin is the same rule FIN-65
+    // change 4 established for `runMonteCarloTrial`.
+    const ruinYear = rows[firstZero];
+    expect(ruinYear.age).toBe(66);
+    expect(ruinYear.endingBalance).toBe(0);
+    expect(ruinYear.annualWithdrawal).toBeCloseTo(ruinYear.beginningBalance, 6);
+
+    // Nothing was cut back here — the plan funded its last draw in full, to the cent — so the
+    // clamp changed no reported figure in this year beyond pinning the ending at zero.
+    const requested = rows[firstZero - 1].annualWithdrawal * 1.03;
+    expect(requested - ruinYear.annualWithdrawal).toBeCloseTo(0, 6);
+
+    // 67 is where the unclamped arithmetic first printed a deficit. FIN-65 change 2 re-derived
+    // that figure as -28_272.77027721367 by folding `ending = (beginning - w) * 1.03` from age
+    // 60 with w = beginningBalance-at-62 * 0.20 = 23_678 indexed 3%/yr (itself a rebaseline
+    // from -23_331.90 before the withdrawal-timing change). That is the number this ticket
+    // exists to stop reporting.
+    expect(rows[firstZero + 1].age).toBe(67);
+    expect(rows[firstZero + 1].endingBalance).toBe(0);
   });
 
-  it('keeps every row after the first negative one unclamped and finite, still inflating withdrawals', () => {
-    const firstNegative = rows.findIndex((row) => row.endingBalance < 0);
+  it('reports every year after ruin as an empty portfolio, not a deepening deficit', () => {
+    const firstZero = rows.findIndex((row) => row.endingBalance === 0);
 
-    rows.slice(firstNegative).forEach((row, index, negativeRows) => {
-      expect(Number.isFinite(row.endingBalance)).toBe(true);
-      expect(row.endingBalance).toBeLessThan(0);
-      if (index > 0) {
-        expect(row.annualWithdrawal).toBeGreaterThan(negativeRows[index - 1].annualWithdrawal);
-      }
+    rows.slice(firstZero + 1).forEach((row) => {
+      expect(row, `age ${row.age}`).toMatchObject({
+        beginningBalance: 0,
+        annualWithdrawal: 0,
+        investmentReturn: 0,
+        annualContribution: 0,
+        endingBalance: 0,
+      });
     });
 
-    // Final year matches the independent reconstruction exactly, confirming no clamping
-    // ever kicked in across the remaining 23 years of runaway negative compounding.
-    expect(rows[rows.length - 1].endingBalance).toBeCloseTo(-1_292_039.2034206502, 3);
+    // FIN-65 change 6 rebaseline. The unclamped reconstruction ran to -1_339_170.193230963 by age 90
+    // (itself a FIN-65 rebaseline from -1_292_039.20) — 23 years of a deficit compounding at
+    // 3% on a plan with no borrowing in it. That number is what this ticket exists to stop
+    // reporting; the horizon now reads zero.
+    expect(rows[rows.length - 1].endingBalance).toBe(0);
+  });
+});
+
+/**
+ * FIN-65 change 3: the Plan tab has to speak the same units as the Stress Test tab, or the
+ * two tabs report different numbers for the same plan and the app looks broken.
+ */
+describe('toTodaysDollarRows', () => {
+  const plan = assumptions({
+    currentAge: 40,
+    retirementAge: 43,
+    planningHorizonEndAge: 45,
+    initialBalance: 100_000,
+    inflationRate: 0.03,
+  });
+
+  it('divides each year by the price level that year, compounded from today', () => {
+    const nominal = runProjection(plan);
+    const real = toTodaysDollarRows(nominal, 0.03);
+
+    real.forEach((row, i) => {
+      // Year `i`'s ending balance is measured at the END of that year, so it has lived
+      // through `i + 1` years of inflation.
+      expect(row.endingBalance).toBeCloseTo(nominal[i].endingBalance / 1.03 ** (i + 1), 6);
+    });
+  });
+
+  /**
+   * A row is a breakdown a reader can add up in the detail panel, so the identity
+   * `end = begin - withdrawal + return + contribution` has to survive deflation. It does
+   * only because every field in a row is divided by the SAME price level — deflating the
+   * opening balance by the start-of-year level instead would be defensible in isolation and
+   * would break the panel's arithmetic by a year of inflation.
+   */
+  it('keeps each row internally consistent, so the detail breakdown still adds up', () => {
+    const real = toTodaysDollarRows(runProjection(plan), 0.03);
+
+    for (const row of real) {
+      expect(
+        row.beginningBalance - row.annualWithdrawal + row.investmentReturn + row.annualContribution,
+      ).toBeCloseTo(row.endingBalance, 6);
+    }
+  });
+
+  it('leaves age and year untouched', () => {
+    const nominal = runProjection(plan);
+    const real = toTodaysDollarRows(nominal, 0.03);
+
+    expect(real.map((row) => [row.age, row.year])).toEqual(
+      nominal.map((row) => [row.age, row.year]),
+    );
+  });
+
+  it('is the identity at zero inflation', () => {
+    const nominal = runProjection(plan);
+
+    expect(toTodaysDollarRows(nominal, 0)).toEqual(nominal);
+  });
+
+  /**
+   * The tautology worth being explicit about: an inflation-indexed withdrawal is by
+   * construction flat in real terms, so the deflated withdrawal line carries no information
+   * about the plan. It is still the right number to show — a retiree's spending power really
+   * is meant to be constant — but nobody should read the flat line as evidence of anything.
+   */
+  it('flattens an inflation-indexed withdrawal to a constant in real terms', () => {
+    const real = toTodaysDollarRows(runProjection(plan), 0.03);
+    const retired = real.filter((row) => row.annualWithdrawal > 0);
+
+    expect(retired.length).toBeGreaterThan(1);
+    for (const row of retired) {
+      expect(row.annualWithdrawal).toBeCloseTo(retired[0].annualWithdrawal, 6);
+    }
+  });
+});
+
+describe('realReturn', () => {
+  /**
+   * The Fisher relation, not the subtraction people reach for first. At 7% and 2.5% the
+   * naive `nominal - inflation` gives 4.5% where the correct figure is ~4.39% — small here,
+   * and compounding to a visible gap over a 65-year horizon.
+   */
+  it('divides out inflation rather than subtracting it', () => {
+    expect(realReturn(0.07, 0.025)).toBeCloseTo(1.07 / 1.025 - 1, 12);
+    expect(realReturn(0.07, 0.025)).not.toBeCloseTo(0.045, 4);
+  });
+
+  it('matches the real returns ProjectionLab publishes for its own defaults', () => {
+    // Their Rates screen shows 5.34% real for a 8.5% nominal stock return (7% price + 1.5%
+    // dividend) and 1.94% for a 5% bond return, both against 3% inflation.
+    expect(realReturn(0.085, 0.03) * 100).toBeCloseTo(5.34, 2);
+    expect(realReturn(0.05, 0.03) * 100).toBeCloseTo(1.94, 2);
+  });
+
+  it('is the nominal return when there is no inflation', () => {
+    expect(realReturn(0.07, 0)).toBeCloseTo(0.07, 12);
+  });
+
+  it('goes negative when inflation outruns the return', () => {
+    expect(realReturn(0.02, 0.05)).toBeLessThan(0);
+  });
+});
+
+/**
+ * FIN-65 change 6: a deterministic plan that runs dry flatlines at zero.
+ *
+ * Reverses a documented Story 1 decision (see the note this ticket rewrote on
+ * `withdrawFullShortfall`): the engine used to keep projecting into negative territory on the
+ * grounds that a failing plan should be shown rather than hidden. It should — but a portfolio
+ * of *negative* $150,775 is not the failure being shown, it is unclamped arithmetic continuing
+ * past the point the plan died, and nothing in this engine models borrowing. Flatlining at
+ * zero shows the same failure and stops asserting a debt that was never simulated.
+ *
+ * At the shipped defaults with a 100% bond allocation the old behaviour crossed zero at age 96
+ * and reported -$150,775 in today's dollars at 100. The Plan tab's y-axis floor hid that on the
+ * chart, but the hover tooltip and the year-detail panel both read the row directly and showed
+ * it as fact.
+ *
+ * This is the same decision `runMonteCarloTrial` already made at FIN-65 change 4, taken at the
+ * same layer (the trial/projection loop, not the injected `WithdrawalStrategy`) so the two
+ * engines stay structurally parallel and a caller-supplied strategy cannot opt out of it.
+ */
+describe('FIN-65 change 6: ruin is absorbing in the deterministic projection', () => {
+  /** Runs dry well before the horizon: retired at 65 drawing 40% a year on a flat 4% return. */
+  const ruinous: PlanAssumptions = {
+    currentAge: 65,
+    retirementAge: 65,
+    initialBalance: 500_000,
+    currentAnnualIncome: 0,
+    annualContributionRate: 0,
+    planningHorizonEndAge: 90,
+    annualRaiseRate: 0,
+    annualReturnRate: 0.04,
+    inflationRate: 0.025,
+    withdrawalRateInRetirement: 0.4,
+  };
+
+  it('never reports a negative ending balance', () => {
+    for (const row of runProjection(ruinous)) {
+      expect(row.endingBalance, `age ${row.age}`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('never reports a negative beginning balance', () => {
+    for (const row of runProjection(ruinous)) {
+      expect(row.beginningBalance, `age ${row.age}`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('stays at zero once it reaches zero, rather than recovering', () => {
+    const rows = runProjection(ruinous);
+    const ruinIndex = rows.findIndex((row) => row.endingBalance === 0);
+
+    expect(ruinIndex).toBeGreaterThan(0);
+    for (const row of rows.slice(ruinIndex)) {
+      expect(row.endingBalance, `age ${row.age}`).toBe(0);
+    }
+  });
+
+  it('reports zero for every component of a post-ruin year, not just the ending balance', () => {
+    const rows = runProjection(ruinous);
+    const ruinIndex = rows.findIndex((row) => row.endingBalance === 0);
+
+    // The year-detail panel renders each of these; a post-ruin year that still claims a
+    // withdrawal or an investment return describes activity in an empty portfolio.
+    for (const row of rows.slice(ruinIndex + 1)) {
+      expect(row, `age ${row.age}`).toMatchObject({
+        beginningBalance: 0,
+        annualWithdrawal: 0,
+        investmentReturn: 0,
+        annualContribution: 0,
+        endingBalance: 0,
+      });
+    }
+  });
+
+  it('caps the final withdrawal at what the portfolio could actually fund', () => {
+    const rows = runProjection(ruinous);
+    const ruinIndex = rows.findIndex((row) => row.endingBalance === 0);
+    const finalYear = rows[ruinIndex];
+
+    // The year the money runs out is the one year where the requested withdrawal exceeds the
+    // balance. Reporting the full request would leave the year-detail breakdown failing to add
+    // up by exactly the overshoot, in the single year a user is most likely to click on.
+    // What was requested that year: the prior year's draw, indexed for inflation.
+    const requested = rows[ruinIndex - 1].annualWithdrawal * (1 + ruinous.inflationRate);
+
+    expect(finalYear.annualWithdrawal).toBeLessThan(requested);
+    expect(finalYear.annualWithdrawal).toBeCloseTo(finalYear.beginningBalance, 6);
+  });
+
+  it('keeps the year-detail breakdown adding up in every year, including the ruin year', () => {
+    for (const row of runProjection(ruinous)) {
+      expect(
+        row.beginningBalance - row.annualWithdrawal + row.investmentReturn + row.annualContribution,
+        `age ${row.age}`,
+      ).toBeCloseTo(row.endingBalance, 6);
+    }
+  });
+
+  it('leaves a plan that never runs dry completely unchanged', () => {
+    // The clamp must be inert for solvent plans — this is the regression that would silently
+    // rewrite every projection the app actually shows.
+    const solvent: PlanAssumptions = {
+      ...ruinous,
+      annualReturnRate: 0.07,
+      withdrawalRateInRetirement: 0.03,
+    };
+    const rows = runProjection(solvent);
+
+    expect(rows.every((row) => row.endingBalance > 0)).toBe(true);
+    expect(rows.at(-1)?.endingBalance).toBeGreaterThan(solvent.initialBalance);
+  });
+
+  it('reports the 100%-bond default plan flatlining at zero rather than at -$150,775', () => {
+    // The exact case that prompted this ticket, in today's dollars as the Plan tab shows it.
+    const defaults: PlanAssumptions = {
+      currentAge: 35,
+      retirementAge: 65,
+      initialBalance: 250_000,
+      currentAnnualIncome: 85_000,
+      annualContributionRate: 0.15,
+      planningHorizonEndAge: 100,
+      annualRaiseRate: 0.03,
+      annualReturnRate: 0.04,
+      inflationRate: 0.025,
+      withdrawalRateInRetirement: 0.039,
+    };
+    const rows = toTodaysDollarRows(runProjection(defaults), defaults.inflationRate);
+
+    expect(rows.at(-1)?.endingBalance).toBe(0);
+    expect(rows.every((row) => row.endingBalance >= 0)).toBe(true);
   });
 });

@@ -14,6 +14,7 @@ import type {
   PortfolioValue,
   ProjectionErrorCode,
   ProjectionRow,
+  HistoricalYearInflation,
   HistoricalYearReturn,
   RandomSource,
   ReturnModel,
@@ -56,6 +57,7 @@ type PublicTypeSurface = {
   randomSource: RandomSource;
   trialConfig: TrialConfig;
   volatilityAssumptions: VolatilityAssumptions;
+  historicalYearInflation: HistoricalYearInflation;
   historicalYearReturn: HistoricalYearReturn;
   returnModel: ReturnModel;
 };
@@ -71,6 +73,8 @@ describe('public surface', () => {
     'InvalidProjectionInputError',
     'withdrawFullShortfall',
     'zeroTax',
+    // FIN-65 change 2: split out of `applyGrowth` so the withdrawal stage can run first.
+    'snapshotBeginningBalance',
     'applyGrowth',
     'applyLifeEvents',
     'computeIncome',
@@ -80,7 +84,9 @@ describe('public surface', () => {
     'pipelineStages',
     'runStages',
     'runPeriod',
+    'realReturn',
     'runProjection',
+    'toTodaysDollarRows',
     'validatePlanAssumptions',
     'createInitialPeriodState',
     'createSeededRandom',
@@ -93,10 +99,14 @@ describe('public surface', () => {
     'correlatedNormals',
     'DEFAULT_CORRELATION',
     'DEFAULT_RETURN_ASSUMPTIONS',
-    'expectedPortfolioReturn',
+    // FIN-65: the Plan tab's compounding rate — the drag-free blend, see `toAssumptions`.
+    'blendedPortfolioReturn',
     'createHistoricalReturnGenerator',
     'DEFAULT_BLOCK_LENGTH_YEARS',
     'HISTORICAL_ANNUAL_RETURNS',
+    // FIN-65: paired with HISTORICAL_ANNUAL_RETURNS — the Monte Carlo historical path draws
+    // a period's return and its cost-of-living increase from the same year.
+    'HISTORICAL_ANNUAL_INFLATION',
   ];
 
   it.each(runtimeExports)('re-exports %s', (name) => {

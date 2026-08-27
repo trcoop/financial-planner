@@ -3,7 +3,9 @@
  *
  * The stage order is the architectural commitment (Engine Architecture Design, Pipeline /
  * step function). Later stories extend the engine by filling in stages, swapping strategy
- * implementations, or adding `PlanEvent` types — not by reordering this list.
+ * implementations, or adding `PlanEvent` types — not by reordering this list. It has been
+ * reordered exactly once, at FIN-65 change 2, to move retirement withdrawals ahead of growth;
+ * see {@link pipelineStages} for the decision and what deliberately did *not* move with it.
  *
  * Every stage carries its Story 1 accumulation and drawdown behaviour (ERD §5, WP-1b), with
  * the sole exception of {@link applyLifeEvents}, which stays an intentional no-op until
@@ -24,28 +26,38 @@ import type { PeriodState, PipelineStage, PlanAssumptions, RunPeriodInput } from
 const isRetired = (age: number, assumptions: PlanAssumptions): boolean => age >= assumptions.retirementAge;
 
 /**
+ * Records the balance the period opened with, before any stage has touched it.
+ *
+ * Its own stage as of FIN-65 change 2. It used to be a side-obligation of {@link applyGrowth},
+ * which was fine only while growth ran first; now that {@link computeWithdrawals} precedes
+ * growth and needs the *opening* balance to rate the first retirement year, the snapshot has
+ * to be taken before either of them. {@link recordPeriod} reads it back, and it is not
+ * recoverable once `balance` has been reduced by a withdrawal.
+ */
+export const snapshotBeginningBalance: PipelineStage = (state, _input) => ({
+  ...state,
+  beginningBalance: state.balance,
+});
+
+/**
  * Grows the balance by this period's return.
  *
- * Owns two side-obligations the later stages depend on: it snapshots `beginningBalance`
- * from the incoming `balance` and stores the computed `investmentReturn` dollar amount,
- * both of which {@link recordPeriod} reads back. Neither is recoverable once `balance` is
- * overwritten with the post-growth value, which is why they are carried explicitly.
+ * Runs on whatever the balance is when it is reached — as of FIN-65 change 2 that is the
+ * balance net of this year's retirement withdrawal, so the year's growth applies to
+ * `beginningBalance - withdrawal`. Stores the computed `investmentReturn` dollar amount for
+ * {@link recordPeriod}, which is not recoverable once `balance` is overwritten with the
+ * post-growth value.
  */
-export const applyGrowth: PipelineStage = (state, input) => {
-  const beginningBalance = state.balance;
-
-  return {
-    ...state,
-    beginningBalance,
-    // Stated against the period's own return, not `assumptions.annualReturnRate`: the
-    // deterministic projection is just the case where the two are equal every year, while a
-    // Monte Carlo trial varies `returnForPeriod` per period through this same stage.
-    investmentReturn: beginningBalance * input.returnForPeriod,
-    // `x * (1 + r)` rather than `x + investmentReturn` to match ERD §5's ending-balance
-    // formula literally — the two differ in the last bit or two under IEEE-754.
-    balance: beginningBalance * (1 + input.returnForPeriod),
-  };
-};
+export const applyGrowth: PipelineStage = (state, input) => ({
+  ...state,
+  // Stated against the period's own return, not `assumptions.annualReturnRate`: the
+  // deterministic projection is just the case where the two are equal every year, while a
+  // Monte Carlo trial varies `returnForPeriod` per period through this same stage.
+  investmentReturn: state.balance * input.returnForPeriod,
+  // `x * (1 + r)` rather than `x + investmentReturn` to match ERD §5's ending-balance
+  // formula literally — the two differ in the last bit or two under IEEE-754.
+  balance: state.balance * (1 + input.returnForPeriod),
+});
 
 /** Applies any life events active this period. Always a no-op for Stories 1-3 — no UI populates events yet. */
 export const applyLifeEvents: PipelineStage = (state, _input) => state;
@@ -86,7 +98,23 @@ export const computeIncome: PipelineStage = (state, input) => {
  *
  * Retirement only: the first retirement year withdraws
  * `balanceAtStartOfFirstRetirementYear * withdrawalRateInRetirement`, and every year after
- * inflates the prior withdrawal by `inflationRate`.
+ * inflates the prior withdrawal by this period's inflation rate.
+ *
+ * **Runs BEFORE {@link applyGrowth} as of FIN-65 change 2**, so a retirement year resolves as
+ * `(beginningBalance - withdrawal) * (1 + r)`: the retiree takes the year's spending money out
+ * at the start of the year, and only what is left is invested. This is the model Bengen (1994)
+ * and the Trinity study use, and the change is worth roughly +0.15pp to +0.25pp of SAFEMAX.
+ *
+ * There are three distinct published models here and we are choosing the middle one on
+ * purpose, so do not "fix" this back:
+ *
+ * - end-of-year (what this engine did before): `1_000_000 * 1.07 - 40_000` = $1,030,000
+ * - **start-of-year, ours**: `(1_000_000 - 40_000) * 1.07` = $1,027,200
+ * - monthly time-weighted (e.g. ProjectionLab): ~$1,028,499
+ *
+ * Ours is the most conservative of the three, by about $1,300/yr on $1M at 7%. That is a
+ * deliberate preference for the simpler, directly-published Bengen/Trinity convention over a
+ * finer-grained model whose extra precision we cannot independently validate.
  */
 export const computeWithdrawals: PipelineStage = (state, input) => {
   const { assumptions, withdrawalStrategy } = input;
@@ -95,14 +123,36 @@ export const computeWithdrawals: PipelineStage = (state, input) => {
     return { ...state, annualWithdrawal: 0 };
   }
 
+  /**
+   * The period's own inflation when the caller knows it, the plan's flat assumption otherwise
+   * (FIN-65).
+   *
+   * The `??` fallback is load-bearing, not defensive coding — it is the whole scope fence
+   * between the two kinds of caller:
+   *
+   * - Monte Carlo's *historical* path sets `inflationForPeriod` to the realised CPI-U of the
+   *   very historical year it drew this period's return from. Pairing them is what the
+   *   safe-withdrawal-rate literature does (Bengen 1994, Trinity); leaving them unpaired ran
+   *   nominal 1970s returns against a placid invented 2.5% cost of living, which does not
+   *   merely bias the mean — it inverts the cohort ranking.
+   * - The deterministic projection (`runProjection`, the Plan tab) and Monte Carlo's GBM
+   *   branch have no historical year to key off, so they never set it and stay on
+   *   `assumptions.inflationRate`. The Plan tab pairing a user-chosen nominal return with a
+   *   user-chosen nominal inflator is internally consistent, and FIN-65 must not leak into it.
+   *
+   * `??` and not `||`: 1929's CPI-U is exactly 0.0000, which `||` would silently replace with
+   * the plan's rate.
+   */
+  const inflationRate = input.inflationForPeriod ?? assumptions.inflationRate;
+
   // `priorWithdrawal === null` is what marks the first retirement year, so this works
   // identically whether retirement is reached mid-projection or was already underway at
   // year 0. The first year rates `beginningBalance` — the balance at the *start* of the
-  // year, before `applyGrowth` — per ERD §5.
+  // year, per ERD §5 — which `snapshotBeginningBalance` captured before this stage ran.
   const requested =
     state.priorWithdrawal === null
       ? state.beginningBalance * assumptions.withdrawalRateInRetirement
-      : state.priorWithdrawal * (1 + assumptions.inflationRate);
+      : state.priorWithdrawal * (1 + inflationRate);
 
   const plan = withdrawalStrategy(state, requested);
 
@@ -154,13 +204,27 @@ export const recordPeriod: PipelineStage = (state, _input) => ({
 /**
  * The pipeline's fixed stage order.
  *
- * `applyGrowth -> applyLifeEvents -> computeIncome -> computeWithdrawals -> applyTax -> recordPeriod`
+ * `snapshotBeginningBalance -> applyLifeEvents -> computeWithdrawals -> applyGrowth ->
+ *  computeIncome -> applyTax -> recordPeriod`
+ *
+ * **Changed once, deliberately, at FIN-65 change 2** — the doc comment at the top of this file
+ * calls the order an architectural commitment, so this is recorded as a decision rather than
+ * left as a shuffle. Retirement withdrawals now come *out of the portfolio before* the year's
+ * growth is applied, which is what Bengen (1994) and the Trinity study both model. The
+ * `beginningBalance` snapshot moved into its own leading stage to make that possible; see
+ * {@link snapshotBeginningBalance} and the note in {@link computeWithdrawals}.
+ *
+ * `computeIncome` deliberately stayed *after* `applyGrowth`, exactly where it was. Its
+ * placement encodes a separate Story 1 decision — contributions land at year end and earn no
+ * return in the year they are made — and letting a withdrawal-timing change quietly relocate
+ * contributions too would be a second behavioural change riding along unannounced.
  */
 export const pipelineStages: readonly PipelineStage[] = [
-  applyGrowth,
+  snapshotBeginningBalance,
   applyLifeEvents,
-  computeIncome,
   computeWithdrawals,
+  applyGrowth,
+  computeIncome,
   applyTax,
   recordPeriod,
 ];

@@ -53,7 +53,8 @@ describe('handleMonteCarloRequest', () => {
     );
     // Both calls draw a fresh random seed, so compare shape/meta rather than exact values.
     expect(response.result.meta).toEqual(directly.meta);
-    expect(response.result.percentiles.p10).toHaveLength(66);
+    expect(response.result.percentiles.real.p10).toHaveLength(66);
+    expect(response.result.percentiles.nominal.p10).toHaveLength(66);
     expect(response.result.successRate).toBeGreaterThanOrEqual(0);
     expect(response.result.successRate).toBeLessThanOrEqual(100);
   });
