@@ -277,6 +277,62 @@ describe('FIN-65 wiring: the Plan tab reports today\'s dollars at a blended rate
     )
   })
 
+  /**
+   * Round-4 finding. The two tests above both derive their expected price level from `ADVANCED`,
+   * which sets `inflationPercent: 2.5` — so a deflator hardcoded to the literal `0.025` was
+   * indistinguishable from one that reads the user's value, and that mutation survived all 641
+   * tests. Inflation is an editable advanced field, so the mutant is reachable: it would leave
+   * the chart and the headline tile roughly 9.2x too high at 6% inflation and 2.6x too low at
+   * 1%, under a label that says today's dollars.
+   *
+   * The fix is a second rate, not new production code. `it.each` rather than one extra case so
+   * the pair straddles the fixture's 2.5% in both directions — a single higher rate would still
+   * pass under a deflator stuck at any value below it.
+   */
+  it.each([
+    [1, 0.01],
+    [6, 0.06],
+  ])(
+    'reads the inflation rate the user entered (%i percent), not the default the other tests happen to use',
+    (percent, rate) => {
+      const advanced = { ...ADVANCED, inflationPercent: percent }
+      const { result } = renderHook(() => useProjectionState(CORE, advanced, DEBOUNCE_MS))
+      const plan = toAssumptions(CORE, advanced)
+      const nominal = runProjection(plan)
+      const year = nominal.length - 1
+
+      expect(plan.inflationRate).toBeCloseTo(rate, 10)
+      expect(result.current.rows[year].endingBalance).toBeCloseTo(
+        nominal[year].endingBalance / (1 + rate) ** (year + 1),
+        6,
+      )
+
+      // And the tile, which reads the same rows but is the figure a user quotes back.
+      const retirementYear = CORE.retirementAge - CORE.currentAge
+      expect(result.current.projectedBalanceAtRetirement).toBeCloseTo(
+        nominal[retirementYear].endingBalance / (1 + rate) ** (retirementYear + 1),
+        6,
+      )
+    },
+  )
+
+  it('deflates by more at a higher inflation rate, on the same nominal plan', () => {
+    // The relationship the fixed-rate tests cannot see: two different user inputs must produce
+    // two different real series from an identical nominal one. `annualReturnRate` is unaffected
+    // by `inflationPercent`, so the nominal projection underneath these is literally the same.
+    const at1 = renderHook(() => useProjectionState(CORE, { ...ADVANCED, inflationPercent: 1 }, DEBOUNCE_MS))
+    const at6 = renderHook(() => useProjectionState(CORE, { ...ADVANCED, inflationPercent: 6 }, DEBOUNCE_MS))
+    const year = at1.result.current.rows.length - 1
+
+    expect(toAssumptions(CORE, { ...ADVANCED, inflationPercent: 1 }).annualReturnRate).toBeCloseTo(
+      toAssumptions(CORE, { ...ADVANCED, inflationPercent: 6 }).annualReturnRate,
+      10,
+    )
+    expect(at6.result.current.rows[year].endingBalance).toBeLessThan(
+      at1.result.current.rows[year].endingBalance,
+    )
+  })
+
   it('blends the stock and bond returns at the allocation weight', () => {
     const plan = toAssumptions(CORE, { ...ADVANCED, stocksAllocationPercent: 70 })
 

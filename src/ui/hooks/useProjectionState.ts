@@ -122,6 +122,15 @@ export function useProjectionState(
     }
   }, [debouncedCoreValues, debouncedAdvancedValues])
 
+  // Round-4 note on a naming collision worth not tripping over: this reports the retirement
+  // year's ENDING balance — the pot after that year's withdrawal and growth — while
+  // `src/ui/calibration.test.ts` uses the same year's `beginningBalance` for what it calls "the
+  // pot the retiree starts drawing from". Both are correct for what they measure, but the two
+  // files now attach the same English phrase to different quantities, and FIN-65 change 2
+  // widened the gap between them by a year of drawdown-plus-growth (the withdrawal now precedes
+  // the growth it used to follow). Ending is the right one here: it is the number the tile shows
+  // beside a chart whose retirement-year point is also an ending balance, and a tile that
+  // disagreed with the point directly above it would be the worse error.
   const retirementRow = rows.find((row) => row.age >= debouncedCoreValues.retirementAge)
   const projectedBalanceAtRetirement = retirementRow?.endingBalance ?? rows.at(-1)?.endingBalance
 
