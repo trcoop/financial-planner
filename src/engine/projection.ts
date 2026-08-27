@@ -194,6 +194,25 @@ const advance = (state: PeriodState): PeriodState => ({ ...state, age: state.age
  * makes its equivalent gate reachable and tested. Deleting this would silently pick the
  * opposite answer for the Plan tab on the day life events land.
  *
+ * **Three smaller pieces here are likewise dead in every state the engine can reach today**, so
+ * a mutation deleting any one of them survives the suite. Round 5 of the FIN-65 review flagged
+ * them; they are kept as guards, with the reachability arguments recorded so the next reader
+ * does not have to re-derive them:
+ *
+ * - The `lastRow === undefined` branch. {@link recordPeriod} is the last stage of `runPeriod`,
+ *   so `state.rows` is non-empty on every call this function receives. The alternative is a
+ *   non-null assertion, which turns a pipeline reordering into a silent `undefined` spread.
+ * - The `Math.max(0, ...)` in `funded`. Both arguments to the inner `Math.min` are already
+ *   non-negative: `beginningBalance` is either the validated `initialBalance` or a previously
+ *   clamped ending, and a withdrawal never goes below zero.
+ * - The `- lastRow.annualContribution` term in the derived return. A period with a contribution
+ *   is by definition pre-retirement (see `isRetired` in `pipeline.ts`), so its withdrawal is
+ *   zero; and {@link validatePlanAssumptions} floors `annualReturnRate` at -1. Such a period
+ *   therefore ends on `beginningBalance * (1 + r) + contribution >= contribution > 0` and can
+ *   never trigger the clamp. The term stays because it is what makes the identity hold *by
+ *   construction* rather than by coincidence — and it is the first thing that becomes live if
+ *   {@link applyLifeEvents} ever credits money to a plan that is already failing.
+ *
  * `priorWithdrawal` is deliberately NOT cut back — it carries the inflation-indexed spending
  * *need*, which keeps rising whether or not the portfolio can fund it. See
  * {@link computeWithdrawals}.
@@ -223,8 +242,11 @@ const clampRuin = (state: PeriodState, ruined: boolean): { state: PeriodState; r
           annualWithdrawal: funded,
           // Derived, not recomputed from the period's rate: whatever growth ran on, the row
           // must close on a zero ending balance. Solving the breakdown identity for the return
-          // gives this, and it reduces to exactly 0 in the ordinary retirement case (where the
-          // cutback takes `funded` to `beginningBalance` and there is no contribution).
+          // gives this. It is exact in every reachable case, not merely close: in the ordinary
+          // ruin year the cutback takes `funded` to `beginningBalance` with no contribution, so
+          // this is exactly 0; in a year that lands on zero with the draw fully funded (scenario
+          // B's age 66) `funded` still equals `beginningBalance`, likewise 0; and in every year
+          // after ruin all three terms are already 0.
           investmentReturn: funded - lastRow.beginningBalance - lastRow.annualContribution,
           endingBalance: 0,
         },

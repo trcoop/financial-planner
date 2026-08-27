@@ -611,10 +611,16 @@ describe('FIN-55: external formula validation — deterministic scenario A (30 -
 });
 
 describe('FIN-55: external formula validation — deterministic scenario B (already-retired-adjacent, high withdrawal)', () => {
-  // Age 60, retiring at 62 (already-retired-adjacent), high 20% withdrawal rate driving the
-  // balance negative. Confirms the deterministic engine does NOT clamp a negative balance —
-  // deliberately distinct from the separately-filed chart-rendering clamping bug, which is a
-  // UI display concern and untouched here.
+  // Age 60, retiring at 62 (already-retired-adjacent), high 20% withdrawal rate that exhausts
+  // the portfolio well inside the horizon.
+  //
+  // This header used to read: "Confirms the deterministic engine does NOT clamp a negative
+  // balance — deliberately distinct from the separately-filed chart-rendering clamping bug,
+  // which is a UI display concern and untouched here." FIN-65 change 6 moved the clamp into the
+  // engine, which is what that sentence said would not happen; the chart-only fix left the
+  // tooltip and the year-detail panel still quoting negative balances. Kept rather than deleted
+  // so the reversal is legible: the scenario's arithmetic below is unchanged, only the reported
+  // tail is.
   const rows = runProjection(
     assumptions({
       currentAge: 60,
@@ -647,10 +653,12 @@ describe('FIN-55: external formula validation — deterministic scenario B (alre
 
     expect(firstZero).toBeGreaterThan(0);
 
-    // 66, not the 67 this test named before FIN-65 change 6, and the difference is the point. At 66 the
-    // requested draw is *exactly* the opening balance: both are the same expression,
-    // `26_787.11... * 1.03`, so they evaluate to the identical double and the year closes on
-    // exactly 0. The old assertion searched for `endingBalance < 0` and zero is not negative,
+    // 66, not the 67 this test named before FIN-65 change 6, and the difference is the point. At
+    // 66 the requested draw is *exactly* the opening balance, because both sides reduce to the
+    // same expression, `25_873.589906... * 1.03`: age 65 draws 25_873.589906 against a
+    // beginning balance of 51_747.179812 — twice its own draw, to the cent — so it closes on
+    // exactly one more year's worth, and age 66 indexes that same draw up by the 3% inflation
+    // rate. Identical expression, identical double, and the year closes on exactly 0. The old assertion searched for `endingBalance < 0` and zero is not negative,
     // so it skipped the year the money actually ran out and reported the first year the
     // deficit became visible instead. Treating exactly zero as ruin is the same rule FIN-65
     // change 4 established for `runMonteCarloTrial`.
