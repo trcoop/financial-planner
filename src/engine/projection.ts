@@ -334,6 +334,11 @@ const clampRuin = (state: PeriodState, ruined: boolean): { state: PeriodState; r
         {
           ...lastRow,
           annualWithdrawal: funded,
+          // ERD §11 Q2b (resolved 2026-08-27): zeroed in step with the cut-back
+          // `annualWithdrawal`, not left at the full requested figure — a "Medicare: $2,400"
+          // line next to a withdrawal too small to have included it was judged more
+          // misleading than losing per-line ruin-year detail.
+          eventCosts: lastRow.eventCosts.map((entry) => ({ ...entry, amount: 0 })),
           // Derived, not recomputed from the period's rate: whatever growth ran on, the row
           // must close on a zero ending balance. Solving the breakdown identity for the return
           // gives this. It is exact in every reachable case, not merely close: in the ordinary
@@ -352,6 +357,7 @@ const clampRuin = (state: PeriodState, ruined: boolean): { state: PeriodState; r
 
 export const runProjection = (assumptions: PlanAssumptions, events: PlanEvent[] = []): ProjectionRow[] => {
   validatePlanAssumptions(assumptions);
+  validatePlanEvents(events);
 
   const input: RunPeriodInput = {
     events,
@@ -411,6 +417,9 @@ export const toTodaysDollarRows = (
       investmentReturn: row.investmentReturn / priceLevel,
       annualWithdrawal: row.annualWithdrawal / priceLevel,
       endingBalance: row.endingBalance / priceLevel,
+      // Events & Medicare Cost ERD §5: the same price level deflates each event's entry, so a
+      // deflated Medicare figure sits alongside the deflated withdrawal total it is part of.
+      eventCosts: row.eventCosts.map((entry) => ({ ...entry, amount: entry.amount / priceLevel })),
     };
   });
 
