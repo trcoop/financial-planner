@@ -870,6 +870,21 @@ describe('runMonteCarloTrials', () => {
     ...extra,
   });
 
+  it('validates events at the top of the function, rejecting an invalid recurringCost event', () => {
+    const invalidEvent = {
+      type: 'recurringCost' as const,
+      id: 'bad',
+      label: 'Bad',
+      startAge: 65,
+      annualAmount: 100,
+      growthRate: -2,
+    };
+
+    expect(() =>
+      runMonteCarloTrials(assumptions(), allocation70_30, undefined, [invalidEvent], options({ simulationCount: 5 })),
+    ).toThrow(InvalidProjectionInputError);
+  });
+
   it('returns the MonteCarloResult shape and nothing else', () => {
     const result = runMonteCarloTrials(assumptions(), allocation70_30, undefined, [], options());
 

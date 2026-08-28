@@ -16,5 +16,11 @@ export default defineConfig({
     // the suite against stale code from other branches, and letting an unrelated branch's red
     // test fail this one's run. CI clones clean so it never saw this; local runs did.
     exclude: [...configDefaults.exclude, '.claude/**'],
+    // Vitest's 5000ms default is too tight for the heaviest Monte Carlo tests (8,000-path
+    // trials in calibration.test.ts, monteCarloHandler.test.ts) under CI's slower/loaded
+    // runners — they run comfortably under 5s locally but have flaked repeatedly in CI on
+    // this exact timeout. Raised globally rather than per-test since the same class of test
+    // recurs across files.
+    testTimeout: 15000,
   },
 })
