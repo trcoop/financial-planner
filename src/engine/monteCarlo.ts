@@ -10,6 +10,7 @@ import { InvalidProjectionInputError } from './errors';
 import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 import type { HistoricalYearReturn } from './historicalReturns';
 import { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
+import { HISTORICAL_ANNUAL_MEDICAL_INFLATION } from './medicalInflationData';
 import { runPeriod } from './pipeline';
 import { validatePlanEvents } from './projection';
 import { withdrawFullShortfall, zeroTax } from './strategies';
@@ -478,6 +479,31 @@ const INFLATION_BY_YEAR: ReadonlyMap<number, number> = new Map(
  */
 const inflationForYear = (year: number): number | undefined => INFLATION_BY_YEAR.get(year);
 
+/**
+ * Year -> realised medical-care CPI-U, built once at module load, mirroring
+ * {@link INFLATION_BY_YEAR}'s pattern immediately above and for the same reason (FIN-72/ERD §5):
+ * a linear scan of the medical dataset inside the trial loop would run once per period per path
+ * for a lookup that never changes.
+ */
+const MEDICAL_INFLATION_BY_YEAR: ReadonlyMap<number, number> = new Map(
+  HISTORICAL_ANNUAL_MEDICAL_INFLATION.map((entry) => [entry.year, entry.medicalInflation]),
+);
+
+/**
+ * This historical year's realised medical-care CPI-U, or `undefined` when the year isn't in the
+ * table. Exported (unlike {@link inflationForYear}) so it can be unit-tested directly against the
+ * real `HISTORICAL_ANNUAL_MEDICAL_INFLATION` dataset, per FIN-72's acceptance criteria — a thin,
+ * explicit wrapper whose entire body is the map lookup, nothing else.
+ *
+ * A miss returns `undefined` by construction. That is deliberate: this function does NOT apply
+ * `MEDICARE_PART_B_EVENT.growthRate`'s deterministic-branch fallback itself — that fallback is
+ * `applyLifeEvents`'s `input.eventGrowthOverrides?.get(event.id) ?? event.growthRate` (WP-1b/
+ * FIN-71, ERD §5), one layer up. Baking a fallback in here would make a genuine gap in the
+ * dataset indistinguishable from "this event's rate really is 5.5% this year."
+ */
+export const medicalInflationForYear = (year: number): number | undefined =>
+  MEDICAL_INFLATION_BY_YEAR.get(year);
+
 /** Everything a single simulated path needs beyond the plan, the events and its RNG. */
 export interface TrialConfig {
   allocation: PortfolioAllocation;
@@ -576,10 +602,31 @@ export const runMonteCarloTrial = (
           draw,
         );
 
+    // FIN-72 (ERD §5): a fresh Map built each period from the CURRENT period's drawn historical
+    // year — unlike `inflationForPeriod` below, which is deliberately lagged one period.
+    // `eventGrowthOverrides` answers "what did this event's cost actually grow by this year,"
+    // the same category of question `inflationIndex`'s price-level tracking asks about the
+    // current drawn year — not "what raise does this year's withdrawal budget get," which is
+    // the lagged question `inflationForPeriod` answers. Keyed generically by event id
+    // (`'medicarePartB'` today) rather than by a Medicare-specific field, so a second
+    // historically-sampled event can reuse this channel without touching this loop again.
+    //
+    // `medicalInflationForYear` returns `undefined` on a miss (year outside the dataset) or when
+    // there's no drawn historical year at all (the GBM branch, or a `runPeriodFn` override that
+    // never draws). Either way the id is simply omitted from the map rather than inserted with an
+    // `undefined` value — `eventGrowthOverrides?.get(event.id) ?? event.growthRate` (WP-1b) reads
+    // a missing key exactly the same way it reads a present-but-`undefined` one, so there is no
+    // behavioral difference; omitting keeps the map's value type `number`, not `number | undefined`.
+    const medicarePartBGrowth = historicalYear ? medicalInflationForYear(historicalYear.year) : undefined;
+    const eventGrowthOverrides: ReadonlyMap<string, number> | undefined = historicalYear
+      ? new Map(medicarePartBGrowth !== undefined ? [['medicarePartB', medicarePartBGrowth] as const] : [])
+      : undefined;
+
     state = step(state, {
       events,
       assumptions: plan,
       returnForPeriod,
+      eventGrowthOverrides,
       // FIN-65: the drawn historical years supply both the nominal returns and the
       // cost-of-living increases, so the two series come from one sampler — no second
       // sampler, no second RNG draw (which would also have shifted every existing seeded

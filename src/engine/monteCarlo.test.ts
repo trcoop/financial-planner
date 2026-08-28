@@ -14,6 +14,7 @@ import {
   drawPortfolioReturn,
   extractPercentiles,
   gbmPeriodReturn,
+  medicalInflationForYear,
   runMonteCarloTrial,
   runMonteCarloTrials,
   standardNormal,
@@ -25,6 +26,7 @@ import { withdrawFullShortfall, zeroTax } from './strategies';
 import { pipelineStages, runPeriod } from './pipeline';
 import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 import { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
+import { HISTORICAL_ANNUAL_MEDICAL_INFLATION } from './medicalInflationData';
 import type { PeriodState, PipelineStage, PlanAssumptions, ProjectionRow } from './types';
 
 /** This year's S&P 500 total return from our own Damodaran table. */
@@ -1919,6 +1921,137 @@ describe('FIN-65: runMonteCarloTrial passes the prior drawn year inflation', () 
     expect(seen).toHaveLength(5);
     for (const period of seen) {
       expect(period.inflation).toBeUndefined();
+    }
+  });
+});
+
+describe('medicalInflationForYear', () => {
+  it('returns the table entry for a year inside the real (1936-2025) BLS-sourced range', () => {
+    expect(medicalInflationForYear(1975)).toBe(0.1206);
+    expect(medicalInflationForYear(2020)).toBe(0.0411);
+    expect(medicalInflationForYear(2025)).toBe(0.0295);
+  });
+
+  it('returns the table entry for a backfilled (1928-1935) year too', () => {
+    expect(medicalInflationForYear(1928)).toBe(-0.0174);
+    expect(medicalInflationForYear(1932)).toBe(-0.1598);
+  });
+
+  it('returns undefined for a year outside the table', () => {
+    expect(medicalInflationForYear(1927)).toBeUndefined();
+    expect(medicalInflationForYear(2026)).toBeUndefined();
+  });
+
+  it('agrees with the real HISTORICAL_ANNUAL_MEDICAL_INFLATION dataset for every year', () => {
+    for (const entry of HISTORICAL_ANNUAL_MEDICAL_INFLATION) {
+      expect(medicalInflationForYear(entry.year)).toBe(entry.medicalInflation);
+    }
+  });
+});
+
+/** This year's realised medical-care CPI-U from our own dataset. */
+const yearMedicalCpi = (year: number): number => {
+  const entry = HISTORICAL_ANNUAL_MEDICAL_INFLATION.find((candidate) => candidate.year === year);
+  if (entry === undefined) throw new Error(`no medical CPI entry for ${year}`);
+  return entry.medicalInflation;
+};
+
+describe('FIN-72: runMonteCarloTrial builds eventGrowthOverrides from the CURRENT drawn year', () => {
+  /** `draw` pinned to 0 always selects block start index 0 — 1928-1932, repeatedly (blockLength 5). */
+  const alwaysFirstBlock = (): number => 0;
+
+  const capturingStep =
+    (seen: Array<{ ret: number; medicare: number | undefined }>): PipelineStage =>
+    (state, input) => {
+      seen.push({
+        ret: input.returnForPeriod,
+        medicare: input.eventGrowthOverrides?.get('medicarePartB'),
+      });
+      return referenceRunPeriod(state, input);
+    };
+
+  it("matches the dataset's entry for the period's drawn year, not a lagged one", () => {
+    const seen: Array<{ ret: number; medicare: number | undefined }> = [];
+    const plan = assumptions({ currentAge: 65, retirementAge: 65, planningHorizonEndAge: 74 });
+
+    runMonteCarloTrial(plan, [], alwaysFirstBlock, {
+      allocation: { stocksPercent: 100, bondsPercent: 0 },
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      runPeriodFn: capturingStep(seen),
+    });
+
+    // Same block as the FIN-65 inflation test above: ten periods = 1928-1932 drawn twice.
+    const expectedYears = [1928, 1929, 1930, 1931, 1932, 1928, 1929, 1930, 1931, 1932];
+    expect(seen).toHaveLength(expectedYears.length);
+    expect(seen.map((period) => period.ret)).toEqual(expectedYears.map((year) => yearStockReturn(year)));
+
+    // Unlike `inflationForPeriod` (lagged one period), `eventGrowthOverrides` uses the CURRENT
+    // period's drawn year every time, including period 0 — there is no "no previous period" gap
+    // here, because this isn't indexing a withdrawal set in advance, it's asking what this
+    // event's cost actually grew by this year.
+    expect(seen.map((period) => period.medicare)).toEqual(
+      expectedYears.map((year) => yearMedicalCpi(year)),
+    );
+  });
+
+  it('produces different Medicare growth for the same period across trials that draw different years', () => {
+    const plan = assumptions({ currentAge: 65, retirementAge: 65, planningHorizonEndAge: 69 });
+    const config = {
+      allocation: { stocksPercent: 100, bondsPercent: 0 },
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      blockLengthYears: 200, // longer than the horizon: one unbroken run from a random start year
+    };
+
+    const firstSeen: Array<{ ret: number; medicare: number | undefined }> = [];
+    runMonteCarloTrial(plan, [], createSeededRandom(7), {
+      ...config,
+      runPeriodFn: capturingStep(firstSeen),
+    });
+
+    const secondSeen: Array<{ ret: number; medicare: number | undefined }> = [];
+    runMonteCarloTrial(plan, [], createSeededRandom(8), {
+      ...config,
+      runPeriodFn: capturingStep(secondSeen),
+    });
+
+    // Seeds 7 and 8 are already pinned elsewhere in this file (`produces the same path twice
+    // from the same seed` / a different-seed counterpart) as drawing different historical
+    // starting points — different first-period returns confirms it here too.
+    expect(firstSeen[0].ret).not.toBe(secondSeen[0].ret);
+    expect(firstSeen[0].medicare).not.toBe(secondSeen[0].medicare);
+
+    // And each trial's value is exactly its own drawn year's real dataset entry — found by
+    // matching the (100%-stock, so unambiguous) returnForPeriod back to HISTORICAL_ANNUAL_RETURNS.
+    const yearForReturn = (ret: number): number => {
+      const entry = HISTORICAL_ANNUAL_RETURNS.find((candidate) => candidate.stockReturn === ret);
+      if (entry === undefined) throw new Error(`no HISTORICAL_ANNUAL_RETURNS entry for return ${ret}`);
+      return entry.year;
+    };
+
+    expect(firstSeen[0].medicare).toBe(medicalInflationForYear(yearForReturn(firstSeen[0].ret)));
+    expect(secondSeen[0].medicare).toBe(medicalInflationForYear(yearForReturn(secondSeen[0].ret)));
+  });
+
+  it('leaves eventGrowthOverrides undefined on the GBM branch, which has no historical year', () => {
+    const seen: Array<{ ret: number; medicare: number | undefined }> = [];
+    const plan = assumptions({ currentAge: 65, retirementAge: 65, planningHorizonEndAge: 69 });
+
+    runMonteCarloTrial(plan, [], createSeededRandom(11), {
+      allocation: allocation70_30,
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      returnModel: 'gbm',
+      runPeriodFn: capturingStep(seen),
+    });
+
+    expect(seen).toHaveLength(5);
+    for (const period of seen) {
+      expect(period.medicare).toBeUndefined();
     }
   });
 });
