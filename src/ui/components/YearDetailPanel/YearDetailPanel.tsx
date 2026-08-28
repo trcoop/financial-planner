@@ -11,6 +11,12 @@ export interface YearDetailPanelProps {
   row: ChartRow | undefined
 }
 
+/** Stable id of the Medicare Part B event (must match `src/ui/medicareEvent.ts`'s
+ * `MEDICARE_PART_B_EVENT.id`) — not imported from there to keep this file free of any
+ * Medicare-specific knowledge beyond "look up this key", matching `ChartRow.eventCosts`'s
+ * generic, stable-key shape (ERD §9). */
+const MEDICARE_EVENT_ID = 'medicarePartB'
+
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',
@@ -19,6 +25,8 @@ const currency = new Intl.NumberFormat('en-US', {
 
 /** A fixed-width `Card` showing the detail for the year selected in `ChartContainer`. */
 export function YearDetailPanel({ row }: YearDetailPanelProps) {
+  const medicareEntry = row?.eventCosts.find((entry) => entry.id === MEDICARE_EVENT_ID)
+
   return (
     <Card className={styles.card}>
       <section aria-label="Year detail" className={styles.section}>
@@ -47,6 +55,12 @@ export function YearDetailPanel({ row }: YearDetailPanelProps) {
                 <dt>Annual withdrawal</dt>
                 <dd>{currency.format(row.annualWithdrawal)}</dd>
               </div>
+              {medicareEntry && (
+                <div className={styles.row}>
+                  <dt>Medicare</dt>
+                  <dd>{currency.format(medicareEntry.amount)}</dd>
+                </div>
+              )}
               <div className={styles.row}>
                 <dt>Balance end</dt>
                 <dd>{currency.format(row.endingBalance)}</dd>

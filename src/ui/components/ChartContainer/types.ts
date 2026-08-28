@@ -7,6 +7,17 @@
  * that the integration ticket (FIN-26) maps real `runProjection` rows onto when wiring this
  * into `App.tsx`.
  */
+/**
+ * One event's cost for a year, keyed by a stable id (never a positional index) — a structural
+ * copy of `src/engine`'s `EventCostEntry` (Events & Medicare Cost ERD §4), kept separate per
+ * this file's "deliberately not imported from `src/engine`" convention above.
+ */
+export interface EventCostEntry {
+  /** Echoes the source `PlanEvent`'s `id`, e.g. `'medicarePartB'`. */
+  id: string
+  amount: number
+}
+
 export interface ChartRow {
   /** Age at the start of this year. */
   age: number
@@ -22,4 +33,7 @@ export interface ChartRow {
   annualWithdrawal: number
   /** Balance at the end of the year. */
   endingBalance: number
+  /** Per-event cost breakdown for this year (e.g. Medicare). Empty array, never `undefined`,
+   * when no event is active this year (ERD §4/§9). */
+  eventCosts: EventCostEntry[]
 }

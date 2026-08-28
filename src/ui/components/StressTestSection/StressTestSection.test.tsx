@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlanAssumptions } from '../../../engine'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
 import type { ChartRow } from '../ChartContainer/types'
+import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
 import { StressTestSection } from './StressTestSection'
 
 const baseAssumptions: PlanAssumptions = {
@@ -30,6 +31,7 @@ const baseRows: ChartRow[] = [
     investmentReturn: 7_000,
     annualWithdrawal: 0,
     endingBalance: 122_000,
+    eventCosts: [],
   },
 ]
 
@@ -121,6 +123,14 @@ describe('StressTestSection', () => {
     expect(allocationArg).toEqual({ stocksPercent: 70, bondsPercent: 30 })
   })
 
+  it('passes [MEDICARE_PART_B_EVENT] as the events argument unconditionally, with no opt-in/opt-out (FIN-73)', () => {
+    const orchestrator = new FakeOrchestrator()
+    render(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
+
+    const [, , , eventsArg] = orchestrator.runCalls[0]
+    expect(eventsArg).toEqual([MEDICARE_PART_B_EVENT])
+  })
+
   it('runs against a caller-supplied allocation instead of the 70/30 default (FIN-56)', () => {
     const orchestrator = new FakeOrchestrator()
     render(
@@ -207,6 +217,81 @@ describe('StressTestSection', () => {
     const chart = await screen.findByRole('figure')
     expect(chart).toBeInTheDocument()
     expect(screen.getAllByText(/median.*50th percentile/i).length).toBeGreaterThan(0)
+  })
+
+  it('suppresses the Medicare-start marker when currentAge is already >= 65 at t=0 (FIN-73)', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const rows: ChartRow[] = [
+      { age: 65, year: 0, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
+    ]
+    render(
+      <StressTestSection
+        assumptions={{ ...baseAssumptions, currentAge: 65 }}
+        rows={rows}
+        orchestrator={orchestrator}
+      />,
+    )
+
+    act(() => orchestrator.resolveRun())
+    await screen.findByRole('figure')
+
+    expect(screen.queryByTestId('percentile-chart-medicare-marker')).not.toBeInTheDocument()
+  })
+
+  it('shows the Medicare-start marker when the planning horizon ends exactly at 65 (FIN-73)', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const rows: ChartRow[] = [
+      { age: 35, year: 0, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
+      { age: 65, year: 30, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
+    ]
+    render(
+      <StressTestSection
+        assumptions={{ ...baseAssumptions, currentAge: 35, planningHorizonEndAge: 65 }}
+        rows={rows}
+        orchestrator={orchestrator}
+      />,
+    )
+
+    act(() => {
+      // Two-row result, index-aligned with the two-row `rows` fixture above — `resolveRun()`'s
+      // module-level `fakeResult` only has single-value percentile arrays, so this reaches past
+      // it directly via `setState` (same pattern as the `multiYearRows` test above).
+      const orchestratorWithPrivateAccess = orchestrator as unknown as {
+        setState: (state: StressTestState) => void
+      }
+      orchestratorWithPrivateAccess.setState({
+        status: 'complete',
+        result: {
+          ...fakeResult,
+          percentiles: {
+            real: { p10: [1, 1], p50: [2, 2], p90: [3, 3] },
+            nominal: { p10: [10, 10], p50: [20, 20], p90: [30, 30] },
+          },
+        },
+      })
+    })
+    await screen.findByRole('figure')
+
+    expect(screen.getByTestId('percentile-chart-medicare-marker')).toBeInTheDocument()
+  })
+
+  it('suppresses the Medicare-start marker when the planning horizon ends before 65 (FIN-73)', async () => {
+    const orchestrator = new FakeOrchestrator()
+    const rows: ChartRow[] = [
+      { age: 64, year: 0, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
+    ]
+    render(
+      <StressTestSection
+        assumptions={{ ...baseAssumptions, currentAge: 64, planningHorizonEndAge: 64 }}
+        rows={rows}
+        orchestrator={orchestrator}
+      />,
+    )
+
+    act(() => orchestrator.resolveRun())
+    await screen.findByRole('figure')
+
+    expect(screen.queryByTestId('percentile-chart-medicare-marker')).not.toBeInTheDocument()
   })
 
   it('cancels the in-flight run and shows a transient cancelled message when assumptions change', async () => {
@@ -418,9 +503,9 @@ describe('StressTestSection', () => {
   it('defaults the selected-year detail readout to the retirement year, not the last row (FIN-61)', async () => {
     const orchestrator = new FakeOrchestrator()
     const multiYearRows: ChartRow[] = [
-      { age: 35, year: 0, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0 },
-      { age: 67, year: 32, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0 },
-      { age: 100, year: 65, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0 },
+      { age: 35, year: 0, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
+      { age: 67, year: 32, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
+      { age: 100, year: 65, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
     ]
     render(<StressTestSection assumptions={baseAssumptions} rows={multiYearRows} orchestrator={orchestrator} />)
 

@@ -21,7 +21,8 @@ import {
   type LineChartSeries,
 } from './ui/components/PercentileLineChart/PercentileLineChart'
 import { YearDetailPanel } from './ui/components/YearDetailPanel/YearDetailPanel'
-import { useProjectionState } from './ui/hooks/useProjectionState'
+import { useProjectionState, PLANNING_HORIZON_END_AGE } from './ui/hooks/useProjectionState'
+import { MEDICARE_PART_B_EVENT } from './ui/medicareEvent'
 import { formatCurrency, formatPercent } from './ui/utils/format'
 import { clearAssumptions, loadAssumptions, saveAssumptions } from './storage'
 import './App.css'
@@ -108,6 +109,14 @@ function App() {
     if (row) setSelectedRow(row)
   }
 
+  // FIN-73: the age-65 marker is suppressed in the two cases where it would mislabel the
+  // chart — the horizon ends before 65 (Medicare never appears at all), or the plan's current
+  // age is already >= 65 at t=0 (Medicare starts in period 0, so there's no "starts here"
+  // point to the right of the first row to mark). Computed at the call site (not inside
+  // PercentileLineChart), per ERD §9 — the chart only sees `rows`.
+  const medicareStartAge =
+    coreValues.currentAge < 65 && 65 <= PLANNING_HORIZON_END_AGE ? MEDICARE_PART_B_EVENT.startAge : undefined
+
   return (
     <div className="shell">
       <TopBar />
@@ -169,6 +178,7 @@ function App() {
                     onSelectRow={handleSelectPlanRow}
                     defaultSelectedYear={retirementRow?.year}
                     retirementAge={coreValues.retirementAge}
+                    medicareStartAge={medicareStartAge}
                     showLegend={false}
                   />
                   <YearDetailPanel row={selectedRow ?? retirementRow} />

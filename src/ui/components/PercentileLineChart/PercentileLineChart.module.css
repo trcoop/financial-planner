@@ -204,6 +204,84 @@
   pointer-events: none;
 }
 
+/* Permanent Medicare-start marker (FIN-73) — a small icon badge rather than a full-height line
+   (unlike `.retirementMarker`/`.activeMarker`) since it marks a single point event, not a
+   period boundary the whole chart height needs to reference. `pointer-events: auto` (unlike
+   the other markers) so the native `title` attribute tooltip is actually hoverable. */
+.medicareMarker {
+  /* Button reset — this is a real `<button>` (for native focusability) styled to look like the
+     plain icon badge it always was, not a button. */
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+
+  position: absolute;
+  /* `top` itself is set inline per-render, as a percentage tracking the highest plotted line's
+     actual value at this age (see `medicareYPercent` in PercentileLineChart.tsx) — not a fixed
+     distance from the chart's top edge, which put the marker hard against the container edge on
+     charts whose lines climb steeply toward the right (e.g. Stress Test's p90). The transform
+     here then lifts the icon a fixed clearance *above that point on the line*, consistent
+     across both charts regardless of how close the line runs to the chart's own top edge (the
+     chart's y-axis also plots with ~15% headroom above the data's peak — see
+     `CHART_HEADROOM_FACTOR` — so there's room for this clearance even at the series max). */
+  transform: translate(-50%, calc(-100% - 8px));
+  pointer-events: auto;
+  cursor: help;
+  /* Above `.hoverTargets` (an invisible full-height overlay covering the whole plot, added
+     after this marker in DOM order) — without this, the hover targets intercept every
+     pointer event over the marker's area and its `title` tooltip never fires. */
+  z-index: 2;
+}
+
+.medicareIcon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-background, #fff);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Visible on-hover/focus label for `.medicareMarker` (FIN-73 round 2 — the native `title`
+   attribute alone is kept for accessibility, but its only visible affordance is the browser's
+   generic "?" help cursor from `cursor: help` above; a sighted user hovering saw just that
+   cursor change with no actual text, which reads as broken rather than informative). Styled to
+   match `.tooltip`'s card look so it reads as part of the same chart UI. `pointer-events: none`
+   so this label itself never becomes what intercepts/blocks the hover. */
+.medicareLabel {
+  position: absolute;
+  /* Opens upward, above the icon, rather than downward toward the line — the icon now sits
+     right above the line itself (see `.medicareMarker`'s `transform`), so a downward label
+     would sit right on top of the line/shaded area instead of clear of the chart content. */
+  bottom: 100%;
+  left: 50%;
+  transform: translate(-50%, -4px);
+  white-space: nowrap;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text);
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 100ms ease;
+}
+
+.medicareMarker:hover .medicareLabel,
+.medicareMarker:focus-visible .medicareLabel {
+  opacity: 1;
+  visibility: visible;
+}
+
 /* Active/selected-period marker (FIN-60) — bold and solid, using the high-contrast text color
    rather than a muted one, so it reads as "the thing currently selected" distinctly from both
    the dashed retirement marker and the thin muted hover line. */

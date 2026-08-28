@@ -168,6 +168,27 @@ describe('PercentileLineChart', () => {
     expect(screen.queryByTestId('percentile-chart-retirement-marker')).not.toBeInTheDocument()
   })
 
+  it('renders a permanent Medicare-start marker with the exact tooltip text when medicareStartAge matches a row (FIN-73)', () => {
+    render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" medicareStartAge={36} />,
+    )
+    const markers = screen.getAllByTestId('percentile-chart-medicare-marker')
+    expect(markers).toHaveLength(1)
+    expect(markers[0]).toHaveAttribute('title', 'Medicare starts.')
+  })
+
+  it('renders no Medicare marker when medicareStartAge is omitted or matches no row', () => {
+    const { rerender } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />,
+    )
+    expect(screen.queryByTestId('percentile-chart-medicare-marker')).not.toBeInTheDocument()
+
+    rerender(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" medicareStartAge={99} />,
+    )
+    expect(screen.queryByTestId('percentile-chart-medicare-marker')).not.toBeInTheDocument()
+  })
+
   it('renders no active-period marker until a default or click sets one', () => {
     render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
@@ -227,8 +248,9 @@ describe('PercentileLineChart', () => {
       <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />,
     )
     // First polygon is the p90 area (series[0]); its bottom edge should follow p50 (series[1]),
-    // per FIN-60's "shading beneath each line, down to the next line". maxValue across all rows
-    // is 260,000 (p90's last row), and VIEW_HEIGHT is 200 — so if the bottom edge used a
+    // per FIN-60's "shading beneath each line, down to the next line". Data maxValue across all
+    // rows is 260,000 (p90's last row); the chart plots with 15% headroom above that (FIN-73 —
+    // see `CHART_HEADROOM_FACTOR`), and VIEW_HEIGHT is 200 — so if the bottom edge used a
     // constant chart-bottom value instead (the mutation under test), every bottom y would be
     // exactly 200 regardless of p50's actual values.
     const p90Area = container.querySelectorAll('polygon')[0]
@@ -239,7 +261,7 @@ describe('PercentileLineChart', () => {
     const bottomPoints = points.slice(rows.length)
     const bottomYs = bottomPoints.map((p) => Number(p.split(',')[1]))
 
-    const maxValue = 260_000
+    const maxValue = 260_000 * 1.15
     const expectedYs = [...rows]
       .reverse()
       .map((row) => 200 - (row.values.p50 / maxValue) * 200)
@@ -270,8 +292,9 @@ describe('PercentileLineChart', () => {
     ]
     render(<PercentileLineChart rows={highRows} series={percentileSeries} title="Monte Carlo outcomes" />)
     const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
-    // top gridline == maxValue == 1,180,000, rounds to nearest 100k => $1,200,000
-    expect(labels[0]).toHaveTextContent('$1,200,000')
+    // top gridline == maxValue * 1.15 headroom (FIN-73) == 1,357,000, rounds to nearest 100k =>
+    // $1,400,000
+    expect(labels[0]).toHaveTextContent('$1,400,000')
   })
 
   it('abbreviates a comfortably-multi-million y-axis label to one decimal of millions', () => {
@@ -280,7 +303,8 @@ describe('PercentileLineChart', () => {
     ]
     render(<PercentileLineChart rows={highRows} series={percentileSeries} title="Monte Carlo outcomes" />)
     const labels = screen.getAllByTestId('percentile-chart-y-axis-label')
-    expect(labels[0]).toHaveTextContent('$5.2M')
+    // maxValue * 1.15 headroom (FIN-73) == 5,964,805.05, abbreviates to $6.0M
+    expect(labels[0]).toHaveTextContent('$6.0M')
   })
 
   it('renders a year-scrubber slider spanning the rows, wired to the same selection as a click (FIN-61)', () => {

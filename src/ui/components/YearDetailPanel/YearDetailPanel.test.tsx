@@ -15,6 +15,7 @@ const rows: ChartRow[] = [
     investmentReturn: 7_000,
     annualWithdrawal: 0,
     endingBalance: 122_000,
+    eventCosts: [],
   },
   {
     age: 36,
@@ -24,6 +25,7 @@ const rows: ChartRow[] = [
     investmentReturn: 8_540,
     annualWithdrawal: 0,
     endingBalance: 145_990,
+    eventCosts: [],
   },
 ]
 
@@ -35,6 +37,29 @@ const retirementRow: ChartRow = {
   investmentReturn: 84_000,
   annualWithdrawal: 48_000,
   endingBalance: 1_236_000,
+  eventCosts: [],
+}
+
+const medicareRow: ChartRow = {
+  age: 65,
+  year: 30,
+  beginningBalance: 1_100_000,
+  annualContribution: 0,
+  investmentReturn: 77_000,
+  annualWithdrawal: 46_434.8,
+  endingBalance: 1_130_565.2,
+  eventCosts: [{ id: 'medicarePartB', amount: 2_434.8 }],
+}
+
+const preMedicareRow: ChartRow = {
+  age: 64,
+  year: 29,
+  beginningBalance: 1_050_000,
+  annualContribution: 0,
+  investmentReturn: 73_500,
+  annualWithdrawal: 44_000,
+  endingBalance: 1_079_500,
+  eventCosts: [],
 }
 
 const SERIES: LineChartSeries[] = [{ key: 'balance', label: 'Balance', color: 'var(--color-primary)' }]
@@ -114,5 +139,18 @@ describe('YearDetailPanel', () => {
 
     expect(panel).toHaveTextContent('$122,000')
     expect(panel).not.toHaveTextContent('$145,990')
+  })
+
+  it('shows a non-zero Medicare line for a year with a medicarePartB eventCosts entry (FIN-73)', () => {
+    render(<YearDetailPanel row={medicareRow} />)
+    const panel = screen.getByRole('region', { name: 'Year detail' })
+    expect(panel).toHaveTextContent('Medicare')
+    expect(panel).toHaveTextContent('$2,435')
+  })
+
+  it('shows no Medicare line for a year with an empty eventCosts array (FIN-73)', () => {
+    render(<YearDetailPanel row={preMedicareRow} />)
+    const panel = screen.getByRole('region', { name: 'Year detail' })
+    expect(panel).not.toHaveTextContent('Medicare')
   })
 })
