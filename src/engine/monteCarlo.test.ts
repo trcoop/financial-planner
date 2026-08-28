@@ -27,7 +27,7 @@ import { pipelineStages, runPeriod } from './pipeline';
 import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 import { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
 import { HISTORICAL_ANNUAL_MEDICAL_INFLATION } from './medicalInflationData';
-import type { PeriodState, PipelineStage, PlanAssumptions, ProjectionRow } from './types';
+import type { PeriodState, PipelineStage, PlanAssumptions, PlanEvent, ProjectionRow } from './types';
 
 /** This year's S&P 500 total return from our own Damodaran table. */
 const yearStockReturn = (year: number): number => {
@@ -2053,6 +2053,110 @@ describe('FIN-72: runMonteCarloTrial builds eventGrowthOverrides from the CURREN
     for (const period of seen) {
       expect(period.medicare).toBeUndefined();
     }
+  });
+});
+
+/**
+ * FIN-74 (WP-4 integration): the FIN-72 suite above proves `eventGrowthOverrides` is built
+ * correctly and handed to `input`, but every one of those tests replays it through
+ * `referenceRunPeriod` — a hand-rolled mirror that never calls the real `applyLifeEvents` or
+ * `computeWithdrawals`. That leaves the actual join — does the real pipeline's `eventCosts`
+ * and `annualWithdrawal` actually move when a different historical year is drawn? —
+ * unexercised until now. These tests run the REAL `runPeriod` (the production default
+ * `step`, imported from `./pipeline`, not a `runPeriodFn` override) with a real
+ * `recurringCost` Medicare-shaped event, end to end through `runMonteCarloTrial`.
+ */
+describe('FIN-74: Medicare historical sampling through the real applyLifeEvents/computeWithdrawals pipeline', () => {
+  const medicareEvent: PlanEvent = {
+    type: 'recurringCost',
+    id: 'medicarePartB',
+    label: 'Medicare Part B',
+    startAge: 65,
+    endAge: undefined,
+    annualAmount: 2_434.8,
+    growthRate: 0.055,
+    recurrenceIntervalYears: 1,
+  };
+
+  /** Captures each period's real `ProjectionRow` (as `recordPeriod` wrote it) alongside the
+   * drawn return, by wrapping the REAL `runPeriod` rather than replacing it. */
+  const capturingRealStep =
+    (seen: ProjectionRow[]): PipelineStage =>
+    (state, input) => {
+      const next = runPeriod(state, input);
+      seen.push(next.rows.at(-1) as ProjectionRow);
+      return next;
+    };
+
+  const medicareEntry = (row: ProjectionRow): { id: string; amount: number } | undefined =>
+    row.eventCosts.find((entry) => entry.id === 'medicarePartB');
+
+  it('two trials seeded to draw different historical years produce different real eventCosts for the same period', () => {
+    const plan = assumptions({ currentAge: 65, retirementAge: 65, planningHorizonEndAge: 70 });
+    const config = {
+      allocation: { stocksPercent: 100, bondsPercent: 0 },
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      blockLengthYears: 200, // one unbroken run from a random start year, per-seed
+    };
+
+    const firstSeen: ProjectionRow[] = [];
+    runMonteCarloTrial(plan, [medicareEvent], createSeededRandom(7), {
+      ...config,
+      runPeriodFn: capturingRealStep(firstSeen),
+    });
+
+    const secondSeen: ProjectionRow[] = [];
+    runMonteCarloTrial(plan, [medicareEvent], createSeededRandom(8), {
+      ...config,
+      runPeriodFn: capturingRealStep(secondSeen),
+    });
+
+    // Period 0's Medicare amount is the bare `annualAmount` regardless of the drawn year — 0
+    // elapsed years since `startAge` zeroes out the exponent (`pipeline.ts`'s
+    // `applyLifeEvents` formula). Period 1 is the first period where a real growth-rate
+    // difference is observable in the real dollar amount.
+    const firstEntry = medicareEntry(firstSeen[1]);
+    const secondEntry = medicareEntry(secondSeen[1]);
+    expect(firstEntry).toBeDefined();
+    expect(secondEntry).toBeDefined();
+    expect(firstEntry?.amount).not.toBe(secondEntry?.amount);
+
+    // And each trial's `annualWithdrawal` — additive with the Medicare cost through the real
+    // `computeWithdrawals`/withdrawal-strategy stages — differs too, proving the divergence
+    // actually reaches the withdrawal a user would see, not just the `eventCosts` entry.
+    expect(firstSeen[1].annualWithdrawal).not.toBe(secondSeen[1].annualWithdrawal);
+  });
+
+  it("a trial's real eventCosts amount for a period matches HISTORICAL_ANNUAL_MEDICAL_INFLATION's entry for that period's drawn year, not lagged", () => {
+    const plan = assumptions({ currentAge: 65, retirementAge: 65, planningHorizonEndAge: 70 });
+    const seen: ProjectionRow[] = [];
+    const returns: number[] = [];
+
+    runMonteCarloTrial(plan, [medicareEvent], createSeededRandom(7), {
+      allocation: { stocksPercent: 100, bondsPercent: 0 },
+      volatility: DEFAULT_VOLATILITY_ASSUMPTIONS,
+      returnAssumptions: DEFAULT_RETURN_ASSUMPTIONS,
+      correlation: DEFAULT_CORRELATION,
+      blockLengthYears: 200,
+      runPeriodFn: (state, input) => {
+        returns.push(input.returnForPeriod);
+        return capturingRealStep(seen)(state, input);
+      },
+    });
+
+    // Recover period 1's drawn year the same way the FIN-72 suite does: match its (100%-stock,
+    // unambiguous) `returnForPeriod` back to `HISTORICAL_ANNUAL_RETURNS`.
+    const entry = HISTORICAL_ANNUAL_RETURNS.find((candidate) => candidate.stockReturn === returns[1]);
+    expect(entry).toBeDefined();
+    const drawnYear = entry?.year as number;
+    const expectedMedicalInflation = HISTORICAL_ANNUAL_MEDICAL_INFLATION.find(
+      (row) => row.year === drawnYear,
+    )?.medicalInflation as number;
+
+    const actualEntry = medicareEntry(seen[1]);
+    expect(actualEntry?.amount).toBeCloseTo(medicareEvent.annualAmount * (1 + expectedMedicalInflation), 6);
   });
 });
 
