@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as engine from './index';
 import type {
+  EventCostEntry,
   MonteCarloOptions,
   MonteCarloResult,
   PathBalances,
@@ -36,6 +37,7 @@ import type {
  * the build fail with TS2305 if any of them is dropped from `index.ts`.
  */
 type PublicTypeSurface = {
+  eventCostEntry: EventCostEntry;
   periodState: PeriodState;
   pipelineStage: PipelineStage;
   planAssumptions: PlanAssumptions;
@@ -88,6 +90,7 @@ describe('public surface', () => {
     'runProjection',
     'toTodaysDollarRows',
     'validatePlanAssumptions',
+    'validatePlanEvents',
     'createInitialPeriodState',
     'createSeededRandom',
     'createRandomSeed',

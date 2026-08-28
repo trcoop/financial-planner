@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { InvalidProjectionInputError } from './errors';
 import type { ProjectionErrorCode } from './errors';
 import { pipelineStages } from './pipeline';
-import { realReturn, runProjection, toTodaysDollarRows } from './projection';
+import { realReturn, runProjection, toTodaysDollarRows, validatePlanEvents } from './projection';
 import type { PipelineStage, PlanAssumptions, PlanEvent } from './types';
 
 /** The Story 1 PRD's happy-path assumptions, overridable per scenario. */
@@ -75,11 +75,16 @@ describe('runProjection shape', () => {
           'annualWithdrawal',
           'beginningBalance',
           'endingBalance',
+          'eventCosts',
           'investmentReturn',
           'year',
         ].sort(),
       );
-      Object.values(row).forEach((value) => expect(Number.isFinite(value)).toBe(true));
+      // eventCosts is an array (always [] until WP-1b), not a numeric field.
+      expect(row.eventCosts).toEqual([]);
+      Object.entries(row)
+        .filter(([field]) => field !== 'eventCosts')
+        .forEach(([, value]) => expect(Number.isFinite(value)).toBe(true));
     });
   });
 });
@@ -486,6 +491,141 @@ describe('runProjection input validation', () => {
     // Moving the validation call below the fold makes this the only test in the suite to fail,
     // by hanging; the assertion above passes either way.
     expectRejection(assumptions({ planningHorizonEndAge: Number.POSITIVE_INFINITY }), 'NON_FINITE_INPUT');
+  });
+});
+
+/** A minimal, otherwise-valid `recurringCost` event, overridable per scenario. */
+const recurringCost = (
+  overrides: Partial<Extract<PlanEvent, { type: 'recurringCost' }>> = {},
+): Extract<PlanEvent, { type: 'recurringCost' }> => ({
+  type: 'recurringCost',
+  id: 'medicarePartB',
+  label: 'Medicare Part B',
+  startAge: 65,
+  annualAmount: 2_434.8,
+  growthRate: 0.055,
+  ...overrides,
+});
+
+/** Asserts `validatePlanEvents` throws `InvalidProjectionInputError` carrying `code`. */
+const expectEventRejection = (events: PlanEvent[], code: ProjectionErrorCode): void => {
+  let thrown: unknown;
+  try {
+    validatePlanEvents(events);
+  } catch (error) {
+    thrown = error;
+  }
+
+  expect(thrown).toBeInstanceOf(InvalidProjectionInputError);
+  expect((thrown as InvalidProjectionInputError).code).toBe(code);
+  expect((thrown as InvalidProjectionInputError).message).toBeTruthy();
+};
+
+describe('validatePlanEvents', () => {
+  it('accepts a well-formed recurringCost event', () => {
+    expect(() => validatePlanEvents([recurringCost()])).not.toThrow();
+  });
+
+  it('accepts an empty events array', () => {
+    expect(() => validatePlanEvents([])).not.toThrow();
+  });
+
+  it.each(['annualAmount', 'growthRate', 'startAge'] as const)('rejects %s when it is NaN', (field) => {
+    expectEventRejection([recurringCost({ [field]: Number.NaN })], 'EVENT_NON_FINITE_NUMERIC_FIELD');
+  });
+
+  it.each(['endAge', 'recurrenceIntervalYears'] as const)(
+    'rejects %s when it is NaN, even though it is optional',
+    (field) => {
+      expectEventRejection([recurringCost({ [field]: Number.NaN })], 'EVENT_NON_FINITE_NUMERIC_FIELD');
+    },
+  );
+
+  it.each([Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'rejects an infinite annualAmount (%s)',
+    (value) => {
+      expectEventRejection([recurringCost({ annualAmount: value })], 'EVENT_NON_FINITE_NUMERIC_FIELD');
+    },
+  );
+
+  it('rejects a negative startAge', () => {
+    expectEventRejection([recurringCost({ startAge: -1 })], 'EVENT_NEGATIVE_AGE');
+  });
+
+  it('rejects a negative endAge', () => {
+    expectEventRejection([recurringCost({ startAge: 0, endAge: -1 })], 'EVENT_NEGATIVE_AGE');
+  });
+
+  it('rejects an endAge before startAge', () => {
+    expectEventRejection([recurringCost({ startAge: 70, endAge: 65 })], 'EVENT_END_BEFORE_START');
+  });
+
+  it('accepts endAge equal to startAge', () => {
+    expect(() => validatePlanEvents([recurringCost({ startAge: 65, endAge: 65 })])).not.toThrow();
+  });
+
+  it('accepts an event with no endAge (runs through the horizon)', () => {
+    expect(() => validatePlanEvents([recurringCost({ endAge: undefined })])).not.toThrow();
+  });
+
+  it.each([0, 2.5, -1])('rejects a recurrenceIntervalYears of %s', (value) => {
+    expectEventRejection([recurringCost({ recurrenceIntervalYears: value })], 'EVENT_RECURRENCE_INTERVAL_INVALID');
+  });
+
+  it.each([1, 3])('accepts a recurrenceIntervalYears of %s', (value) => {
+    expect(() => validatePlanEvents([recurringCost({ recurrenceIntervalYears: value })])).not.toThrow();
+  });
+
+  it('accepts an event with no recurrenceIntervalYears (defaults to every year)', () => {
+    expect(() => validatePlanEvents([recurringCost({ recurrenceIntervalYears: undefined })])).not.toThrow();
+  });
+
+  it('rejects two events sharing the same id', () => {
+    expectEventRejection(
+      [recurringCost({ id: 'medicarePartB' }), recurringCost({ id: 'medicarePartB', label: 'Duplicate' })],
+      'EVENT_DUPLICATE_ID',
+    );
+  });
+
+  it('rejects a growthRate below -100%', () => {
+    expectEventRejection([recurringCost({ growthRate: -1.01 })], 'EVENT_GROWTH_RATE_BELOW_NEGATIVE_100_PERCENT');
+  });
+
+  it('accepts a growthRate at exactly -100%', () => {
+    expect(() => validatePlanEvents([recurringCost({ growthRate: -1 })])).not.toThrow();
+  });
+
+  it('does not reject a negative annualAmount', () => {
+    // A negative-cost event is contrived but coherent (a cost that goes away) — ERD §6.
+    expect(() => validatePlanEvents([recurringCost({ annualAmount: -100 })])).not.toThrow();
+  });
+
+  it('checks finiteness before every other recurringCost condition, per ERD §6 ordering', () => {
+    // A NaN recurrenceIntervalYears trips both EVENT_NON_FINITE_NUMERIC_FIELD and (via
+    // !Number.isInteger) EVENT_RECURRENCE_INTERVAL_INVALID — the finiteness code, checked
+    // first, wins.
+    expectEventRejection(
+      [recurringCost({ recurrenceIntervalYears: Number.NaN })],
+      'EVENT_NON_FINITE_NUMERIC_FIELD',
+    );
+  });
+
+  it('reports EVENT_DUPLICATE_ID before EVENT_GROWTH_RATE_BELOW_NEGATIVE_100_PERCENT for a duplicate whose growth rate is also invalid', () => {
+    // ERD §6 table order puts EVENT_DUPLICATE_ID ahead of the growth-rate check — a second
+    // event with a reused id AND an invalid growthRate should still report the duplicate.
+    expectEventRejection(
+      [recurringCost({ id: 'medicarePartB' }), recurringCost({ id: 'medicarePartB', growthRate: -1.5 })],
+      'EVENT_DUPLICATE_ID',
+    );
+  });
+
+  it('reports EVENT_RECURRENCE_INTERVAL_INVALID for a merely non-integer, finite value', () => {
+    expectEventRejection([recurringCost({ recurrenceIntervalYears: 2.5 })], 'EVENT_RECURRENCE_INTERVAL_INVALID');
+  });
+
+  it('ignores non-recurringCost event variants entirely', () => {
+    const oneTime: PlanEvent = { type: 'oneTimeExpense', atAge: 40, amount: -50, label: 'Malformed but ignored' };
+    expect(() => validatePlanEvents([oneTime])).not.toThrow();
   });
 });
 

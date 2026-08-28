@@ -114,6 +114,7 @@ const referenceRunPeriod: PipelineStage = (state, input) => {
         investmentReturn,
         annualWithdrawal: sourced,
         endingBalance,
+        eventCosts: state.eventCosts,
       },
     ],
   };
@@ -1530,6 +1531,7 @@ describe('FIN-55: pure-GBM isolation against the analytic lognormal median', () 
           investmentReturn: endingBalance - beginningBalance,
           annualWithdrawal: 0,
           endingBalance,
+          eventCosts: state.eventCosts,
         },
       ],
     };

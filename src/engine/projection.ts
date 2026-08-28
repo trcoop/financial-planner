@@ -123,6 +123,98 @@ export const validatePlanAssumptions = (assumptions: PlanAssumptions): void => {
 };
 
 /**
+ * Rejects `PlanEvent`s the engine cannot meaningfully run on (Events & Medicare Cost ERD §6).
+ *
+ * Only the `recurringCost` variant is checked — `oneTimeExpense`/`durationExpense` are
+ * unreachable (nothing constructs them yet), so validating them is speculative work with no
+ * possible test coverage.
+ *
+ * Conditions are evaluated top-to-bottom per event, in the exact order of ERD §6's table, and
+ * the first condition an event trips is the code thrown — evaluation stops there for that
+ * event. This matters concretely for `recurrenceIntervalYears`: a non-finite value (e.g.
+ * `NaN`) trips both the finiteness check and `EVENT_RECURRENCE_INTERVAL_INVALID`'s
+ * `!Number.isInteger` check, and the finiteness check (checked first) wins. A merely
+ * non-integer-but-finite value like `2.5` only trips `EVENT_RECURRENCE_INTERVAL_INVALID`.
+ *
+ * Duplicate-id checking runs after every event has individually passed the per-event checks,
+ * so a malformed event is reported with its own specific code rather than being masked by a
+ * duplicate-id error.
+ *
+ * WP-1a scaffolding: not yet called by `runProjection`/`runMonteCarloTrials` — that wiring is
+ * WP-1b/WP-2's (ERD §6, §10).
+ *
+ * @throws {InvalidProjectionInputError}
+ */
+export const validatePlanEvents = (events: PlanEvent[]): void => {
+  const seenIds = new Set<string>();
+
+  for (const event of events) {
+    if (event.type !== 'recurringCost') {
+      continue;
+    }
+
+    const { id, startAge, endAge, annualAmount, growthRate, recurrenceIntervalYears } = event;
+
+    const finitenessFields: ReadonlyArray<readonly [string, number | undefined]> = [
+      ['annualAmount', annualAmount],
+      ['growthRate', growthRate],
+      ['startAge', startAge],
+      ['endAge', endAge],
+      ['recurrenceIntervalYears', recurrenceIntervalYears],
+    ];
+    const nonFinite = finitenessFields.find(
+      ([, value]) => value !== undefined && (typeof value !== 'number' || !Number.isFinite(value)),
+    );
+    if (nonFinite) {
+      const [field, value] = nonFinite;
+      throw new InvalidProjectionInputError(
+        'EVENT_NON_FINITE_NUMERIC_FIELD',
+        `recurringCost event "${id}": ${field} must be a finite number, received ${String(value)}.`,
+      );
+    }
+
+    if (startAge < 0 || (endAge !== undefined && endAge < 0)) {
+      throw new InvalidProjectionInputError(
+        'EVENT_NEGATIVE_AGE',
+        `recurringCost event "${id}": ages must not be negative, received startAge ${startAge}, endAge ${String(endAge)}.`,
+      );
+    }
+
+    if (endAge !== undefined && endAge < startAge) {
+      throw new InvalidProjectionInputError(
+        'EVENT_END_BEFORE_START',
+        `recurringCost event "${id}": endAge ${endAge} is before startAge ${startAge}.`,
+      );
+    }
+
+    if (
+      recurrenceIntervalYears !== undefined &&
+      (!Number.isInteger(recurrenceIntervalYears) || recurrenceIntervalYears < 1)
+    ) {
+      throw new InvalidProjectionInputError(
+        'EVENT_RECURRENCE_INTERVAL_INVALID',
+        `recurringCost event "${id}": recurrenceIntervalYears must be a positive whole number, received ${recurrenceIntervalYears}.`,
+      );
+    }
+
+    if (seenIds.has(id)) {
+      throw new InvalidProjectionInputError(
+        'EVENT_DUPLICATE_ID',
+        `Duplicate PlanEvent id "${id}" — ids must be unique for EventCostEntry lookups to be unambiguous.`,
+      );
+    }
+    seenIds.add(id);
+
+    if (growthRate < -1) {
+      throw new InvalidProjectionInputError(
+        'EVENT_GROWTH_RATE_BELOW_NEGATIVE_100_PERCENT',
+        `recurringCost event "${id}": growthRate must not be below -1 (-100%), received ${growthRate}.`,
+      );
+    }
+  }
+};
+
+/**
  * The state a projection starts from, at year 0 and `currentAge`.
  *
  * The working fields (`beginningBalance`, `investmentReturn`, `annualContribution`,
@@ -143,6 +235,8 @@ export const createInitialPeriodState = (assumptions: PlanAssumptions): PeriodSt
   investmentReturn: 0,
   annualContribution: 0,
   annualWithdrawal: 0,
+  eventCosts: [],
+  retirementEventCostTotal: 0,
 });
 
 /** Moves a completed period on to the next year. */

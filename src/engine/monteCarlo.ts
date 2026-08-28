@@ -383,6 +383,8 @@ export const createInitialPeriodState = (plan: PlanAssumptions): PeriodState => 
   investmentReturn: 0,
   annualContribution: 0,
   annualWithdrawal: 0,
+  eventCosts: [],
+  retirementEventCostTotal: 0,
 });
 
 /**

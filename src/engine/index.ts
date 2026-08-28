@@ -37,9 +37,11 @@ export {
   runProjection,
   toTodaysDollarRows,
   validatePlanAssumptions,
+  validatePlanEvents,
 } from './projection';
 
 export type {
+  EventCostEntry,
   PeriodState,
   PipelineStage,
   PlanAssumptions,

@@ -78,6 +78,14 @@ export interface ProjectionRow {
   annualWithdrawal: number;
   /** Balance at the end of the year. May go negative — that is a valid failure state. */
   endingBalance: PortfolioValue;
+  /**
+   * Per-event cost breakdown for this period, keyed by each active event's `id`.
+   *
+   * Always `[]`, never `undefined`, in a period with no active `recurringCost` events —
+   * `recordPeriod` always writes this field (ERD §4). WP-1a scaffolding: `applyLifeEvents`
+   * is still a no-op, so this is `[]` for every row until WP-1b lands real behavior.
+   */
+  eventCosts: EventCostEntry[];
 }
 
 /**
@@ -85,10 +93,52 @@ export interface ProjectionRow {
  *
  * Always `[]` for Stories 1-3 — no UI populates it yet. The stage consumes the list from
  * day one so later stories add event types additively, without a pipeline change.
+ *
+ * `recurringCost` is WP-1a scaffolding (Events & Medicare Cost ERD §4): types and validation
+ * only land here — `applyLifeEvents` remains a no-op for it until WP-1b.
  */
 export type PlanEvent =
   | { type: 'oneTimeExpense'; atAge: number; amount: number; label: string }
-  | { type: 'durationExpense'; startAge: number; endAge: number; annualAmount: number; label: string };
+  | { type: 'durationExpense'; startAge: number; endAge: number; annualAmount: number; label: string }
+  | {
+      type: 'recurringCost';
+      /** Stable key. UI and tests look this event up directly — never by array position
+       * (PRD requirement). `'medicarePartB'` for the Medicare instance. */
+      id: string;
+      label: string;
+      /** First age this cost applies, inclusive. */
+      startAge: number;
+      /** Last age this cost applies, inclusive. `undefined` = runs through the plan horizon
+       * (Medicare's case — no end condition). */
+      endAge?: number;
+      /** This event's cost in the year `age === startAge`, before any growth is applied. */
+      annualAmount: number;
+      /** This event's own annual growth rate, decimal — independent of `assumptions.inflationRate`.
+       * Used directly by the deterministic projection and Monte Carlo's GBM branch; the
+       * historical branch may override it per period via `eventGrowthOverrides` (see below) when
+       * a growth-rate generator is registered for this event's `id`. */
+      growthRate: number;
+      /** Recurrence interval in years: `1` = every year (Medicare), `N` = every N years.
+       * Defaults to `1` when omitted. The cost is charged only in periods where
+       * `(age - startAge) % recurrenceIntervalYears === 0`; the compounding clock (below)
+       * still runs every year regardless, so a cost that skips years still reflects full
+       * elapsed growth when it next recurs. */
+      recurrenceIntervalYears?: number;
+    };
+
+/**
+ * One event's cost contribution for a single period.
+ *
+ * Array element, not a map value, so it survives `structuredClone`'d worker messaging and
+ * direct UI mapping the same way the rest of `ProjectionRow` does (ERD §4) — a stable key on
+ * each entry (`id`) satisfies the "not by array position" requirement without needing a
+ * `Record<string, number>` container.
+ */
+export interface EventCostEntry {
+  /** Echoes the source `PlanEvent`'s `id`. */
+  id: string;
+  amount: number;
+}
 
 /**
  * State threaded from one period to the next by the fold.
@@ -158,6 +208,26 @@ export interface PeriodState {
    * satisfying strategy ships (Story 4+).
    */
   annualWithdrawal: number;
+  /**
+   * This period's per-event cost breakdown. Set by `applyLifeEvents`, read by `recordPeriod`
+   * and by `computeWithdrawals`.
+   *
+   * WP-1a scaffolding: always `[]` today, since `applyLifeEvents` remains a no-op until
+   * WP-1b implements the real active/recurrence/compounding logic (ERD §5).
+   */
+  eventCosts: EventCostEntry[];
+  /**
+   * The subset of {@link PeriodState.eventCosts} that should fold into a retirement-period
+   * withdrawal, summed to a single dollar figure. Set by `applyLifeEvents`.
+   *
+   * Kept as its own field rather than inlined as `eventCosts.reduce(...)` in
+   * `computeWithdrawals` so a future non-portfolio-funded event type can be excluded from
+   * this total without changing `computeWithdrawals`'s formula (ERD §5, §11 Q2). For every
+   * event type that exists today, this is simply the full sum of `eventCosts`.
+   *
+   * WP-1a scaffolding: always `0` today, alongside `eventCosts` being `[]`.
+   */
+  retirementEventCostTotal: number;
 }
 
 /** What a {@link WithdrawalStrategy} decided to actually withdraw. */
@@ -233,6 +303,18 @@ export interface RunPeriodInput {
    * plan's own `inflationRate` instead. See {@link computeWithdrawals}.
    */
   inflationForPeriod?: number;
+  /**
+   * Per-event-id growth-rate override for this period, keyed by `PlanEvent.id`. When an id is
+   * present, `applyLifeEvents` uses this rate for that event's compounding *this period only*,
+   * instead of the event's own static `growthRate`. Absent entirely on the deterministic
+   * projection and on Monte Carlo's GBM branch (both fall back to each event's own
+   * `growthRate`); populated on Monte Carlo's historical branch for any event whose growth is
+   * meant to track a real historical series (ERD §4, §5).
+   *
+   * WP-1a scaffolding: nothing constructs or reads this map yet — `applyLifeEvents` is a
+   * no-op until WP-1b.
+   */
+  eventGrowthOverrides?: ReadonlyMap<string, number>;
   withdrawalStrategy: WithdrawalStrategy;
   taxCalculator: TaxCalculator;
 }
