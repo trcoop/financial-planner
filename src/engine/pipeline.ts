@@ -59,8 +59,52 @@ export const applyGrowth: PipelineStage = (state, input) => ({
   balance: state.balance * (1 + input.returnForPeriod),
 });
 
-/** Applies any life events active this period. Always a no-op for Stories 1-3 — no UI populates events yet. */
-export const applyLifeEvents: PipelineStage = (state, _input) => state;
+/**
+ * Applies any `recurringCost` life events active this period (Events & Medicare Cost ERD §5).
+ *
+ * For each `recurringCost` event: active check (`startAge`/`endAge`), then a recurrence check
+ * (`(age - startAge) % interval === 0`) — a period that is active but off-interval contributes
+ * nothing and is *absent* from `eventCosts` this period (not a `{ id, amount: 0 }` entry; see
+ * ERD §5's resolution). When both checks pass, the amount compounds continuously by elapsed
+ * years since `startAge` — `annualAmount * (1 + rate) ** (age - startAge)` — never by number of
+ * occurrences, so a once-every-3-years event's third charge reflects 6 years of growth, not
+ * three 2-year doublings. `rate` prefers this period's `eventGrowthOverrides` entry for the
+ * event's id (Monte Carlo's historical branch) and falls back to the event's own static
+ * `growthRate` otherwise (the deterministic projection and the GBM branch).
+ *
+ * `retirementEventCostTotal` is the sum of every entry landed in `eventCosts` this period — see
+ * `PeriodState.retirementEventCostTotal`'s doc comment for why it is kept as its own field
+ * rather than inlined at the `computeWithdrawals` call site.
+ */
+export const applyLifeEvents: PipelineStage = (state, input) => {
+  const eventCosts = input.events.flatMap((event) => {
+    if (event.type !== 'recurringCost') {
+      return [];
+    }
+
+    const active = state.age >= event.startAge && (event.endAge === undefined || state.age <= event.endAge);
+    if (!active) {
+      return [];
+    }
+
+    const interval = event.recurrenceIntervalYears ?? 1;
+    const onInterval = (state.age - event.startAge) % interval === 0;
+    if (!onInterval) {
+      return [];
+    }
+
+    const rate = input.eventGrowthOverrides?.get(event.id) ?? event.growthRate;
+    const amount = event.annualAmount * (1 + rate) ** (state.age - event.startAge);
+
+    return [{ id: event.id, amount }];
+  });
+
+  return {
+    ...state,
+    eventCosts,
+    retirementEventCostTotal: eventCosts.reduce((sum, entry) => sum + entry.amount, 0),
+  };
+};
 
 /**
  * Computes this period's income and contribution.
@@ -149,20 +193,30 @@ export const computeWithdrawals: PipelineStage = (state, input) => {
   // identically whether retirement is reached mid-projection or was already underway at
   // year 0. The first year rates `beginningBalance` — the balance at the *start* of the
   // year, per ERD §5 — which `snapshotBeginningBalance` captured before this stage ran.
-  const requested =
+  // The base (non-event) spending need — this is the figure `priorWithdrawal` tracks and
+  // compounds. `state.retirementEventCostTotal` (Events & Medicare Cost ERD §5) is added on
+  // top of it below, but deliberately AFTER `priorWithdrawal` is set from `baseRequested`
+  // alone: if the combined total fed back into `priorWithdrawal`, an event's own growth rate
+  // would get inflation-compounded a second time on top of itself every subsequent year — the
+  // "no feedback loop" requirement (ERD §5, PRD Round 1 decision 3).
+  const baseRequested =
     state.priorWithdrawal === null
       ? state.beginningBalance * assumptions.withdrawalRateInRetirement
       : state.priorWithdrawal * (1 + inflationRate);
+
+  const requested = baseRequested + state.retirementEventCostTotal;
 
   const plan = withdrawalStrategy(state, requested);
 
   return {
     ...state,
-    // The *requested* figure compounds, never the sourced one: this models a spending need
-    // that rises with inflation whether or not the portfolio could fund last year's draw.
-    // See `PeriodState.priorWithdrawal` (resolved 2026-08-15, FIN-15 review).
-    priorWithdrawal: requested,
-    // The row reports, and the balance is reduced by, what actually left the portfolio.
+    // The *requested* base figure compounds, never the sourced one: this models a spending
+    // need that rises with inflation whether or not the portfolio could fund last year's draw.
+    // See `PeriodState.priorWithdrawal` (resolved 2026-08-15, FIN-15 review). Base only, not
+    // `requested` (which includes this period's event costs) — see the comment above.
+    priorWithdrawal: baseRequested,
+    // The row reports, and the balance is reduced by, what actually left the portfolio —
+    // includes this period's event costs, additively.
     annualWithdrawal: plan.amount,
     balance: state.balance - plan.amount,
   };

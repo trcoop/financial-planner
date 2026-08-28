@@ -648,3 +648,116 @@ describe('runPeriod', () => {
     }
   });
 });
+
+describe('applyLifeEvents', () => {
+  const syntheticEvent = {
+    type: 'recurringCost' as const,
+    id: 'synthetic',
+    label: 'Synthetic',
+    startAge: 65,
+    annualAmount: 1_000,
+    growthRate: 0.1,
+    recurrenceIntervalYears: 3,
+  };
+
+  it('contributes cost only on-interval, and compounds continuously by elapsed years, not by occurrence count', () => {
+    // age 65 (elapsed 0): on-interval, 1000 * 1.1^0 = 1000
+    const first = applyLifeEvents(periodState({ age: 65 }), runPeriodInput({ events: [syntheticEvent] }));
+    expect(first.eventCosts).toEqual([{ id: 'synthetic', amount: 1_000 }]);
+
+    // age 66, 67 (elapsed 1, 2): off-interval, absent from eventCosts
+    const offA = applyLifeEvents(periodState({ age: 66 }), runPeriodInput({ events: [syntheticEvent] }));
+    expect(offA.eventCosts).toEqual([]);
+    const offB = applyLifeEvents(periodState({ age: 67 }), runPeriodInput({ events: [syntheticEvent] }));
+    expect(offB.eventCosts).toEqual([]);
+
+    // age 68 (elapsed 3): on-interval, third occurrence reflects 6 years of continuous
+    // growth (1.1^3), not three 2-year doublings of a 2-year step.
+    const third = applyLifeEvents(periodState({ age: 68 }), runPeriodInput({ events: [syntheticEvent] }));
+    expect(third.eventCosts[0].amount).toBeCloseTo(1_000 * 1.1 ** 3, 6);
+  });
+
+  it('is absent from eventCosts before startAge and after endAge', () => {
+    const withEnd = { ...syntheticEvent, endAge: 66, recurrenceIntervalYears: 1 };
+    const before = applyLifeEvents(periodState({ age: 64 }), runPeriodInput({ events: [withEnd] }));
+    expect(before.eventCosts).toEqual([]);
+    const after = applyLifeEvents(periodState({ age: 67 }), runPeriodInput({ events: [withEnd] }));
+    expect(after.eventCosts).toEqual([]);
+  });
+
+  it('sets retirementEventCostTotal to the sum of eventCosts entries', () => {
+    const eventTwo = { ...syntheticEvent, id: 'synthetic2', recurrenceIntervalYears: 1, annualAmount: 500 };
+    const result = applyLifeEvents(
+      periodState({ age: 65 }),
+      runPeriodInput({ events: [syntheticEvent, eventTwo] }),
+    );
+    expect(result.retirementEventCostTotal).toBeCloseTo(1_000 + 500, 6);
+  });
+
+  it("uses the event's own growthRate independent of assumptions.inflationRate", () => {
+    const baseInflation = applyLifeEvents(
+      periodState({ age: 68 }),
+      runPeriodInput({
+        events: [syntheticEvent],
+        assumptions: { ...runPeriodInput().assumptions, inflationRate: 0.025 },
+      }),
+    );
+    const differentInflation = applyLifeEvents(
+      periodState({ age: 68 }),
+      runPeriodInput({
+        events: [syntheticEvent],
+        assumptions: { ...runPeriodInput().assumptions, inflationRate: 0.5 },
+      }),
+    );
+    expect(differentInflation.eventCosts[0].amount).toBeCloseTo(baseInflation.eventCosts[0].amount, 6);
+
+    const differentGrowth = applyLifeEvents(
+      periodState({ age: 68 }),
+      runPeriodInput({ events: [{ ...syntheticEvent, growthRate: 0.2 }] }),
+    );
+    expect(differentGrowth.eventCosts[0].amount).not.toBeCloseTo(baseInflation.eventCosts[0].amount, 6);
+  });
+
+  it('uses eventGrowthOverrides for this event id when present, instead of its static growthRate', () => {
+    const withOverride = applyLifeEvents(
+      periodState({ age: 68 }),
+      runPeriodInput({
+        events: [syntheticEvent],
+        eventGrowthOverrides: new Map([['synthetic', 0.2]]),
+      }),
+    );
+    expect(withOverride.eventCosts[0].amount).toBeCloseTo(1_000 * 1.2 ** 3, 6);
+  });
+});
+
+describe('computeWithdrawals additive event-cost term', () => {
+  it('adds retirementEventCostTotal to requested only when isRetired', () => {
+    const preRetirement = computeWithdrawals(
+      periodState({ age: 60, retirementEventCostTotal: 1_000 }),
+      runPeriodInput(),
+    );
+    expect(preRetirement.annualWithdrawal).toBe(0);
+
+    const retired = computeWithdrawals(
+      periodState({ age: 70, beginningBalance: 1_000_000, retirementEventCostTotal: 1_000 }),
+      runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, retirementAge: 67 } }),
+    );
+    expect(retired.annualWithdrawal).toBeCloseTo(1_000_000 * 0.04 + 1_000, 6);
+  });
+
+  it('does not feed the event cost into priorWithdrawal (no feedback loop)', () => {
+    const withoutEvent = computeWithdrawals(
+      periodState({ age: 70, beginningBalance: 1_000_000, retirementEventCostTotal: 0 }),
+      runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, retirementAge: 67 } }),
+    );
+    const withEvent = computeWithdrawals(
+      periodState({ age: 70, beginningBalance: 1_000_000, retirementEventCostTotal: 1_000 }),
+      runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, retirementAge: 67 } }),
+    );
+
+    // priorWithdrawal tracks only the base figure, identical with and without the event.
+    expect(withEvent.priorWithdrawal).toBe(withoutEvent.priorWithdrawal);
+    // annualWithdrawal (what's reported/sourced) differs by exactly the event cost.
+    expect(withEvent.annualWithdrawal - withoutEvent.annualWithdrawal).toBeCloseTo(1_000, 6);
+  });
+});
