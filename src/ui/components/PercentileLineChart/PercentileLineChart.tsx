@@ -45,6 +45,14 @@ export interface PercentileLineChartProps {
    * isn't present in `rows`. */
   retirementAge?: number
   /**
+   * Age at which the permanent Medicare-start marker renders (FIN-73). Computed at the call
+   * site, not here — the chart only sees `rows`, while the call site already knows
+   * `currentAge`/`planningHorizonEndAge` from `assumptions` and can apply the suppression
+   * rules (horizon ends before 65; current age already >= 65 at t=0, which would mislabel
+   * period 0) before ever passing this prop. Renders nothing if the age isn't present in
+   * `rows`, same as `retirementAge`. */
+  medicareStartAge?: number
+  /**
    * Called with the newly selected row whenever a time slice is clicked/tapped (FIN-60). This
    * component owns selection ("active period") state internally (uncontrolled) and lifts the
    * selected row up via this callback — mirroring `ChartContainer`'s `onSelectRow` contract so
@@ -159,6 +167,7 @@ export function PercentileLineChart({
   series,
   title,
   retirementAge,
+  medicareStartAge,
   onSelectRow,
   defaultSelectedYear,
   showLegend = true,
@@ -182,7 +191,15 @@ export function PercentileLineChart({
   const plotWrapperRef = useRef<HTMLDivElement>(null)
   const firstAge = rows.at(0)?.age
   const lastAge = rows.at(-1)?.age
-  const maxValue = Math.max(1, ...rows.flatMap((row) => series.map((s) => row.values[s.key] ?? 0)))
+  const dataMaxValue = Math.max(1, ...rows.flatMap((row) => series.map((s) => row.values[s.key] ?? 0)))
+  // Scales the plotted y-axis above the data's own peak so the highest line never touches the
+  // top edge of the chart — without this, the permanent Medicare-start marker (which sits fixed
+  // near the top of the plot regardless of the line's value, see `.medicareMarker` below) has
+  // nowhere to sit that doesn't crowd or overlap the line itself when the balance peaks near the
+  // top of its range. Applied to both the plotted lines (`yForValue`) and the gridlines/axis
+  // labels so they stay consistent with each other.
+  const CHART_HEADROOM_FACTOR = 1.15
+  const maxValue = dataMaxValue * CHART_HEADROOM_FACTOR
   const lastIndex = Math.max(rows.length - 1, 1)
   const hoveredRow = hoveredIndex !== null ? rows[hoveredIndex] : undefined
 
@@ -317,6 +334,39 @@ export function PercentileLineChart({
   const retirementIndex = retirementAge === undefined ? -1 : rows.findIndex((row) => row.age === retirementAge)
   const retirementX = retirementIndex >= 0 ? xForIndex(retirementIndex, lastIndex) : null
 
+  const medicareIndex = medicareStartAge === undefined ? -1 : rows.findIndex((row) => row.age === medicareStartAge)
+  const medicareX = medicareIndex >= 0 ? xForIndex(medicareIndex, lastIndex) : null
+  // Y-position clears the highest plotted line's value across a small window of nearby rows,
+  // not just the marker's own exact row — anchoring to a single row let a line climbing steeply
+  // just a few years to either side (e.g. balance still rising toward retirement shortly after
+  // 65) pass close beside/above the marker even though the marker's own row was clear when it
+  // was placed. `MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS` rows on each side is enough to cover
+  // that "a few years over" case without pulling in the whole chart's peak (which is what the
+  // per-row fixed-from-top approach effectively did, and looked wrong on Stress Test's p90 — see
+  // the note below). Not tracking engine internals — `rows`/`series` are already the chart's own
+  // presentational data.
+  const MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS = 5
+  const medicareWindowStart = medicareIndex >= 0 ? Math.max(0, medicareIndex - MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS) : -1
+  const medicareWindowEnd =
+    medicareIndex >= 0 ? Math.min(rows.length - 1, medicareIndex + MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS) : -1
+  const medicareTopValue =
+    medicareIndex >= 0
+      ? Math.max(
+          0,
+          ...rows
+            .slice(medicareWindowStart, medicareWindowEnd + 1)
+            .flatMap((row) => series.map((s) => row.values[s.key] ?? 0)),
+        )
+      : 0
+  // Y-position tracks that windowed value (not a fixed offset from the chart's top edge) — a
+  // fixed-from-top offset put the marker right at the container edge on charts whose lines climb
+  // steeply toward the right (e.g. Stress Test's p90), since the chart's own top edge is set by
+  // the *overall* series max, which can sit well above this particular row's value. Tracking the
+  // windowed value keeps a consistent visual clearance above the line in both the Plan tab's
+  // single-line chart and Stress Test's three-line fan.
+  const medicareY = medicareIndex >= 0 ? yForValue(medicareTopValue, maxValue) : null
+  const medicareYPercent = medicareY !== null ? (medicareY / VIEW_HEIGHT) * 100 : null
+
   const selectedIndex = selectedYear === undefined ? -1 : rows.findIndex((row) => row.year === selectedYear)
   const selectedX = selectedIndex >= 0 ? xForIndex(selectedIndex, lastIndex) : null
 
@@ -410,6 +460,42 @@ export function PercentileLineChart({
                   className={styles.retirementMarker}
                   style={{ left: `${(retirementX / VIEW_WIDTH) * 100}%` }}
                 />
+              )}
+
+              {/* Permanent Medicare-start marker (FIN-73) — a one-time icon at age 65, distinct
+                  from the dashed retirement marker so the two don't read as the same kind of
+                  event when they land near each other. Icon is an explicit placeholder (PRD
+                  Open Questions / ERD §11 Q4) — swapping it later is not a data-contract
+                  change. `title` gives the exact-text tooltip as an accessible-name fallback;
+                  `.medicareLabel` is the actual visible-on-hover/focus text (round 2 — a native
+                  `title` tooltip's only visible affordance turned out to be the generic "?" help
+                  cursor, not readable text), so both a mouse hover and a keyboard focus show
+                  "Medicare starts." on screen, not just to assistive tech. A real `<button>`
+                  (not a `div` with `tabIndex`) so it's natively focusable/interactive rather than
+                  faking that with an ARIA/tabIndex workaround. `top` is set inline per-render
+                  (round 3) to the *row's own* highest plotted value at this age rather than a
+                  fixed distance from the chart's top edge — a fixed-from-top offset landed the
+                  marker right at the container edge on charts whose lines climb steeply toward
+                  the right (Stress Test's p90), since the chart's top edge is set by the overall
+                  series max, not this particular row's value. */}
+              {medicareX !== null && medicareYPercent !== null && (
+                <button
+                  type="button"
+                  data-testid="percentile-chart-medicare-marker"
+                  className={styles.medicareMarker}
+                  style={{
+                    left: `${(medicareX / VIEW_WIDTH) * 100}%`,
+                    top: `${medicareYPercent}%`,
+                  }}
+                  title="Medicare starts."
+                >
+                  <span className={styles.medicareIcon} aria-hidden="true">
+                    +
+                  </span>
+                  <span className={styles.medicareLabel} aria-hidden="true">
+                    Medicare starts.
+                  </span>
+                </button>
               )}
 
               {/* Active/selected-period marker (FIN-60) — bold and solid, distinct from both

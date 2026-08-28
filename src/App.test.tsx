@@ -296,6 +296,23 @@ describe('App shell', () => {
 
     await waitFor(() => expect(screen.queryByTestId('percentile-chart-retirement-marker')).not.toBeInTheDocument())
   })
+
+  it('shows the Medicare-start marker by default, and suppresses it once current age reaches 65 (FIN-73)', async () => {
+    // Default currentAge is 35, well under 65, with the fixed 100-age horizon comfortably past
+    // it, so the marker should show on load.
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.getByTestId('percentile-chart-medicare-marker')).toBeInTheDocument()
+
+    // Moving current age to 65 puts Medicare cost in period 0 — the age-65 marker would
+    // mislabel that as "starts here" (ERD §9/PRD), so it must disappear.
+    const ageInput = screen.getByLabelText('Current age')
+    await user.clear(ageInput)
+    await user.type(ageInput, '65')
+
+    await waitFor(() => expect(screen.queryByTestId('percentile-chart-medicare-marker')).not.toBeInTheDocument())
+  })
 })
 
 describe('App persistence (FIN-43)', () => {

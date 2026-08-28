@@ -8,6 +8,7 @@ import { Button } from '../Button/Button'
 import { Card } from '../Card/Card'
 import type { ChartRow } from '../ChartContainer/types'
 import { PercentileLineChart, type LineChartRow, type LineChartSeries } from '../PercentileLineChart/PercentileLineChart'
+import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
 import styles from './StressTestSection.module.css'
 
 /**
@@ -165,11 +166,14 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
   }, [assumptions])
 
   const handleRunClick = () => {
-    orchestrator.run(assumptions, allocation, DEFAULT_VOLATILITY_ASSUMPTIONS, [], returnAssumptions).catch(() => {
-      // Intentionally ignored: the orchestrator's `subscribe` callback already syncs `state`
-      // to `cancelled`/`error` for both rejection paths (cancellation and worker failure).
-      // This catch exists solely to prevent an unhandled promise rejection.
-    })
+    // FIN-73: Medicare Part B is applied unconditionally, no UI opt-in/opt-out (ERD §9).
+    orchestrator
+      .run(assumptions, allocation, DEFAULT_VOLATILITY_ASSUMPTIONS, [MEDICARE_PART_B_EVENT], returnAssumptions)
+      .catch(() => {
+        // Intentionally ignored: the orchestrator's `subscribe` callback already syncs `state`
+        // to `cancelled`/`error` for both rejection paths (cancellation and worker failure).
+        // This catch exists solely to prevent an unhandled promise rejection.
+      })
   }
 
   useImperativeHandle(ref, () => ({ runStressTest: handleRunClick }))
@@ -213,6 +217,13 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
     ? (chartRows.find((row) => row.age === assumptions.retirementAge) ?? chartRows.at(-1))
     : undefined
 
+  // FIN-73: mirrors App.tsx's Plan-tab gating (ERD §9) — suppressed when the horizon ends
+  // before 65, or when the plan's current age is already >= 65 at t=0.
+  const medicareStartAge =
+    assumptions.currentAge < 65 && 65 <= assumptions.planningHorizonEndAge
+      ? MEDICARE_PART_B_EVENT.startAge
+      : undefined
+
   useEffect(() => {
     if (chartRows) {
       setSelectedRow(defaultRow ?? null)
@@ -249,6 +260,7 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
             // unit is stated once under the tab bar in App.tsx rather than on each chart.
             title="Simulated outcomes by year"
             retirementAge={assumptions.retirementAge}
+            medicareStartAge={medicareStartAge}
             // Mirrors App.tsx's Plan-tab default so both tabs' sliders/markers start at the same
             // year rather than this one defaulting to index 0 (current age) — FIN-61.
             defaultSelectedYear={defaultRow?.year}

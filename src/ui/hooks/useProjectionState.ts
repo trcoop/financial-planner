@@ -8,6 +8,7 @@ import {
 } from '../../engine'
 import { isAdvancedInputValid, isCoreInputValid } from '../components'
 import type { AdvancedAssumptionValues, CoreInputValues } from '../components'
+import { MEDICARE_PART_B_EVENT } from '../medicareEvent'
 import { useDebouncedValue } from './useDebouncedValue'
 
 /** Planning horizon is a call-site default per FIN-19 — not user input for the MVP. Exported so
@@ -105,7 +106,8 @@ export function useProjectionState(
         // renders its own fan in today's dollars for the same reason, so the two tabs report
         // comparable numbers for the same plan.
         rows: toTodaysDollarRows(
-          runProjection(planAssumptions),
+          // FIN-73: Medicare Part B is applied unconditionally, no UI opt-in/opt-out (ERD §9).
+          runProjection(planAssumptions, [MEDICARE_PART_B_EVENT]),
           planAssumptions.inflationRate,
         ),
         error: undefined,
