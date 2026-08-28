@@ -1073,3 +1073,102 @@ describe('FIN-65 change 6: ruin is absorbing in the deterministic projection', (
     expect(rows.every((row) => row.endingBalance >= 0)).toBe(true);
   });
 });
+
+describe('FIN-71: recurringCost events integrated end to end', () => {
+  const medicareLike: PlanEvent = {
+    type: 'recurringCost',
+    id: 'medicarePartB',
+    label: 'Medicare Part B',
+    startAge: 65,
+    annualAmount: 2_434.8,
+    growthRate: 0.055,
+    recurrenceIntervalYears: 1,
+  };
+
+  it('ruin-year: eventCosts is zeroed in the ruin year, matching the cut-back annualWithdrawal', () => {
+    const ruinous: PlanAssumptions = {
+      currentAge: 65,
+      retirementAge: 65,
+      initialBalance: 500_000,
+      currentAnnualIncome: 0,
+      annualContributionRate: 0,
+      planningHorizonEndAge: 90,
+      annualRaiseRate: 0,
+      annualReturnRate: 0.04,
+      inflationRate: 0.025,
+      withdrawalRateInRetirement: 0.4,
+    };
+    const rows = runProjection(ruinous, [medicareLike]);
+    const ruinIndex = rows.findIndex((row) => row.endingBalance === 0);
+
+    expect(ruinIndex).toBeGreaterThan(0);
+    const ruinRow = rows[ruinIndex];
+    // The withdrawal was cut back below what Medicare's request would have needed, so the
+    // event-cost entry is rescaled to zero right alongside it.
+    expect(ruinRow.eventCosts).toEqual([{ id: 'medicarePartB', amount: 0 }]);
+  });
+
+  it('withdrawal-mechanics: today\'s-dollars annualWithdrawal strictly increases year over year once the event has started', () => {
+    const plan: PlanAssumptions = {
+      currentAge: 60,
+      retirementAge: 60,
+      initialBalance: 2_000_000,
+      currentAnnualIncome: 0,
+      annualContributionRate: 0,
+      planningHorizonEndAge: 90,
+      annualRaiseRate: 0,
+      annualReturnRate: 0.07,
+      inflationRate: 0.025,
+      withdrawalRateInRetirement: 0.04,
+    };
+    const rows = toTodaysDollarRows(runProjection(plan, [medicareLike]), plan.inflationRate);
+    const afterStart = rows.filter((row) => row.age >= 65);
+
+    for (let i = 1; i < afterStart.length; i += 1) {
+      expect(afterStart[i].annualWithdrawal, `age ${afterStart[i].age}`).toBeGreaterThan(
+        afterStart[i - 1].annualWithdrawal,
+      );
+    }
+  });
+
+  it('gating: retirement age 70 — eventCosts populated for ages 65-69 with $0 contribution to annualWithdrawal, additive term first appears at 70', () => {
+    const plan: PlanAssumptions = {
+      currentAge: 60,
+      retirementAge: 70,
+      initialBalance: 1_000_000,
+      currentAnnualIncome: 100_000,
+      annualContributionRate: 0.15,
+      planningHorizonEndAge: 90,
+      annualRaiseRate: 0.03,
+      annualReturnRate: 0.07,
+      inflationRate: 0.025,
+      withdrawalRateInRetirement: 0.04,
+    };
+    const rows = runProjection(plan, [medicareLike]);
+
+    for (const age of [65, 66, 67, 68, 69]) {
+      const row = rows.find((r) => r.age === age)!;
+      expect(row.eventCosts.length, `age ${age}`).toBe(1);
+      expect(row.eventCosts[0].amount, `age ${age}`).toBeCloseTo(
+        2_434.8 * 1.055 ** (age - 65),
+        6,
+      );
+      expect(row.annualWithdrawal, `age ${age}`).toBe(0);
+    }
+
+    const noMedicare = runProjection(plan);
+    const withMedicareAt70 = rows.find((r) => r.age === 70)!;
+    const withoutMedicareAt70 = noMedicare.find((r) => r.age === 70)!;
+
+    expect(withMedicareAt70.annualWithdrawal - withoutMedicareAt70.annualWithdrawal).toBeCloseTo(
+      2_434.8 * 1.055 ** 5,
+      2,
+    );
+  });
+
+  it('validatePlanEvents is enforced at runProjection\'s boundary', () => {
+    expect(() =>
+      runProjection(assumptions(), [{ ...medicareLike, growthRate: -2 }]),
+    ).toThrow(InvalidProjectionInputError);
+  });
+});

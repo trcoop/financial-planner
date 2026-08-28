@@ -11,6 +11,7 @@ import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 import type { HistoricalYearReturn } from './historicalReturns';
 import { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
 import { runPeriod } from './pipeline';
+import { validatePlanEvents } from './projection';
 import { withdrawFullShortfall, zeroTax } from './strategies';
 import type {
   PeriodState,
@@ -754,6 +755,7 @@ export const runMonteCarloTrials = (
   events: PlanEvent[] = [],
   options: MonteCarloOptions = {},
 ): MonteCarloResult => {
+  validatePlanEvents(events);
   validateAllocation(allocation);
   assertFinite(volatilityAssumptions?.stocks, 'volatilityAssumptions.stocks');
   assertFinite(volatilityAssumptions?.bonds, 'volatilityAssumptions.bonds');
