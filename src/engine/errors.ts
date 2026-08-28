@@ -59,7 +59,30 @@ export type ProjectionErrorCode =
   /** `annualContributionRate` outside [0, 1]. */
   | 'CONTRIBUTION_RATE_OUT_OF_RANGE'
   /** `withdrawalRateInRetirement` outside [0, 1]. */
-  | 'WITHDRAWAL_RATE_OUT_OF_RANGE';
+  | 'WITHDRAWAL_RATE_OUT_OF_RANGE'
+  /**
+   * A `recurringCost` `PlanEvent`'s `annualAmount`, `growthRate`, `startAge`, `endAge` (when
+   * present), or `recurrenceIntervalYears` (when present) is not a finite number. Checked
+   * before every other `recurringCost` condition, per Events & Medicare Cost ERD §6, since the
+   * range/comparison checks below would silently pass on `NaN`.
+   */
+  | 'EVENT_NON_FINITE_NUMERIC_FIELD'
+  /** A `recurringCost` event's `startAge < 0`, or `endAge !== undefined && endAge < 0`. */
+  | 'EVENT_NEGATIVE_AGE'
+  /** A `recurringCost` event's `endAge !== undefined && endAge < startAge`. */
+  | 'EVENT_END_BEFORE_START'
+  /**
+   * A `recurringCost` event's `recurrenceIntervalYears` is present but not a positive whole
+   * number (`!Number.isInteger(recurrenceIntervalYears) || recurrenceIntervalYears < 1`).
+   */
+  | 'EVENT_RECURRENCE_INTERVAL_INVALID'
+  /** Two events in the same array share an `id` — would make `EventCostEntry` lookups ambiguous. */
+  | 'EVENT_DUPLICATE_ID'
+  /**
+   * A `recurringCost` event's `growthRate < -1`, same rationale as
+   * `RATE_BELOW_NEGATIVE_100_PERCENT`.
+   */
+  | 'EVENT_GROWTH_RATE_BELOW_NEGATIVE_100_PERCENT';
 
 /**
  * Thrown when caller-supplied engine input violates an invariant.

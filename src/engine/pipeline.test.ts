@@ -37,6 +37,8 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   investmentReturn: 0,
   annualContribution: 0,
   annualWithdrawal: 0,
+  eventCosts: [],
+  retirementEventCostTotal: 0,
   ...overrides,
 });
 
@@ -509,7 +511,7 @@ describe('recordPeriod', () => {
 
   it('appends exactly one row per period', () => {
     const existing: ProjectionRow[] = [
-      { age: 34, year: -1, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0 },
+      { age: 34, year: -1, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
     ];
 
     const result = recordPeriod(periodState({ rows: existing }), runPeriodInput());

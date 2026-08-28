@@ -197,6 +197,7 @@ export const recordPeriod: PipelineStage = (state, _input) => ({
       investmentReturn: state.investmentReturn,
       annualWithdrawal: state.annualWithdrawal,
       endingBalance: state.balance,
+      eventCosts: state.eventCosts,
     },
   ],
 });
