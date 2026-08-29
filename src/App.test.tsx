@@ -203,8 +203,8 @@ describe('App shell', () => {
   })
 
   it('does not show the re-run CTA when inputs change before any stress test has ever completed (FIN-48)', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<App />)
       // No emitComplete() here — the mocked orchestrator's initial auto-run never resolves,
@@ -228,8 +228,8 @@ describe('App shell', () => {
   })
 
   it('swaps the success rate for a "Re-run stress test" CTA once inputs change after a completed run (FIN-48)', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<App />)
       act(() => {
@@ -252,8 +252,8 @@ describe('App shell', () => {
   })
 
   it('re-running the stress test from the stale CTA triggers a run without switching tabs (FIN-48)', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<App />)
       act(() => {
@@ -326,8 +326,8 @@ describe('App persistence (FIN-43)', () => {
   })
 
   it('restores previously edited values across an unmount/remount (reload-equivalent)', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       const { unmount } = render(<App />)
       const ageInput = screen.getByLabelText('Current age')
@@ -356,7 +356,6 @@ describe('App persistence (FIN-43)', () => {
     const storageModule = await import('./storage')
     const mockedSave = storageModule.saveAssumptions as unknown as ReturnType<typeof vi.fn>
 
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     // Fake timers are installed *before* the initial render (rather than right after it) so the
     // mount-time debounce effect schedules its `setTimeout` against the fake clock from the
     // start. Installing them after render left that first timer real/native — `mockClear()`
@@ -364,6 +363,7 @@ describe('App persistence (FIN-43)', () => {
     // e.g. which chart component was mounted), making this test's "ignore the mount-time save"
     // step flaky rather than deterministic.
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<FreshApp />)
       await act(async () => {
@@ -398,8 +398,8 @@ describe('App persistence (FIN-43)', () => {
     const storageModule = await import('./storage')
     const mockedSave = storageModule.saveAssumptions as unknown as ReturnType<typeof vi.fn>
 
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<FreshApp />)
       await vi.advanceTimersByTimeAsync(350)
@@ -419,8 +419,8 @@ describe('App persistence (FIN-43)', () => {
   })
 
   it('reset control asks for confirmation via an in-system dialog, and does nothing on decline', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<App />)
       // Change a field away from its default first, so decline vs. confirm are
@@ -447,8 +447,8 @@ describe('App persistence (FIN-43)', () => {
   })
 
   it('reset control clears storage and reverts to defaults with no reload, on confirm', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<App />)
       const ageInput = screen.getByLabelText('Current age')
@@ -480,8 +480,8 @@ describe('App stock/bond allocation wiring (FIN-56)', () => {
   })
 
   it('re-runs the stress test with the updated allocation after editing the Advanced assumptions field', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<App />)
       await user.click(screen.getByText('Advanced assumptions'))
@@ -520,8 +520,8 @@ describe('App return assumption wiring (FIN-57, FIN-64)', () => {
   })
 
   it('does not change the stress test return assumptions after editing the Advanced assumptions fields', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<App />)
       await user.click(screen.getByText('Advanced assumptions'))
