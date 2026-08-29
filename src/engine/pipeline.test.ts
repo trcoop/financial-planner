@@ -796,6 +796,19 @@ describe('FIN-75: recurringCost basis compounds from plan year 0, not startAge',
     // NOT the buggy re-exponentiation of only the last rate: base * (1 + r2)^2.
     expect(afterPeriod2).not.toBeCloseTo(1_000 * 1.1 ** 2, 2);
   });
+
+  it('reports the full plan-year-0-anchored amount at year 0 when the event is already active and its startAge is BEFORE currentAge', () => {
+    // Distinct from the "zero dormant years" case (startAge === currentAge, covered above):
+    // here the event is already 5 years into being active when the plan itself starts, so
+    // startAge < currentAge. A regression that anchors growth-skip on `state.age ===
+    // event.startAge` instead of `state.year === 0` would wrongly apply growth here, since
+    // this period's age (70) never equals startAge (65).
+    const alreadyActive = { ...dormantEvent, startAge: 65 };
+    const state = applyLifeEvents(periodState({ age: 70, year: 0 }), runPeriodInput({ events: [alreadyActive] }));
+
+    // Year 0 applies no growth yet, regardless of how far past startAge the plan begins.
+    expect(state.eventCosts).toEqual([{ id: 'dormant', amount: 1_000 }]);
+  });
 });
 
 describe('computeWithdrawals additive event-cost term', () => {
