@@ -9,8 +9,10 @@
  * of a horizon: Monte Carlo folds that same step function over its own per-path returns.
  */
 
+import { computeCumulativeInflationIndex, deflateSeries } from './deflate';
 import { InvalidProjectionInputError } from './errors';
 import { runPeriod } from './pipeline';
+import { clampRuinedBalance } from './ruin';
 import { withdrawFullShortfall, zeroTax } from './strategies';
 import type { PeriodState, PlanAssumptions, PlanEvent, ProjectionRow, RunPeriodInput } from './types';
 
@@ -313,7 +315,8 @@ const advance = (state: PeriodState): PeriodState => ({ ...state, age: state.age
  * {@link computeWithdrawals}.
  */
 const clampRuin = (state: PeriodState, ruined: boolean): { state: PeriodState; ruined: boolean } => {
-  if (!ruined && state.balance > 0) {
+  const clamped = clampRuinedBalance(state.balance, ruined);
+  if (!clamped.ruined) {
     return { state, ruined: false };
   }
 
@@ -408,10 +411,10 @@ export const toTodaysDollarRows = (
   rows: readonly ProjectionRow[],
   inflationRate: number,
 ): ProjectionRow[] =>
-  rows.map((row, year) => {
-    const priceLevel = (1 + inflationRate) ** (year + 1);
-
-    return {
+  deflateSeries(
+    rows,
+    computeCumulativeInflationIndex(rows.map(() => inflationRate)),
+    (row, priceLevel) => ({
       ...row,
       beginningBalance: row.beginningBalance / priceLevel,
       annualContribution: row.annualContribution / priceLevel,
@@ -421,8 +424,8 @@ export const toTodaysDollarRows = (
       // Events & Medicare Cost ERD §5: the same price level deflates each event's entry, so a
       // deflated Medicare figure sits alongside the deflated withdrawal total it is part of.
       eventCosts: row.eventCosts.map((entry) => ({ ...entry, amount: entry.amount / priceLevel })),
-    };
-  });
+    }),
+  );
 
 /**
  * The Fisher relation: what a nominal return is worth once inflation is taken out.
