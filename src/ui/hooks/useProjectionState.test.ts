@@ -404,6 +404,7 @@ describe('useProjectionState Medicare wiring (FIN-73)', () => {
   })
 
   it('passes [medicarePartBEvent(inflationRate)] to runProjection unconditionally, with no opt-in/opt-out', () => {
+    vi.mocked(runProjection).mockClear()
     renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
     const plan = toAssumptions(CORE, ADVANCED)
 
