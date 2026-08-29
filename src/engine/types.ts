@@ -228,6 +228,23 @@ export interface PeriodState {
    * WP-1a scaffolding: always `0` today, alongside `eventCosts` being `[]`.
    */
   retirementEventCostTotal: number;
+  /**
+   * Running per-event cost basis, keyed by `PlanEvent.id`, carried and grown every period from
+   * plan year 0 regardless of whether the event is currently active (FIN-75).
+   *
+   * Mirrors {@link PeriodState.priorWithdrawal}'s chaining pattern: each period grows the PRIOR
+   * period's basis by that period's applicable rate (`eventGrowthOverrides` override or the
+   * event's own `growthRate`), rather than recomputing from `annualAmount` with a single rate
+   * exponentiated. This fixes two bugs the flat recompute had — a dormant event (its `startAge`
+   * still years away) accrued zero growth pre-activation, and a historically-sampled event's
+   * amount didn't chain period to period (`base * r_current^n` instead of the true product of
+   * each period's own drawn rate). Seeded at `annualAmount` at year 0 (`createInitialPeriodState`),
+   * then grown by `applyLifeEvents` every period thereafter, active or not.
+   *
+   * `eventCosts`/`retirementEventCostTotal` still only report entries for currently-active,
+   * on-interval events — this field is the growth clock underneath them, not itself reported.
+   */
+  eventCostBasis: ReadonlyMap<string, number>;
 }
 
 /** What a {@link WithdrawalStrategy} decided to actually withdraw. */
