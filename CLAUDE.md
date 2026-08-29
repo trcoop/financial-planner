@@ -3,8 +3,9 @@
 Browser-based financial planning engine with real-time projection and Monte
 Carlo simulation. See `architecture.md` for how the system is structured.
 
-Requirements, specs, and tickets live in Linear (project: DIY Financial
-Planner - MVP, team: FIN) — this repo doesn't duplicate them.
+Requirements, specs, and tickets live in Linear (team: FIN) — this repo
+doesn't duplicate them. See the Linear section below for how to find the
+project currently in progress.
 
 ## Commands
 
@@ -47,10 +48,11 @@ that talks to the network.
 
 - Team: Financial Planning (key `FIN`) — this is the durable home for all
   phases of this product, not just this repo's current scope.
-- Current phase's project: "DIY Financial Planner - MVP"
-  https://linear.app/travis-playground/project/diy-financial-planner-mvp-3da6fbaac5ff
-  — later phases get their own project under the same team, so don't assume
-  this is the only project relevant to this codebase over time.
+- Don't hardcode "the current project" by name here — it goes stale every
+  time a phase finishes. Instead, before picking up work, check
+  `list_projects` for team FIN and use whichever project has status
+  "In Progress" (not "Backlog", not "Completed"). Multiple projects can
+  exist under this team at once; only the in-progress one(s) are live work.
 - Tickets are lean and reference the linked spec document rather than
   duplicating requirements — read the linked doc, not just the ticket
   description, before implementing.
