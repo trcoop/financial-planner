@@ -500,7 +500,7 @@ const MEDICAL_INFLATION_BY_YEAR: ReadonlyMap<number, number> = new Map(
  * `MEDICARE_PART_B_EVENT.growthRate`'s deterministic-branch fallback itself — that fallback is
  * `applyLifeEvents`'s `input.eventGrowthOverrides?.get(event.id) ?? event.growthRate` (WP-1b/
  * FIN-71, ERD §5), one layer up. Baking a fallback in here would make a genuine gap in the
- * dataset indistinguishable from "this event's rate really is 5.5% this year."
+ * dataset indistinguishable from "this event's computed growthRate really is this year's rate."
  */
 export const medicalInflationForYear = (year: number): number | undefined =>
   MEDICAL_INFLATION_BY_YEAR.get(year);

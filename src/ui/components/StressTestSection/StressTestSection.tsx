@@ -8,7 +8,7 @@ import { Button } from '../Button/Button'
 import { Card } from '../Card/Card'
 import type { ChartRow } from '../ChartContainer/types'
 import { PercentileLineChart, type LineChartRow, type LineChartSeries } from '../PercentileLineChart/PercentileLineChart'
-import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
+import { MEDICARE_PART_B_EVENT, medicarePartBEvent } from '../../medicareEvent'
 import styles from './StressTestSection.module.css'
 
 /**
@@ -167,8 +167,17 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
 
   const handleRunClick = () => {
     // FIN-73: Medicare Part B is applied unconditionally, no UI opt-in/opt-out (ERD §9).
+    // FIN-77: growthRate here only ever surfaces as the historical branch's gap-year fallback
+    // (or the GBM return model's rate) — the historical branch itself samples
+    // HISTORICAL_ANNUAL_MEDICAL_INFLATION per period and is otherwise unaffected.
     orchestrator
-      .run(assumptions, allocation, DEFAULT_VOLATILITY_ASSUMPTIONS, [MEDICARE_PART_B_EVENT], returnAssumptions)
+      .run(
+        assumptions,
+        allocation,
+        DEFAULT_VOLATILITY_ASSUMPTIONS,
+        [medicarePartBEvent(assumptions.inflationRate)],
+        returnAssumptions,
+      )
       .catch(() => {
         // Intentionally ignored: the orchestrator's `subscribe` callback already syncs `state`
         // to `cancelled`/`error` for both rejection paths (cancellation and worker failure).
