@@ -39,6 +39,7 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   annualWithdrawal: 0,
   eventCosts: [],
   retirementEventCostTotal: 0,
+  eventCostBasis: new Map(),
   ...overrides,
 });
 
@@ -660,73 +661,153 @@ describe('applyLifeEvents', () => {
     recurrenceIntervalYears: 3,
   };
 
+  /**
+   * Folds `applyLifeEvents` across consecutive periods starting at `startAge`, threading
+   * `eventCostBasis` from one call into the next the way `runPeriod`/`runProjection` do — a
+   * single direct call cannot exercise chaining (FIN-75), since the basis only carries forward
+   * through the state each call returns.
+   */
+  const foldEvents = (
+    events: Parameters<typeof applyLifeEvents>[1]['events'],
+    startAge: number,
+    periods: number,
+    inputOverrides: Partial<Parameters<typeof applyLifeEvents>[1]> = {},
+  ): ReturnType<typeof applyLifeEvents>[] => {
+    let state = periodState({ age: startAge, year: 0 });
+    const results: ReturnType<typeof applyLifeEvents>[] = [];
+    for (let i = 0; i < periods; i += 1) {
+      state = applyLifeEvents(state, runPeriodInput({ events, ...inputOverrides }));
+      results.push(state);
+      state = { ...state, age: state.age + 1, year: state.year + 1 };
+    }
+    return results;
+  };
+
   it('contributes cost only on-interval, and compounds continuously by elapsed years, not by occurrence count', () => {
-    // age 65 (elapsed 0): on-interval, 1000 * 1.1^0 = 1000
-    const first = applyLifeEvents(periodState({ age: 65 }), runPeriodInput({ events: [syntheticEvent] }));
+    // Fold 4 periods starting at age 65 (elapsed 0..3): the basis grows every period
+    // regardless of interval, but only lands in eventCosts on-interval.
+    const [first, offA, offB, third] = foldEvents([syntheticEvent], 65, 4);
+
+    // age 65 (elapsed 0): on-interval, 1000 * 1.1^0 = 1000 (year 0 applies no growth yet).
     expect(first.eventCosts).toEqual([{ id: 'synthetic', amount: 1_000 }]);
 
-    // age 66, 67 (elapsed 1, 2): off-interval, absent from eventCosts
-    const offA = applyLifeEvents(periodState({ age: 66 }), runPeriodInput({ events: [syntheticEvent] }));
+    // age 66, 67 (elapsed 1, 2): off-interval, absent from eventCosts.
     expect(offA.eventCosts).toEqual([]);
-    const offB = applyLifeEvents(periodState({ age: 67 }), runPeriodInput({ events: [syntheticEvent] }));
     expect(offB.eventCosts).toEqual([]);
 
-    // age 68 (elapsed 3): on-interval, third occurrence reflects 6 years of continuous
+    // age 68 (elapsed 3): on-interval, third occurrence reflects 3 periods of continuous
     // growth (1.1^3), not three 2-year doublings of a 2-year step.
-    const third = applyLifeEvents(periodState({ age: 68 }), runPeriodInput({ events: [syntheticEvent] }));
     expect(third.eventCosts[0].amount).toBeCloseTo(1_000 * 1.1 ** 3, 6);
   });
 
-  it('is absent from eventCosts before startAge and after endAge', () => {
+  it('is absent from eventCosts before startAge and after endAge, though its basis still grows', () => {
     const withEnd = { ...syntheticEvent, endAge: 66, recurrenceIntervalYears: 1 };
-    const before = applyLifeEvents(periodState({ age: 64 }), runPeriodInput({ events: [withEnd] }));
+    const [before] = foldEvents([withEnd], 64, 1);
     expect(before.eventCosts).toEqual([]);
-    const after = applyLifeEvents(periodState({ age: 67 }), runPeriodInput({ events: [withEnd] }));
+
+    const [, , , after] = foldEvents([withEnd], 64, 4);
+    // age 67 (elapsed 3 from startAge 64... using startAge 65 below instead for clarity)
     expect(after.eventCosts).toEqual([]);
   });
 
   it('sets retirementEventCostTotal to the sum of eventCosts entries', () => {
     const eventTwo = { ...syntheticEvent, id: 'synthetic2', recurrenceIntervalYears: 1, annualAmount: 500 };
-    const result = applyLifeEvents(
-      periodState({ age: 65 }),
-      runPeriodInput({ events: [syntheticEvent, eventTwo] }),
-    );
+    const [result] = foldEvents([syntheticEvent, eventTwo], 65, 1);
     expect(result.retirementEventCostTotal).toBeCloseTo(1_000 + 500, 6);
   });
 
   it("uses the event's own growthRate independent of assumptions.inflationRate", () => {
-    const baseInflation = applyLifeEvents(
-      periodState({ age: 68 }),
-      runPeriodInput({
-        events: [syntheticEvent],
-        assumptions: { ...runPeriodInput().assumptions, inflationRate: 0.025 },
-      }),
-    );
-    const differentInflation = applyLifeEvents(
-      periodState({ age: 68 }),
-      runPeriodInput({
-        events: [syntheticEvent],
-        assumptions: { ...runPeriodInput().assumptions, inflationRate: 0.5 },
-      }),
-    );
+    const [, , , baseInflation] = foldEvents([syntheticEvent], 65, 4, {
+      assumptions: { ...runPeriodInput().assumptions, inflationRate: 0.025 },
+    });
+    const [, , , differentInflation] = foldEvents([syntheticEvent], 65, 4, {
+      assumptions: { ...runPeriodInput().assumptions, inflationRate: 0.5 },
+    });
     expect(differentInflation.eventCosts[0].amount).toBeCloseTo(baseInflation.eventCosts[0].amount, 6);
 
-    const differentGrowth = applyLifeEvents(
-      periodState({ age: 68 }),
-      runPeriodInput({ events: [{ ...syntheticEvent, growthRate: 0.2 }] }),
-    );
+    const [, , , differentGrowth] = foldEvents([{ ...syntheticEvent, growthRate: 0.2 }], 65, 4);
     expect(differentGrowth.eventCosts[0].amount).not.toBeCloseTo(baseInflation.eventCosts[0].amount, 6);
   });
 
   it('uses eventGrowthOverrides for this event id when present, instead of its static growthRate', () => {
-    const withOverride = applyLifeEvents(
-      periodState({ age: 68 }),
-      runPeriodInput({
-        events: [syntheticEvent],
-        eventGrowthOverrides: new Map([['synthetic', 0.2]]),
-      }),
-    );
+    const [, , , withOverride] = foldEvents([syntheticEvent], 65, 4, {
+      eventGrowthOverrides: new Map([['synthetic', 0.2]]),
+    });
     expect(withOverride.eventCosts[0].amount).toBeCloseTo(1_000 * 1.2 ** 3, 6);
+  });
+});
+
+describe('FIN-75: recurringCost basis compounds from plan year 0, not startAge', () => {
+  const dormantEvent = {
+    type: 'recurringCost' as const,
+    id: 'dormant',
+    label: 'Dormant',
+    startAge: 65,
+    annualAmount: 1_000,
+    growthRate: 0.1,
+    recurrenceIntervalYears: 1,
+  };
+
+  it("a dormant event's nominal amount at activation reflects full elapsed growth from plan year 0, not zero growth pre-startAge", () => {
+    // Plan starts at age 35, the event activates at 65 — 30 dormant years before it ever
+    // reports a cost, each of which must still grow the basis.
+    let state = periodState({ age: 35, year: 0 });
+    for (let elapsed = 0; elapsed < 30; elapsed += 1) {
+      state = applyLifeEvents(state, runPeriodInput({ events: [dormantEvent] }));
+      state = { ...state, age: state.age + 1, year: state.year + 1 };
+    }
+    // Now at age 65, year 30 — the event's first active, on-interval period.
+    const activated = applyLifeEvents(state, runPeriodInput({ events: [dormantEvent] }));
+
+    expect(activated.eventCosts).toEqual([{ id: 'dormant', amount: expect.any(Number) }]);
+    // 30 years of growth from plan year 0, NOT `annualAmount * (1+rate)^(age-startAge) = annualAmount * (1+rate)^0 = annualAmount`.
+    expect(activated.eventCosts[0].amount).toBeCloseTo(1_000 * 1.1 ** 30, 6);
+    expect(activated.eventCosts[0].amount).not.toBeCloseTo(1_000, 0);
+  });
+
+  it("a historically-sampled event's amount after 2 active periods with different drawn rates matches the true chained product, not the last rate re-exponentiated", () => {
+    // Plan starts already at the event's startAge — zero dormant years — so this isolates
+    // bug 2 (chaining) from bug 1 (dormant growth).
+    let state = periodState({ age: 65, year: 0 });
+
+    // Period 0 (year 0): base year, no growth applied yet.
+    state = applyLifeEvents(state, runPeriodInput({ events: [dormantEvent] }));
+    expect(state.eventCosts[0].amount).toBeCloseTo(1_000, 6);
+    state = { ...state, age: state.age + 1, year: state.year + 1 };
+
+    // Period 1 (year 1): drawn rate r1 = 2%.
+    state = applyLifeEvents(
+      state,
+      runPeriodInput({ events: [dormantEvent], eventGrowthOverrides: new Map([['dormant', 0.02]]) }),
+    );
+    const afterPeriod1 = state.eventCosts[0].amount;
+    expect(afterPeriod1).toBeCloseTo(1_000 * 1.02, 6);
+    state = { ...state, age: state.age + 1, year: state.year + 1 };
+
+    // Period 2 (year 2): drawn rate r2 = 10%.
+    state = applyLifeEvents(
+      state,
+      runPeriodInput({ events: [dormantEvent], eventGrowthOverrides: new Map([['dormant', 0.1]]) }),
+    );
+    const afterPeriod2 = state.eventCosts[0].amount;
+
+    // The true chained product: base * (1 + r1) * (1 + r2).
+    expect(afterPeriod2).toBeCloseTo(1_000 * 1.02 * 1.1, 6);
+    // NOT the buggy re-exponentiation of only the last rate: base * (1 + r2)^2.
+    expect(afterPeriod2).not.toBeCloseTo(1_000 * 1.1 ** 2, 2);
+  });
+
+  it('reports the full plan-year-0-anchored amount at year 0 when the event is already active and its startAge is BEFORE currentAge', () => {
+    // Distinct from the "zero dormant years" case (startAge === currentAge, covered above):
+    // here the event is already 5 years into being active when the plan itself starts, so
+    // startAge < currentAge. A regression that anchors growth-skip on `state.age ===
+    // event.startAge` instead of `state.year === 0` would wrongly apply growth here, since
+    // this period's age (70) never equals startAge (65).
+    const alreadyActive = { ...dormantEvent, startAge: 65 };
+    const state = applyLifeEvents(periodState({ age: 70, year: 0 }), runPeriodInput({ events: [alreadyActive] }));
+
+    // Year 0 applies no growth yet, regardless of how far past startAge the plan begins.
+    expect(state.eventCosts).toEqual([{ id: 'dormant', amount: 1_000 }]);
   });
 });
 

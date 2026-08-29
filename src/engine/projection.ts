@@ -237,6 +237,7 @@ export const createInitialPeriodState = (assumptions: PlanAssumptions): PeriodSt
   annualWithdrawal: 0,
   eventCosts: [],
   retirementEventCostTotal: 0,
+  eventCostBasis: new Map(),
 });
 
 /** Moves a completed period on to the next year. */

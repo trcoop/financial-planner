@@ -60,48 +60,68 @@ export const applyGrowth: PipelineStage = (state, input) => ({
 });
 
 /**
- * Applies any `recurringCost` life events active this period (Events & Medicare Cost ERD §5).
+ * Applies any `recurringCost` life events active this period (Events & Medicare Cost ERD §5),
+ * and grows every such event's running cost basis (FIN-75).
  *
- * For each `recurringCost` event: active check (`startAge`/`endAge`), then a recurrence check
+ * The basis (`state.eventCostBasis`, per event id) grows every period from plan year 0 onward —
+ * whether or not the event is currently active — by that period's applicable rate:
+ * `eventGrowthOverrides`'s entry for the event's id (Monte Carlo's historical branch) when
+ * present, else the event's own static `growthRate` (the deterministic projection and the GBM
+ * branch). Year 0 is the base year and applies no growth (`annualAmount` is already stated as of
+ * year 0); every period after that grows the PRIOR period's basis by the CURRENT period's rate —
+ * `priorBasis * (1 + rate)` — the same chaining pattern `computeWithdrawals` uses for
+ * `priorWithdrawal`, so a historically-sampled event's amount is the true product of each
+ * period's own drawn rate rather than a single rate re-exponentiated from the flat base every
+ * period. `createInitialPeriodState` seeds `eventCostBasis` empty; a missing entry here falls
+ * back to `event.annualAmount`, which is what makes year 0 (and any state built without a
+ * pre-seeded basis) read as the unaged starting figure.
+ *
+ * Reporting is unaffected by the growth-every-period rule: an event only lands an `eventCosts`
+ * entry when it is active (`startAge`/`endAge`) AND on-interval
  * (`(age - startAge) % interval === 0`) — a period that is active but off-interval contributes
  * nothing and is *absent* from `eventCosts` this period (not a `{ id, amount: 0 }` entry; see
- * ERD §5's resolution). When both checks pass, the amount compounds continuously by elapsed
- * years since `startAge` — `annualAmount * (1 + rate) ** (age - startAge)` — never by number of
- * occurrences, so a once-every-3-years event's third charge reflects 6 years of growth, not
- * three 2-year doublings. `rate` prefers this period's `eventGrowthOverrides` entry for the
- * event's id (Monte Carlo's historical branch) and falls back to the event's own static
- * `growthRate` otherwise (the deterministic projection and the GBM branch).
+ * ERD §5's resolution), even though its basis still grew this period. When reported, the amount
+ * is the grown basis as of this period — never recomputed from `annualAmount` by exponentiating
+ * elapsed active years, which is the bug this fixes: that formula gave a dormant event zero
+ * growth pre-`startAge`, and re-derived from the flat base every period once active instead of
+ * chaining.
  *
  * `retirementEventCostTotal` is the sum of every entry landed in `eventCosts` this period — see
  * `PeriodState.retirementEventCostTotal`'s doc comment for why it is kept as its own field
  * rather than inlined at the `computeWithdrawals` call site.
  */
 export const applyLifeEvents: PipelineStage = (state, input) => {
-  const eventCosts = input.events.flatMap((event) => {
+  const eventCostBasis = new Map(state.eventCostBasis);
+  const eventCosts: { id: string; amount: number }[] = [];
+
+  for (const event of input.events) {
     if (event.type !== 'recurringCost') {
-      return [];
+      continue;
     }
+
+    const rate = input.eventGrowthOverrides?.get(event.id) ?? event.growthRate;
+    const priorBasis = state.eventCostBasis.get(event.id) ?? event.annualAmount;
+    const basis = state.year === 0 ? priorBasis : priorBasis * (1 + rate);
+    eventCostBasis.set(event.id, basis);
 
     const active = state.age >= event.startAge && (event.endAge === undefined || state.age <= event.endAge);
     if (!active) {
-      return [];
+      continue;
     }
 
     const interval = event.recurrenceIntervalYears ?? 1;
     const onInterval = (state.age - event.startAge) % interval === 0;
     if (!onInterval) {
-      return [];
+      continue;
     }
 
-    const rate = input.eventGrowthOverrides?.get(event.id) ?? event.growthRate;
-    const amount = event.annualAmount * (1 + rate) ** (state.age - event.startAge);
-
-    return [{ id: event.id, amount }];
-  });
+    eventCosts.push({ id: event.id, amount: basis });
+  }
 
   return {
     ...state,
     eventCosts,
+    eventCostBasis,
     retirementEventCostTotal: eventCosts.reduce((sum, entry) => sum + entry.amount, 0),
   };
 };

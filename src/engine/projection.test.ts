@@ -1146,11 +1146,14 @@ describe('FIN-71: recurringCost events integrated end to end', () => {
     };
     const rows = runProjection(plan, [medicareLike]);
 
+    // FIN-75: the basis grows every period from plan year 0 (`currentAge`, 60), not from the
+    // event's own `startAge` (65) — five dormant years (60-64) already grew it before it first
+    // reports, so the exponent here is `age - currentAge`, not `age - startAge`.
     for (const age of [65, 66, 67, 68, 69]) {
       const row = rows.find((r) => r.age === age)!;
       expect(row.eventCosts.length, `age ${age}`).toBe(1);
       expect(row.eventCosts[0].amount, `age ${age}`).toBeCloseTo(
-        2_434.8 * 1.055 ** (age - 65),
+        2_434.8 * 1.055 ** (age - plan.currentAge),
         6,
       );
       expect(row.annualWithdrawal, `age ${age}`).toBe(0);
@@ -1161,7 +1164,7 @@ describe('FIN-71: recurringCost events integrated end to end', () => {
     const withoutMedicareAt70 = noMedicare.find((r) => r.age === 70)!;
 
     expect(withMedicareAt70.annualWithdrawal - withoutMedicareAt70.annualWithdrawal).toBeCloseTo(
-      2_434.8 * 1.055 ** 5,
+      2_434.8 * 1.055 ** (70 - plan.currentAge),
       2,
     );
   });
