@@ -203,6 +203,10 @@ describe('App shell', () => {
   })
 
   it('does not show the re-run CTA when inputs change before any stress test has ever completed (FIN-48)', async () => {
+    // Fake timers installed before userEvent.setup() (FIN-68) — precautionary ordering per
+    // upstream userEvent/vitest docs, not a fix for a reproduced race: in the pinned
+    // @testing-library/user-event version, setup() doesn't eagerly capture timer globals, so
+    // reversing this order didn't reproduce a failure locally either.
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
