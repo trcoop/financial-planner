@@ -54,6 +54,10 @@ that talks to the network.
 - Tickets are lean and reference the linked spec document rather than
   duplicating requirements — read the linked doc, not just the ticket
   description, before implementing.
+- Before writing requirements/PRDs, check the team-level "Deferred / Future
+  Considerations" document for constraints or prior decisions relevant to
+  the new work. When a new PRD defers something, add an entry there rather
+  than only noting it inline in the PRD.
 - Branch naming: `FIN-123-short-description` (ticket ID first) so Linear's
   GitHub integration (already connected) auto-links the branch/PR to the
   ticket and auto-transitions its status.
