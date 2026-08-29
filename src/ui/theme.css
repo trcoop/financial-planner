@@ -1,3 +1,50 @@
+/* Self-hosted Manrope (display) + Source Sans 3 (body) — OFL-1.1 licensed, vendored as .woff2
+ * under src/assets/fonts/ (see the LICENSE files there). No CDN/remote @import: the zero-
+ * network-calls constraint in architecture.md is non-negotiable, and `font-display: swap` keeps
+ * text visible in the system-ui fallback while these load rather than showing blank text (FIN-93). */
+@font-face {
+  font-family: 'Manrope';
+  src: url('../assets/fonts/Manrope-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Manrope';
+  src: url('../assets/fonts/Manrope-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Manrope';
+  src: url('../assets/fonts/Manrope-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Manrope';
+  src: url('../assets/fonts/Manrope-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  src: url('../assets/fonts/SourceSans3-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Source Sans 3';
+  src: url('../assets/fonts/SourceSans3-600.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   /* Color — WCAG AA checked against --color-bg (#ffffff): 4.5:1 for text
      tokens, 3:1 for non-text UI tokens (--color-border, --focus-ring).
@@ -21,8 +68,10 @@
   --color-surface-hover: #e5e7eb;
   --color-text: #1a1f26;
   --color-text-muted: #57606a;
-  --color-primary: #1d4ed8;
-  --color-primary-hover: #1e40af;
+  /* Direction B accent (FIN-93) — oklch(0.58 0.16 250) per the ERD's approved mockup; hover is
+     the same hue/chroma at a darker lightness, mirroring the previous #1d4ed8 -> #1e40af step. */
+  --color-primary: oklch(0.58 0.16 250);
+  --color-primary-hover: oklch(0.48 0.16 250);
   --color-success: #15803d;
   --color-warning: #b45309;
   --color-error: #b91c1c;
@@ -39,8 +88,12 @@
   --space-7: 48px;
   --space-8: 64px;
 
-  /* Typography */
-  --font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Typography (FIN-93) — split display/body families, each with a system fallback so a
+     failed/slow font load degrades gracefully rather than showing blank text. No dedicated
+     "display" call site exists yet (that's for later component-restyle tickets in this
+     project); --font-family-display is defined here for them to pick up. */
+  --font-family-display: 'Manrope', system-ui, sans-serif;
+  --font-family-body: 'Source Sans 3', system-ui, sans-serif;
   --font-size-sm: 0.875rem;
   --font-size-base: 1rem;
   --font-size-lg: 1.25rem;
@@ -49,8 +102,8 @@
   /* Radii & shadow — matched to the approved design mockup so cards read
      "soft/elevated" instead of boxy. */
   --radius-sm: 4px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.08);
 }
@@ -86,7 +139,7 @@ body,
 
 body {
   margin: 0;
-  font-family: var(--font-family);
+  font-family: var(--font-family-body);
   font-size: var(--font-size-base);
   color: var(--color-text);
   background: var(--color-page-bg);
