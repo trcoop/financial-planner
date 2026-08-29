@@ -6,7 +6,9 @@
  * (ERD §3, round-1 review) — it wraps {@link runMonteCarloTrials} rather than replacing it.
  */
 
+import { deflateSeries } from './deflate';
 import { InvalidProjectionInputError } from './errors';
+import { clampRuinedBalance } from './ruin';
 import { HISTORICAL_ANNUAL_RETURNS } from './historicalReturns';
 import type { HistoricalYearReturn } from './historicalReturns';
 import { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
@@ -178,7 +180,7 @@ export interface TrialPath {
  * terms — so real p50 is genuinely not deflated nominal p50.
  */
 export const toTodaysDollars = (path: TrialPath): number[] =>
-  path.balances.map((balance, year) => balance / path.inflationIndex[year]);
+  deflateSeries(path.balances, path.inflationIndex, (balance, priceLevel) => balance / priceLevel);
 
 /** The percentile fan in both units, from a single run (FIN-65 change 3). */
 export interface PercentileViews {
@@ -664,10 +666,11 @@ export const runMonteCarloTrial = (
     // hole DEEPER — produced chart tails in the negative millions that were an artifact of the
     // arithmetic rather than anything a retiree could experience. Zero absorbs: once ruined,
     // ruined, and later contributions cannot resurrect a plan that already failed.
-    if (ruinPeriod === null && state.balance <= 0) {
+    const clamped = clampRuinedBalance(state.balance, ruinPeriod !== null);
+    if (ruinPeriod === null && clamped.ruined) {
       ruinPeriod = year;
     }
-    const balance = ruinPeriod === null ? state.balance : 0;
+    const balance = clamped.balance;
 
     // Neither write moves this trial's OWN output — `ruinPeriod` already forces every later
     // reported balance to zero, and nothing here reads `state.rows` back. What they protect is

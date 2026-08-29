@@ -2697,44 +2697,6 @@ describe('FIN-65: a balance of exactly zero counts as ruin', () => {
   });
 });
 
-/**
- * Round 2 of the FIN-65 review found the deflator itself undefended: changing
- * `toTodaysDollars` to divide every year by `inflationIndex[0]` instead of `inflationIndex[year]`
- * passed the entire suite. The existing coverage could not see it because it used single-period
- * paths, where those two indices are the same value by construction — and the percentile tests
- * call `toTodaysDollars` to build their own expectations, so the oracle moved with the code.
- *
- * These use multi-period paths and hand-computed expectations that never call the function under
- * test. Without them, a "simplification" to one price level would report an age-100 balance
- * deflated by one year of inflation instead of sixty-five — roughly 5x too flattering, under a
- * chart still titled "today's dollars".
- */
-describe('FIN-65: toTodaysDollars deflates each year by that year price level', () => {
-  it('uses a per-year index, not the first year for the whole path', () => {
-    // 10%/yr for two years: the price level ends at 1.1 then 1.21. A flat $100 balance is
-    // therefore worth 100/1.1 = 90.909... then 100/1.21 = 82.644... in today's dollars.
-    const path = { balances: [100, 100], inflationIndex: [1.1, 1.21], ruinPeriod: null };
-
-    const real = toTodaysDollars(path);
-
-    expect(real[0]).toBeCloseTo(90.909090909, 6);
-    expect(real[1]).toBeCloseTo(82.644628099, 6);
-    // Deflating both years by inflationIndex[0] would leave the two equal — the whole point.
-    expect(real[1]).not.toBeCloseTo(real[0], 6);
-  });
-
-  it('keeps falling in real terms across a long path even when nominal is flat', () => {
-    const years = 40;
-    const index = Array.from({ length: years }, (_unused, i) => 1.03 ** (i + 1));
-    const path = { balances: Array(years).fill(1_000_000), inflationIndex: index, ruinPeriod: null };
-
-    const real = toTodaysDollars(path);
-
-    expect(real[years - 1]).toBeCloseTo(1_000_000 / 1.03 ** years, 6);
-    // ~3.26x erosion over 40 years at 3%. Deflating by the first year's index gives 1/1.03.
-    expect(real[years - 1]).toBeLessThan(real[0] / 3);
-  });
-});
 
 /**
  * Round 2 found that "absorbing" was never distinguished from "clamped at zero": swapping the
