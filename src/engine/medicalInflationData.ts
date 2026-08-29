@@ -36,9 +36,10 @@
  * range — a coincidence worth noting (the real number happens to confirm the ballpark secondary
  * citation), not a substitute for having actually computed it from BLS's own series. An
  * unweighted mean of the annual medical rate over the same window is 4.63% (vs. 3.62% general),
- * for reference against the deterministic-branch 5.5% default `MEDICARE_PART_B_EVENT` uses
- * (WP-3/FIN-73's constant, not this file's — noted here only because it is the natural
- * cross-check for this dataset's overall level).
+ * for reference against the deterministic-branch growthRate `medicareEvent.ts`'s
+ * `medicarePartBEvent` computes as this plan's inflation rate plus the ~1.01pp spread FIN-77
+ * derives from this same 1936-2025 overlap (not this file's number — noted here only because
+ * it is the natural cross-check for this dataset's overall level).
  *
  * Two traps when checking this table, both directly inherited from `inflationData.ts`'s header
  * (same two traps, same fixes, restated here rather than merely cross-referenced since a reader

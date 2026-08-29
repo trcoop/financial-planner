@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProjection } from '../../engine'
 import { toAssumptions, useProjectionState } from './useProjectionState'
-import { MEDICARE_PART_B_EVENT } from '../medicareEvent'
+import { medicarePartBEvent } from '../medicareEvent'
 import type { AdvancedAssumptionValues, CoreInputValues } from '../components'
 
 vi.mock('../../engine', async () => {
@@ -270,7 +270,7 @@ describe('FIN-65 wiring: the Plan tab reports today\'s dollars at a blended rate
   it('deflates the projection rows rather than passing through nominal ones', () => {
     const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
     const plan = toAssumptions(CORE, ADVANCED)
-    const nominal = runProjection(plan, [MEDICARE_PART_B_EVENT])
+    const nominal = runProjection(plan, [medicarePartBEvent(plan.inflationRate)])
     const year = nominal.length - 1
 
     // `toTodaysDollarRows` divides year N by (1 + inflation)^(N+1) — derived from the model,
@@ -289,7 +289,7 @@ describe('FIN-65 wiring: the Plan tab reports today\'s dollars at a blended rate
   it('deflates the headline retirement tile too, not just the chart rows', () => {
     const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
     const plan = toAssumptions(CORE, ADVANCED)
-    const nominal = runProjection(plan, [MEDICARE_PART_B_EVENT])
+    const nominal = runProjection(plan, [medicarePartBEvent(plan.inflationRate)])
     const retirementYear = CORE.retirementAge - CORE.currentAge
     const priceLevel = (1 + plan.inflationRate) ** (retirementYear + 1)
 
@@ -320,7 +320,7 @@ describe('FIN-65 wiring: the Plan tab reports today\'s dollars at a blended rate
       const advanced = { ...ADVANCED, inflationPercent: percent }
       const { result } = renderHook(() => useProjectionState(CORE, advanced, DEBOUNCE_MS))
       const plan = toAssumptions(CORE, advanced)
-      const nominal = runProjection(plan, [MEDICARE_PART_B_EVENT])
+      const nominal = runProjection(plan, [medicarePartBEvent(plan.inflationRate)])
 
       expect(plan.inflationRate).toBeCloseTo(rate, 10)
       // Pinned at SOLVENT_YEAR, not at the horizon: at 6% this plan runs dry and both sides of
@@ -403,9 +403,11 @@ describe('useProjectionState Medicare wiring (FIN-73)', () => {
     vi.mocked(runProjection).mockClear()
   })
 
-  it('passes [MEDICARE_PART_B_EVENT] to runProjection unconditionally, with no opt-in/opt-out', () => {
+  it('passes [medicarePartBEvent(inflationRate)] to runProjection unconditionally, with no opt-in/opt-out', () => {
+    vi.mocked(runProjection).mockClear()
     renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+    const plan = toAssumptions(CORE, ADVANCED)
 
-    expect(runProjection).toHaveBeenCalledWith(expect.anything(), [MEDICARE_PART_B_EVENT])
+    expect(runProjection).toHaveBeenCalledWith(expect.anything(), [medicarePartBEvent(plan.inflationRate)])
   })
 })

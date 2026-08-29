@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlanAssumptions } from '../../../engine'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
 import type { ChartRow } from '../ChartContainer/types'
-import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
+import { medicarePartBEvent } from '../../medicareEvent'
 import { StressTestSection } from './StressTestSection'
 
 const baseAssumptions: PlanAssumptions = {
@@ -123,12 +123,12 @@ describe('StressTestSection', () => {
     expect(allocationArg).toEqual({ stocksPercent: 70, bondsPercent: 30 })
   })
 
-  it('passes [MEDICARE_PART_B_EVENT] as the events argument unconditionally, with no opt-in/opt-out (FIN-73)', () => {
+  it('passes [medicarePartBEvent(inflationRate)] as the events argument unconditionally, with no opt-in/opt-out (FIN-73)', () => {
     const orchestrator = new FakeOrchestrator()
     render(<StressTestSection assumptions={baseAssumptions} rows={baseRows} orchestrator={orchestrator} />)
 
     const [, , , eventsArg] = orchestrator.runCalls[0]
-    expect(eventsArg).toEqual([MEDICARE_PART_B_EVENT])
+    expect(eventsArg).toEqual([medicarePartBEvent(baseAssumptions.inflationRate)])
   })
 
   it('runs against a caller-supplied allocation instead of the 70/30 default (FIN-56)', () => {
