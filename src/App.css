@@ -138,6 +138,20 @@
 }
 
 @media (max-width: 959px) {
+  /* Without this, `.main` stays a scroll container (it never actually scrolls on mobile — the
+   * page itself does, per `.shell`'s `height: auto` override above — but merely having
+   * `overflow-y: auto` still makes it one per spec). That accidental scroll container was
+   * capturing `position: sticky` from descendants (TabBar.module.css's mobile `.tabBar`), so
+   * they resolved "stuck" against `.main`'s own non-scrolling box instead of the viewport and
+   * never visually stuck (FIN-102). Placed in this media block (not the earlier one above,
+   * which shares this same `max-width: 959px` condition) so it comes after the unconditional
+   * `.main { overflow-y: auto }` rule in source order — CSS resolves equal-specificity rules by
+   * source order regardless of which is inside a matching media query, so a mobile override
+   * placed *before* the unconditional rule loses to it and silently does nothing. */
+  .main {
+    overflow-y: visible;
+  }
+
   .planBody {
     flex-direction: column;
     flex: none;
@@ -247,4 +261,16 @@
   margin: 0;
   font-size: var(--font-size-lg, 1.125rem);
   font-weight: 600;
+}
+
+/* That programmatic focus (above) exists solely so a screen reader announces the new tabpanel
+ * on switch — it's not a real interactive control, so it shouldn't grow the sighted-user visual
+ * focus ring (`--focus-ring`, theme.css) that :focus-visible normally draws. Chromium treats a
+ * script-triggered .focus() on a non-form element as :focus-visible, so without this override
+ * every tab switch drew a full blue outline box around the plain heading text (FIN-102, found
+ * during mobile sticky-bar testing) — it read as an empty, unlabeled text input rather than a
+ * heading. */
+.sectionHeading:focus-visible {
+  outline: none;
+  box-shadow: none;
 }

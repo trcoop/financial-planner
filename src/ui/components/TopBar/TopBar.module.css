@@ -43,6 +43,15 @@
   .topBar {
     height: 56px;
     padding: 0 var(--space-4);
+    /* Mobile's page scrolls as one long column past `.shell`'s viewport-sized frame (App.css)
+     * — without this, TopBar just scrolls away with the rest of the page, so the app name and
+     * the tab bar sticking below it (TabBar.module.css) both went unreachable without scrolling
+     * back to the top (FIN-102). Requires `.main`'s matching mobile `overflow-y: visible`
+     * override (App.css) — otherwise `.main` stays an accidental scroll container that this
+     * sticky positioning (and TabBar's) would resolve against instead of the viewport. */
+    position: sticky;
+    top: 0;
+    z-index: 3;
   }
 
   .logo {

@@ -81,9 +81,14 @@
      * without this, switching tabs meant scrolling all the way back to the top first. Sticking
      * to the viewport's own top (rather than below TopBar) keeps it reachable from anywhere on
      * the page; `background` is needed since sticky doesn't imply an opaque backdrop, so content
-     * scrolling underneath would otherwise show through. */
+     * scrolling underneath would otherwise show through.
+     *
+     * `top: 56px` (FIN-102), not `0` — TopBar (TopBar.module.css) is now sticky too at this
+     * same breakpoint, at that same 56px mobile height, so this stacks directly below it
+     * instead of overlapping it. `z-index: 2` stays below TopBar's `z-index: 3` for the same
+     * reason. */
     position: sticky;
-    top: 0;
+    top: 56px;
     z-index: 2;
     background: var(--color-bg);
   }
