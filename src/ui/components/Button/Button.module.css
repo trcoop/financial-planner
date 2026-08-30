@@ -13,7 +13,7 @@
    ring avoids that, and reads calmer here besides. */
 .button:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--color-primary);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .button:disabled {

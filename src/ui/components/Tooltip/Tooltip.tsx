@@ -128,6 +128,7 @@ export function Tooltip({ label, children }: TooltipProps) {
         aria-label={label}
         aria-expanded={isOpen}
         aria-controls={popoverId}
+        tabIndex={-1}
         onClick={() => open()}
       >
         i
