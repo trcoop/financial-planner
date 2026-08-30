@@ -9,7 +9,7 @@
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  height: 60px;
+  height: 68px;
   padding: 0 var(--space-5);
   background: #12151c;
   box-sizing: border-box;
@@ -24,10 +24,8 @@
 
 .logo {
   flex: 0 0 auto;
-  width: var(--space-5);
-  height: var(--space-5);
-  border-radius: var(--radius-sm);
-  background: var(--color-primary);
+  width: 26px;
+  height: 26px;
 }
 
 .appName {
@@ -43,7 +41,12 @@
    (Drawer's DESKTOP_QUERY is `min-width: 960px`; see FIN-32). */
 @media (max-width: 959px) {
   .topBar {
-    height: 52px;
+    height: 56px;
     padding: 0 var(--space-4);
+  }
+
+  .logo {
+    width: 22px;
+    height: 22px;
   }
 }

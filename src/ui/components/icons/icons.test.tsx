@@ -2,10 +2,12 @@ import { render } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ChartIcon } from './ChartIcon'
 import { GridIcon } from './GridIcon'
+import { CalculatorIcon } from './CalculatorIcon'
 
 describe.each([
   ['ChartIcon', ChartIcon],
   ['GridIcon', GridIcon],
+  ['CalculatorIcon', CalculatorIcon],
 ])('%s', (name, Icon) => {
   it('renders an inline svg', () => {
     const { container } = render(<Icon />)
