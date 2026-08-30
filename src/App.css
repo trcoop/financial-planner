@@ -52,9 +52,19 @@
    * padding (space-2 top/bottom) plus each item's own layout puts its real rendered height in
    * the ~56-64px range; --bottom-nav-height is a fixed estimate rather than a measured value
    * (jsdom/CSS can't read the other element's rendered height here), used both for this pane's
-   * own height and for the matching scroll-content padding below so nothing sits underneath it. */
+   * own height and for the matching scroll-content padding below so nothing sits underneath it.
+   *
+   * `display: block` (not `flex`) is deliberate here, not an oversight: this pane's only child
+   * is BottomTabBar's own <nav> (which is itself `display: flex` internally, styled in
+   * BottomTabBar.module.css — out of scope for App.css to touch, FIN-90's job). Making *this*
+   * wrapper a flex container too previously sized that <nav> child by its row-flex default (a
+   * content-sized flex item on the main axis, no flex-grow), so despite the wrapper itself
+   * correctly spanning `left: 0; right: 0` (full viewport width), the visible bar inside it
+   * hugged its own content width and rendered scrunched to the left. `display: block` makes the
+   * <nav> a normal block box instead, whose default `width: auto` fills 100% of this now
+   * full-width containing block — no `width: 100%` needed on either element. */
   .bottomNavPane {
-    display: flex;
+    display: block;
     position: fixed;
     left: 0;
     right: 0;

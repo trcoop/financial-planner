@@ -84,7 +84,11 @@ describe('App.css .navPane/.bottomNavPane primary-nav breakpoint', () => {
       bottomNavPaneMatch,
       'expected a .bottomNavPane rule nested inside an @media (max-width: 599px) block',
     ).not.toBeNull()
-    expect(bottomNavPaneMatch![1]).toMatch(/display:\s*flex/)
+    // `display: block` (not `flex`) is deliberate here — see App.css's comment: making this
+    // wrapper a flex container sized its <nav> child by flex-row content-width defaults,
+    // which is exactly the full-width-viewport-but-scrunched-bar bug this file also guards
+    // against below.
+    expect(bottomNavPaneMatch![1]).toMatch(/display:\s*block/)
 
     // Guard against the same rules also/instead living under the unrelated 959px breakpoint.
     const wrongBreakpointPattern =
@@ -104,5 +108,20 @@ describe('App.css .navPane/.bottomNavPane primary-nav breakpoint', () => {
     expect(match, 'expected a .bottomNavPane rule nested inside an @media (max-width: 599px) block').not.toBeNull()
     expect(match![1]).toMatch(/position:\s*fixed/)
     expect(match![1]).toMatch(/bottom:\s*0/)
+  })
+
+  it('does not make .bottomNavPane a flex container (would shrink its <nav> child to content width)', () => {
+    // Bug fix (round 3 review): .bottomNavPane's `left: 0; right: 0;` correctly spans the full
+    // viewport width, but `display: flex` on this wrapper made BottomTabBar's own <nav> child a
+    // row-flex item sized to its content (no flex-grow) instead of a normal block box filling
+    // the wrapper — the bar rendered scrunched to the left despite the wrapper itself being
+    // full-width. `display: block` lets the <nav> (itself flex internally) take its default
+    // `width: auto`, which fills 100% of this full-width containing block.
+    const bottomNavPanePattern =
+      /@media \(max-width: 599px\)\s*\{[\s\S]*?\.bottomNavPane\s*\{([^}]*)\}/
+    const match = appCss.match(bottomNavPanePattern)
+    expect(match, 'expected a .bottomNavPane rule nested inside an @media (max-width: 599px) block').not.toBeNull()
+    expect(match![1]).not.toMatch(/display:\s*flex/)
+    expect(match![1]).toMatch(/display:\s*block/)
   })
 })
