@@ -60,9 +60,9 @@ describe('LeftNav', () => {
     expect(onSelect).toHaveBeenCalledWith('calculators')
   })
 
-  it('only the active item is in the tab order (roving tabindex)', () => {
+  it('removes all items from the page tab order', () => {
     render(<LeftNav items={items} activeId="plan" onSelect={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Plan' })).toHaveAttribute('tabindex', '0')
+    expect(screen.getByRole('button', { name: 'Plan' })).toHaveAttribute('tabindex', '-1')
     expect(screen.getByRole('button', { name: 'Calculators' })).toHaveAttribute('tabindex', '-1')
   })
 

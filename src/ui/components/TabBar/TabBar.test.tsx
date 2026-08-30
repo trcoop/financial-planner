@@ -34,9 +34,9 @@ describe('TabBar', () => {
     expect(onTabChange).toHaveBeenCalledWith('stress-test')
   })
 
-  it('only the active tab is in the tab order (roving tabindex)', () => {
+  it('removes all tabs from the page tab order', () => {
     render(<TabBar tabs={tabs} activeTab="projection" onTabChange={() => {}} />)
-    expect(screen.getByRole('tab', { name: 'Projection' })).toHaveAttribute('tabindex', '0')
+    expect(screen.getByRole('tab', { name: 'Projection' })).toHaveAttribute('tabindex', '-1')
     expect(screen.getByRole('tab', { name: 'Stress Test' })).toHaveAttribute('tabindex', '-1')
   })
 
