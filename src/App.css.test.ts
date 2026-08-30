@@ -54,10 +54,74 @@ describe('App.css .statTiles responsive grid', () => {
 
   it('does not introduce a new one-off breakpoint value for the mobile stat tile grid', () => {
     // Guard against reintroducing e.g. `max-width: 600px` or similar ad hoc values instead of
-    // reusing the app's unified 959px/960px breakpoint (FIN-32).
+    // reusing the app's unified 959px/960px breakpoint (FIN-32). `599` is intentionally
+    // allowed here — that's FIN-100's separate, spec-pinned breakpoint (ERD §6) for switching
+    // between LeftNav and BottomTabBar, an unrelated concern from the stat tile grid this test
+    // guards, not a stray one-off value for this feature.
     const otherMobileWidths = [...appCss.matchAll(/max-width:\s*(\d+)px/g)]
       .map((match) => match[1])
-      .filter((width) => width !== '959' && width !== '960')
+      .filter((width) => width !== '959' && width !== '960' && width !== '599')
     expect(otherMobileWidths).toEqual([])
+  })
+})
+
+describe('App.css .navPane/.bottomNavPane primary-nav breakpoint', () => {
+  it('hides .navPane and shows .bottomNavPane specifically inside @media (max-width: 599px), not the 959px breakpoint', () => {
+    // Structural match (mirrors the .statTiles-under-959px check above) rather than a substring
+    // search — this guards against `.navPane`/`.bottomNavPane`'s visibility rules being moved
+    // into the app's unrelated 959px/960px breakpoint (FIN-32), which would still leave the
+    // literal `599px` string elsewhere in the file and pass a substring-only check.
+    const navPanePattern =
+      /@media \(max-width: 599px\)\s*\{\s*(?:\/\*[\s\S]*?\*\/\s*)?\.navPane\s*\{([^}]*)\}/
+    const navPaneMatch = appCss.match(navPanePattern)
+    expect(navPaneMatch, 'expected a .navPane rule nested inside an @media (max-width: 599px) block').not.toBeNull()
+    expect(navPaneMatch![1]).toMatch(/display:\s*none/)
+
+    const bottomNavPanePattern =
+      /@media \(max-width: 599px\)\s*\{[\s\S]*?\.bottomNavPane\s*\{([^}]*)\}/
+    const bottomNavPaneMatch = appCss.match(bottomNavPanePattern)
+    expect(
+      bottomNavPaneMatch,
+      'expected a .bottomNavPane rule nested inside an @media (max-width: 599px) block',
+    ).not.toBeNull()
+    // `display: block` (not `flex`) is deliberate here — see App.css's comment: making this
+    // wrapper a flex container sized its <nav> child by flex-row content-width defaults,
+    // which is exactly the full-width-viewport-but-scrunched-bar bug this file also guards
+    // against below.
+    expect(bottomNavPaneMatch![1]).toMatch(/display:\s*block/)
+
+    // Guard against the same rules also/instead living under the unrelated 959px breakpoint.
+    const wrongBreakpointPattern =
+      /@media \(max-width: 959px\)\s*\{[\s\S]*?\.(?:navPane|bottomNavPane)\s*\{/
+    expect(appCss).not.toMatch(wrongBreakpointPattern)
+  })
+
+  it('pins .bottomNavPane to the viewport bottom (not document flow) inside the 599px block', () => {
+    // Bug fix (round 2 review): BottomTabBar used to flow at the end of .shell's content, so a
+    // short section (e.g. Calculators) let it ride up under the content instead of staying
+    // pinned to the bottom of the screen. jsdom can't evaluate the @media query itself, but this
+    // asserts the fix's actual declarations are present, structurally nested where they need to
+    // be to take effect on mobile.
+    const bottomNavPanePattern =
+      /@media \(max-width: 599px\)\s*\{[\s\S]*?\.bottomNavPane\s*\{([^}]*)\}/
+    const match = appCss.match(bottomNavPanePattern)
+    expect(match, 'expected a .bottomNavPane rule nested inside an @media (max-width: 599px) block').not.toBeNull()
+    expect(match![1]).toMatch(/position:\s*fixed/)
+    expect(match![1]).toMatch(/bottom:\s*0/)
+  })
+
+  it('does not make .bottomNavPane a flex container (would shrink its <nav> child to content width)', () => {
+    // Bug fix (round 3 review): .bottomNavPane's `left: 0; right: 0;` correctly spans the full
+    // viewport width, but `display: flex` on this wrapper made BottomTabBar's own <nav> child a
+    // row-flex item sized to its content (no flex-grow) instead of a normal block box filling
+    // the wrapper — the bar rendered scrunched to the left despite the wrapper itself being
+    // full-width. `display: block` lets the <nav> (itself flex internally) take its default
+    // `width: auto`, which fills 100% of this full-width containing block.
+    const bottomNavPanePattern =
+      /@media \(max-width: 599px\)\s*\{[\s\S]*?\.bottomNavPane\s*\{([^}]*)\}/
+    const match = appCss.match(bottomNavPanePattern)
+    expect(match, 'expected a .bottomNavPane rule nested inside an @media (max-width: 599px) block').not.toBeNull()
+    expect(match![1]).not.toMatch(/display:\s*flex/)
+    expect(match![1]).toMatch(/display:\s*block/)
   })
 })

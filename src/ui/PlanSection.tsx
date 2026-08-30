@@ -149,8 +149,13 @@ export function PlanSection(_props: PlanSectionProps) {
         * whichever one is open. Not `aria-hidden`: a screen-reader user needs the unit too,
         * and it is the only place it is now stated. */}
       <p className="unitsNote">All amounts in today's dollars</p>
-      <div className="body">
-        <div className="main">
+      {/* FIN-100: renamed from the historical "body"/"main" class names to "planBody"/
+        * "planMain" — App.tsx's new shell now uses those global names for its own
+        * LeftNav-row/content-pane layout (see App.css), so PlanSection's own (structurally
+        * unrelated) tabpanel-layout wrapper needed distinct names to avoid both rules
+        * applying to nested elements of the same class. */}
+      <div className="planBody">
+        <div className="planMain">
           {error ? (
             <output>{error}</output>
           ) : (
