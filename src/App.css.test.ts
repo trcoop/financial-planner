@@ -64,3 +64,31 @@ describe('App.css .statTiles responsive grid', () => {
     expect(otherMobileWidths).toEqual([])
   })
 })
+
+describe('App.css .navPane/.bottomNavPane primary-nav breakpoint', () => {
+  it('hides .navPane and shows .bottomNavPane specifically inside @media (max-width: 599px), not the 959px breakpoint', () => {
+    // Structural match (mirrors the .statTiles-under-959px check above) rather than a substring
+    // search — this guards against `.navPane`/`.bottomNavPane`'s visibility rules being moved
+    // into the app's unrelated 959px/960px breakpoint (FIN-32), which would still leave the
+    // literal `599px` string elsewhere in the file and pass a substring-only check.
+    const navPanePattern =
+      /@media \(max-width: 599px\)\s*\{\s*(?:\/\*[\s\S]*?\*\/\s*)?\.navPane\s*\{([^}]*)\}/
+    const navPaneMatch = appCss.match(navPanePattern)
+    expect(navPaneMatch, 'expected a .navPane rule nested inside an @media (max-width: 599px) block').not.toBeNull()
+    expect(navPaneMatch![1]).toMatch(/display:\s*none/)
+
+    const bottomNavPanePattern =
+      /@media \(max-width: 599px\)\s*\{[\s\S]*?\.bottomNavPane\s*\{([^}]*)\}\s*\}/
+    const bottomNavPaneMatch = appCss.match(bottomNavPanePattern)
+    expect(
+      bottomNavPaneMatch,
+      'expected a .bottomNavPane rule nested inside an @media (max-width: 599px) block',
+    ).not.toBeNull()
+    expect(bottomNavPaneMatch![1]).toMatch(/display:\s*flex/)
+
+    // Guard against the same rules also/instead living under the unrelated 959px breakpoint.
+    const wrongBreakpointPattern =
+      /@media \(max-width: 959px\)\s*\{[\s\S]*?\.(?:navPane|bottomNavPane)\s*\{/
+    expect(appCss).not.toMatch(wrongBreakpointPattern)
+  })
+})

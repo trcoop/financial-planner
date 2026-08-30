@@ -105,6 +105,34 @@ describe('App shell', () => {
     expect(screen.queryByText(/no calculators yet/i)).not.toBeInTheDocument()
   })
 
+  it('moves focus to the new view\'s heading on every section switch (LeftNav)', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const [leftNavCalculators] = screen.getAllByRole('button', { name: 'Calculators' })
+    await user.click(leftNavCalculators)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Calculators' }))
+
+    const [leftNavPlan] = screen.getAllByRole('button', { name: 'Plan' })
+    await user.click(leftNavPlan)
+    // PlanSection's mount-triggers-focus effect (FIN-98) focuses the active tab's own heading
+    // (Projection, the default tab) rather than a heading literally named "Plan".
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Projection' }))
+  })
+
+  it('moves focus to the new view\'s heading on every section switch (BottomTabBar)', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const [, bottomCalculators] = screen.getAllByRole('button', { name: 'Calculators' })
+    await user.click(bottomCalculators)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Calculators' }))
+
+    const [, bottomPlan] = screen.getAllByRole('button', { name: 'Plan' })
+    await user.click(bottomPlan)
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Projection' }))
+  })
+
   it('has no leftover Drawer affordance anywhere in the shell', () => {
     render(<App />)
     expect(screen.queryByRole('button', { name: /collapse/i })).not.toBeInTheDocument()
