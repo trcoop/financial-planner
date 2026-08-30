@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import {
   AdvancedAssumptionsForm,
   DEFAULT_ADVANCED_VALUES,
@@ -310,5 +312,33 @@ describe('real return hints', () => {
     render(<AdvancedAssumptionsForm values={{ ...DEFAULT_VALUES, bondReturnPercent: 2, inflationPercent: 5 }} onChange={() => {}} />)
 
     expect(screen.getByText('-2.9% after inflation')).toBeInTheDocument()
+  })
+
+  // jsdom (this project's Vitest environment) doesn't load real stylesheets or evaluate
+  // `@media` — `vite.config.ts` test config has no `css: true` — so this reads the desktop
+  // `@media (min-width: 960px)` block out of the CSS module source directly, mirroring
+  // TabBar.test.tsx's convention. Fails if the two-column pairing (FIN-101) regresses back to
+  // one full-width field per row, or if rows go back to stretching to match an uneven sibling
+  // (fields alternate plain vs. tooltip+hint rows, so mismatched height is expected here).
+  describe('desktop field pairing (>= 960px), via AdvancedAssumptionsForm.module.css source', () => {
+    const cssPath = fileURLToPath(import.meta.url).replace(
+      /AdvancedAssumptionsForm\.test\.tsx$/,
+      'AdvancedAssumptionsForm.module.css',
+    )
+    const css = readFileSync(cssPath, 'utf-8')
+    const desktopBlockMatch = css.match(/@media \(min-width: 960px\) \{([\s\S]*)\}\s*$/)
+    const desktopBlock = desktopBlockMatch?.[1] ?? ''
+
+    it('has a desktop @media block to inspect (sanity check for the regexes below)', () => {
+      expect(desktopBlock.length).toBeGreaterThan(0)
+    })
+
+    it('pairs fields two-to-a-row on desktop', () => {
+      expect(desktopBlock).toMatch(/\.form\s*\{[^}]*grid-template-columns:\s*1fr 1fr;/)
+    })
+
+    it("doesn't stretch shorter rows to match a taller sibling's tooltip/hint content", () => {
+      expect(desktopBlock).toMatch(/\.form\s*\{[^}]*align-items:\s*start;/)
+    })
   })
 })

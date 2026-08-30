@@ -13,6 +13,11 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-4);
+    /* Fields pair rows with and without a tooltip/hint (uneven content height) — `stretch`
+       (grid's default) would pad the shorter `.fieldRow` in each pair to match its taller
+       sibling, showing up as dead space under it since `.fieldRow` itself bottom-aligns its
+       own children. `start` keeps every row exactly as tall as its own content. */
+    align-items: start;
   }
 }
 
@@ -34,7 +39,9 @@
 }
 
 /* FIN-65: a quiet secondary note under the return inputs, not a second label competing with
-   the field's own. */
+   the field's own. `grid-column: 1 / -1` is inert — this sits in `.fieldRow`, which is
+   `display: flex`, not the `.form` grid one level up (FIN-101) — left as a no-op rather than
+   removed in case `.fieldRow` becomes a grid later, but don't read it as active today. */
 .realReturnHint {
   grid-column: 1 / -1;
   font-size: 0.8125rem;
