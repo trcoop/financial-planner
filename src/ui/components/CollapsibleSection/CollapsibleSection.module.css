@@ -15,9 +15,14 @@
   display: none;
 }
 
+/* FIN-101: same fix as Button.module.css — an outward-spreading box-shadow ring is vulnerable to
+   being shaved by an ancestor's clip rect (the same issue the old NumberField border had); an
+   inset ring avoids that. `border-radius` added so the ring has a visible corner to sit inside
+   instead of a hard rectangle against this element's plain text. */
 .summary:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 
 .icon {

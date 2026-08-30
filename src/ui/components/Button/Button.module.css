@@ -7,9 +7,13 @@
   cursor: pointer;
 }
 
+/* FIN-101: the app-wide `--focus-ring` (theme.css) spreads outward from the border box, which is
+   vulnerable to being shaved by an ancestor's clip rect the same way the old NumberField border
+   was (see NumberField.module.css) — worse for a button that can sit near a clipped edge. An inset
+   ring avoids that, and reads calmer here besides. */
 .button:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 
 .button:disabled {
