@@ -30,10 +30,13 @@
   background: var(--color-primary-hover);
 }
 
+/* FIN-101: a stroked `border-color` here rendered visibly thicker than NumberField's border
+   (see NumberField.module.css) — same stroked-border-vs-inset-box-shadow mismatch as that fix.
+   `box-shadow` keeps it consistent with every other bordered control on this screen. */
 .secondary {
   background: var(--color-surface);
   color: var(--color-text);
-  border-color: var(--color-border);
+  box-shadow: inset 0 0 0 1px var(--color-border);
 }
 
 .secondary:hover:not(:disabled) {
