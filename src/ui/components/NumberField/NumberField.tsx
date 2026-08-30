@@ -94,8 +94,13 @@ export function NumberField({
     // is what makes it self-heal instead of becoming editable/deletable.
     let raw = event.target.value
     let cursor = event.target.selectionStart ?? raw.length
-    if (prefix && raw.startsWith(prefix)) raw = raw.slice(prefix.length)
-    cursor -= prefixLength
+    // Only strip (and offset the cursor by) as much of the prefix as is actually still
+    // there — an edit that consumes part of the prefix (e.g. a paste replacing a selection
+    // that spans the prefix boundary) leaves `raw` not starting with the full prefix, so
+    // `cursor` must not be decremented by more than what was actually stripped.
+    const strippedPrefixLength = prefix && raw.startsWith(prefix) ? prefix.length : 0
+    raw = raw.slice(strippedPrefixLength)
+    cursor -= strippedPrefixLength
     if (suffix && raw.endsWith(suffix)) raw = raw.slice(0, raw.length - suffix.length)
     raw = sanitize(raw)
     cursor = Math.max(0, Math.min(cursor, raw.length))
