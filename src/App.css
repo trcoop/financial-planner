@@ -104,6 +104,16 @@
     flex-direction: column;
     flex: none;
   }
+
+  /* Without this, `.main` stays a scroll container (it never actually scrolls on mobile —
+   * the page itself does, per `.shell`'s `height: auto` override above — but merely having
+   * `overflow-y: auto` still makes it one per spec). That accidental scroll container was
+   * capturing `position: sticky` from descendants (TabBar.module.css's mobile `.tabBar`), so
+   * they resolved "stuck" against `.main`'s own non-scrolling box instead of the viewport and
+   * never visually stuck (FIN-102). Matches `.planMain`'s existing mobile override below. */
+  .main {
+    overflow-y: visible;
+  }
 }
 
 .main {
