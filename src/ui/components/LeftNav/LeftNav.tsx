@@ -24,10 +24,11 @@ export interface LeftNavProps {
  * Primitive left-hand navigation for switching between top-level app sections
  * (Plan, Calculators, ...). Semantically a <nav> with plain buttons — NOT a
  * tablist — so `aria-current="page"` marks the active item rather than
- * `aria-selected`. Keyboard support is a roving-tabindex implementation
- * mirroring TabBar's (src/ui/components/TabBar/TabBar.tsx), but with
- * ArrowUp/ArrowDown (vertical list) instead of ArrowLeft/ArrowRight, plus
- * Home/End to jump to the first/last item.
+ * `aria-selected`. Items are removed from the page's Tab order entirely
+ * (all `tabIndex={-1}`, FIN-101) since this and TabBar
+ * (src/ui/components/TabBar/TabBar.tsx) are the app's primary navigation
+ * rather than in-page content; ArrowUp/ArrowDown (vertical list) and
+ * Home/End still move focus once it's inside the nav (e.g. programmatically).
  *
  * Renders each item's `icon` next to its label when provided (Direction B,
  * FIN-90 round 2), mirroring BottomTabBar's icon+label layout
@@ -87,7 +88,7 @@ export function LeftNav({ items, activeId, onSelect }: LeftNavProps) {
             }}
             type="button"
             aria-current={isActive ? 'page' : undefined}
-            tabIndex={isActive ? 0 : -1}
+            tabIndex={-1}
             className={isActive ? `${styles.item} ${styles.itemActive}` : styles.item}
             onClick={() => onSelect(item.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}

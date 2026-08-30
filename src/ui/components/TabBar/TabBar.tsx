@@ -65,7 +65,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
             id={`tab-${tab.id}`}
             aria-selected={isActive}
             aria-controls={`tabpanel-${tab.id}`}
-            tabIndex={isActive ? 0 : -1}
+            tabIndex={-1}
             className={isActive ? `${styles.tab} ${styles.tabActive}` : styles.tab}
             onClick={() => onTabChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}

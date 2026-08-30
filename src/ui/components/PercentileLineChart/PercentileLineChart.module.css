@@ -120,7 +120,7 @@
 
 .hoverTarget:focus-visible {
   outline: none;
-  box-shadow: inset var(--focus-ring);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 /* Small info box showing the hovered point's age and p10/p50/p90 values. Positioned via inline
