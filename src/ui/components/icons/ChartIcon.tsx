@@ -3,9 +3,12 @@ interface IconProps {
 }
 
 /**
- * Line-chart glyph used for the Plan nav item (BottomTabBar).
- * Inline SVG only — no icon font, npm icon package, or CDN reference,
- * per the app's zero-network-calls constraint.
+ * Line-chart-with-axes glyph used for the Plan nav item (LeftNav desktop and
+ * BottomTabBar mobile). Path data matches the Direction B mockup exactly (an
+ * axis L plus a jagged trend line) — updated FIN-90 round 2 after visual
+ * review found the previous arrow-only glyph didn't match the mockup's
+ * iconography. Inline SVG only — no icon font, npm icon package, or CDN
+ * reference, per the app's zero-network-calls constraint.
  */
 export function ChartIcon({ className }: IconProps) {
   return (
@@ -22,8 +25,8 @@ export function ChartIcon({ className }: IconProps) {
       aria-hidden="true"
       focusable="false"
     >
-      <polyline points="3 17 9 11 13 15 21 6" />
-      <polyline points="15 6 21 6 21 12" />
+      <path d="M3 3v18h18" />
+      <path d="M18.7 8 12 14.7 8.7 11.4 3 17" />
     </svg>
   )
 }

@@ -29,6 +29,11 @@ export interface LeftNavProps {
  * ArrowUp/ArrowDown (vertical list) instead of ArrowLeft/ArrowRight, plus
  * Home/End to jump to the first/last item.
  *
+ * Renders each item's `icon` next to its label when provided (Direction B,
+ * FIN-90 round 2), mirroring BottomTabBar's icon+label layout
+ * (src/ui/components/BottomTabBar/BottomTabBar.tsx). `icon` stays optional
+ * on the shared `NavItem` type — an item without one just renders label-only.
+ *
  * No app-state knowledge lives here: which items exist, which is active, and
  * what happens on selection are all owned by the caller (FIN-100/FIN-89).
  */
@@ -73,6 +78,7 @@ export function LeftNav({ items, activeId, onSelect }: LeftNavProps) {
     <nav className={styles.leftNav} aria-label="Sections">
       {items.map((item, index) => {
         const isActive = item.id === activeId
+        const Icon = item.icon
         return (
           <button
             key={item.id}
@@ -86,7 +92,8 @@ export function LeftNav({ items, activeId, onSelect }: LeftNavProps) {
             onClick={() => onSelect(item.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
-            {item.label}
+            {Icon ? <Icon className={styles.icon} /> : null}
+            <span>{item.label}</span>
           </button>
         )
       })}

@@ -6,25 +6,37 @@
 .leftNav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
-  padding: var(--space-3) var(--space-2);
+  gap: var(--space-2);
+  width: 232px;
+  padding: var(--space-5) var(--space-3);
   background: #12151c;
   height: 100%;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .item {
   appearance: none;
   border: none;
   background: transparent;
-  font-family: var(--font-family-body);
-  font-size: var(--font-size-base);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
   color: rgba(255, 255, 255, 0.72);
   text-align: left;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   cursor: pointer;
   white-space: nowrap;
+}
+
+.icon {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
 }
 
 @media (hover: hover) {
@@ -37,6 +49,5 @@
 .itemActive {
   color: #ffffff;
   background: var(--color-primary);
-  font-family: var(--font-family-display);
-  font-weight: 600;
+  font-weight: 700;
 }

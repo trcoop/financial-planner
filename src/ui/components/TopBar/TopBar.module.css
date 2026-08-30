@@ -1,12 +1,17 @@
+/* Dark unified TopBar (ERD "App Navigation & Shell Redesign", FIN-93 Direction B) — matches
+ * LeftNav's dark surface (src/ui/components/LeftNav/LeftNav.module.css) so the TopBar and nav
+ * read as one continuous dark shell region above the light content area. FIN-93 only landed
+ * light-mode surface/text tokens (see src/ui/theme.css) — no dark-surface token exists yet for
+ * this shell region, so #12151c (same hardcoded value LeftNav already uses, for the same
+ * documented reason) is the one non-token value below. */
 .topBar {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   width: 100%;
-  height: 60px;
+  height: 68px;
   padding: 0 var(--space-5);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: #12151c;
   box-sizing: border-box;
   /* `.shell`'s own auto height resolves against its flex children's *shrunk* sizes, not their
    * natural content sizes (FIN-61) — without this, whenever `.shell`'s content is taller than
@@ -19,16 +24,16 @@
 
 .logo {
   flex: 0 0 auto;
-  width: var(--space-5);
-  height: var(--space-5);
-  border-radius: var(--radius-sm);
-  background: var(--color-primary);
+  width: 26px;
+  height: 26px;
 }
 
 .appName {
+  font-family: var(--font-family-display);
   font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: var(--color-text);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #ffffff;
   white-space: nowrap;
 }
 
@@ -36,7 +41,12 @@
    (Drawer's DESKTOP_QUERY is `min-width: 960px`; see FIN-32). */
 @media (max-width: 959px) {
   .topBar {
-    height: 52px;
+    height: 56px;
     padding: 0 var(--space-4);
+  }
+
+  .logo {
+    width: 22px;
+    height: 22px;
   }
 }

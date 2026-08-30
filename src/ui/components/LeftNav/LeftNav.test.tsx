@@ -3,10 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LeftNav } from './LeftNav'
 import type { NavItem } from './LeftNav'
+import { ChartIcon } from '../icons/ChartIcon'
+import { CalculatorIcon } from '../icons/CalculatorIcon'
 
 const items: NavItem[] = [
   { id: 'plan', label: 'Plan' },
   { id: 'calculators', label: 'Calculators' },
+]
+
+const itemsWithIcons: NavItem[] = [
+  { id: 'plan', label: 'Plan', icon: ChartIcon },
+  { id: 'calculators', label: 'Calculators', icon: CalculatorIcon },
 ]
 
 describe('LeftNav', () => {
@@ -23,6 +30,20 @@ describe('LeftNav', () => {
     render(<LeftNav items={items} activeId="calculators" onSelect={() => {}} />)
     expect(screen.getByRole('button', { name: 'Plan' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('button', { name: 'Calculators' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('renders an icon per entry when the item provides one (Direction B)', () => {
+    render(<LeftNav items={itemsWithIcons} activeId="plan" onSelect={() => {}} />)
+    const plan = screen.getByRole('button', { name: 'Plan' })
+    const calculators = screen.getByRole('button', { name: 'Calculators' })
+    expect(plan.querySelector('svg')).toBeInTheDocument()
+    expect(calculators.querySelector('svg')).toBeInTheDocument()
+  })
+
+  it('renders without an icon when the item omits one', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} />)
+    const plan = screen.getByRole('button', { name: 'Plan' })
+    expect(plan.querySelector('svg')).not.toBeInTheDocument()
   })
 
   it('does not use role="tab" (this is a nav, not a tablist)', () => {

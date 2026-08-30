@@ -3,7 +3,7 @@ import { TopBar } from './ui/components/TopBar/TopBar'
 import { LeftNav, type NavItem } from './ui/components/LeftNav/LeftNav'
 import { BottomTabBar } from './ui/components/BottomTabBar/BottomTabBar'
 import { ChartIcon } from './ui/components/icons/ChartIcon'
-import { GridIcon } from './ui/components/icons/GridIcon'
+import { CalculatorIcon } from './ui/components/icons/CalculatorIcon'
 import { PlanSection } from './ui/PlanSection'
 import { CalculatorsSection } from './ui/CalculatorsSection'
 import './App.css'
@@ -15,12 +15,13 @@ import './App.css'
 type SectionId = 'plan' | 'calculators'
 
 /** Shared item list for both LeftNav (desktop) and BottomTabBar (mobile) — see App.css's
- * `.navPane`/`.bottomNavPane` for how visibility switches between them. `icon` is only
- * consumed by BottomTabBar; LeftNav ignores it at P0 (text-only), per the ERD's pinned
- * NavItem contract. */
+ * `.navPane`/`.bottomNavPane` for how visibility switches between them. `icon` is consumed by
+ * both LeftNav and BottomTabBar (FIN-90 round 2: Direction B's mockup shows an icon beside the
+ * label on both desktop and mobile — supersedes the earlier "LeftNav ignores it, text-only" P0
+ * note). */
 const NAV_ITEMS: NavItem[] = [
   { id: 'plan', label: 'Plan', icon: ChartIcon },
-  { id: 'calculators', label: 'Calculators', icon: GridIcon },
+  { id: 'calculators', label: 'Calculators', icon: CalculatorIcon },
 ]
 
 function isSectionId(id: NavItem['id']): id is SectionId {

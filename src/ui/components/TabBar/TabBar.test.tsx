@@ -121,22 +121,34 @@ describe('TabBar', () => {
       expect(mobileBlock.length).toBeGreaterThan(0)
     })
 
-    it('reduces the pill gap so two short labels fit without horizontal scrolling', () => {
+    // Direction B (FIN-90 round 4): once the pill background was dropped (round 3), the tight
+    // --space-1 gap that used to prevent overflow made adjacent tabs read as one continuous
+    // string of text with no visual separation between them. The gap needs to be wide enough
+    // for each tab to read as distinct, while still relying on `.tabBar`'s own
+    // `overflow-x: auto` (FIN-89) — not an ever-tighter gap — if tabs ever don't fit.
+    it('gives tabs enough gap to read as visually distinct once the pill background is gone', () => {
       const tabBarRule = ruleFor('tabBar')
       const gapMatch = tabBarRule.match(/gap:\s*var\(--space-(\d)\)/)
       expect(gapMatch).not.toBeNull()
-      // --space-2 (8px) is the pre-fix value that caused overflow; the fix
-      // must tighten this further.
-      expect(Number(gapMatch?.[1])).toBeLessThan(2)
+      // --space-1 (4px) was the round-3 value that read as scrunched together; require more.
+      expect(Number(gapMatch?.[1])).toBeGreaterThan(1)
     })
 
-    it('reduces per-pill horizontal padding so two short labels fit without horizontal scrolling', () => {
-      const tabRule = ruleFor('tab')
-      const paddingMatch = tabRule.match(/padding:\s*var\(--space-(\d)\) var\(--space-(\d)\)/)
-      expect(paddingMatch).not.toBeNull()
-      // --space-4 (16px) horizontal was the pre-fix value; the fix must
-      // tighten the horizontal component.
-      expect(Number(paddingMatch?.[2])).toBeLessThan(4)
+    it('keeps horizontal scroll available as the overflow fallback (FIN-89) rather than relying on a tight gap', () => {
+      expect(css).toMatch(/overflow-x:\s*auto;/)
+    })
+
+    // Direction B (FIN-90 round 3) dropped the mobile-only pill treatment entirely — mobile
+    // now reuses the exact same underline `.tab` rule as desktop (no mobile-block override),
+    // with zero horizontal padding on the tab itself (`padding: var(--space-3) 0`, in the base
+    // rule read below rather than the mobile block) so labels get the most room possible.
+    it('gives tabs no horizontal padding of their own, so two short labels fit without horizontal scrolling', () => {
+      // The base `.tab` rule (not `.tabBar`/`.tabActive`) is the first `.tab { ... }` block in
+      // the file, and it precedes every @media block — this file has no mobile-specific `.tab`
+      // override any more (mobile reuses the base rule as-is).
+      const baseTabMatch = css.match(/\n\.tab \{([\s\S]*?)\n\}/)
+      const baseTabRule = baseTabMatch?.[1] ?? ''
+      expect(baseTabRule).toMatch(/padding:\s*var\(--space-\d\)\s+0\s*;/)
     })
 
     it('gives the tab bar the same outer horizontal padding as page content (--space-4, matching TopBar)', () => {

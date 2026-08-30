@@ -1,10 +1,29 @@
+/* Direction B (FIN-90 round 3): container padding matches `.planBody`/`.unitsNote`'s own
+ * left inset (var(--space-6) desktop, var(--space-4) mobile — see App.css) so the tab row's
+ * left edge lines up with the content below it, per the mockup. Individual `.tab` buttons carry
+ * no horizontal padding of their own (mirrors the mockup's near-zero per-tab side padding) so
+ * that container inset is the only thing determining the row's left edge.
+ *
+ * (FIN-90 round 4): the mockup separates this row from the page content below with a plain
+ * background/color difference, not a rule line — no `border-bottom` here. Combined with the
+ * active tab's own underline, a container border read as two stacked lines and looked heavy,
+ * so it's intentionally omitted. */
 .tabBar {
   display: flex;
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-6);
+  padding: 0 var(--space-6);
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
+  /* FIN-90 round 4: Chromium makes any element with real overflow-x content automatically
+   * keyboard-focusable (for arrow-key scrolling), even with no explicit tabindex. Widening the
+   * mobile gap (above) pushed this row past its container width for the first time, which
+   * surfaced that default behavior as a full-width blue focus-ring outline around the whole
+   * row on focus (and it visually disappears again on click/blur). This container isn't a
+   * keyboard target on its own — real keyboard focus and its indicator belong on the individual
+   * `.tab` buttons via their own roving-tabindex handling in TabBar.tsx — so suppress the
+   * browser's auto-focus outline here specifically. */
+  outline: none;
   /* See TopBar.module.css's `.topBar` for why this is needed (FIN-61) — without it, this row
    * gets crushed down to a sliver on mobile whenever `.shell`'s content exceeds the viewport. */
   flex-shrink: 0;
@@ -14,10 +33,11 @@
   appearance: none;
   border: none;
   background: transparent;
-  font-family: var(--font-family-body);
+  font-family: var(--font-family-display);
   font-size: var(--font-size-base);
+  font-weight: 600;
   color: var(--color-text-muted);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) 0;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -32,23 +52,31 @@
 @media (hover: hover) {
   .tab:hover {
     color: var(--color-text);
-    background: var(--color-surface-hover);
   }
 }
 
 .tabActive {
   color: var(--color-primary);
   border-bottom-color: var(--color-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 /* Matches the single responsive breakpoint used across the app shell
-   (Drawer's DESKTOP_QUERY is `min-width: 960px`; see FIN-32). */
+   (Drawer's DESKTOP_QUERY is `min-width: 960px`; see FIN-32). Direction B (FIN-90 round 3):
+   mobile now reuses the exact same underline tab treatment as desktop (`.tab`/`.tabActive`
+   above are untouched here) rather than the pill/button styling this used to override with —
+   the mockup shows the same look at both sizes, distinguishing the active tab only by text
+   color and the underline. Only the container's own layout (horizontal inset matching
+   `.planBody`'s mobile padding, gap, and the sticky-on-scroll behavior) differs by breakpoint. */
 @media (max-width: 959px) {
   .tabBar {
-    border-bottom: none;
     padding: var(--space-2) var(--space-4);
-    gap: var(--space-1);
+    /* FIN-90 round 4: --space-1 (4px) read as one continuous string of text once the pill
+     * background (which used to visually separate tabs on its own) was removed — bump to
+     * --space-4 (16px, matching this row's own horizontal inset) so each tab reads as a
+     * distinct control by whitespace alone. Horizontal scroll (FIN-89) still applies if tabs
+     * don't fit at this gap. */
+    gap: var(--space-4);
     /* Mobile's page scrolls as one long column past .shell's viewport-sized frame (App.css) —
      * without this, switching tabs meant scrolling all the way back to the top first. Sticking
      * to the viewport's own top (rather than below TopBar) keeps it reachable from anywhere on
@@ -58,18 +86,5 @@
     top: 0;
     z-index: 2;
     background: var(--color-bg);
-  }
-
-  .tab {
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    padding: var(--space-2) var(--space-3);
-  }
-
-  .tabActive {
-    background: var(--color-primary);
-    border-color: var(--color-primary);
-    color: var(--color-bg);
-    border-bottom-color: var(--color-primary);
   }
 }
