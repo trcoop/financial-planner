@@ -54,10 +54,13 @@ describe('App.css .statTiles responsive grid', () => {
 
   it('does not introduce a new one-off breakpoint value for the mobile stat tile grid', () => {
     // Guard against reintroducing e.g. `max-width: 600px` or similar ad hoc values instead of
-    // reusing the app's unified 959px/960px breakpoint (FIN-32).
+    // reusing the app's unified 959px/960px breakpoint (FIN-32). `599` is intentionally
+    // allowed here — that's FIN-100's separate, spec-pinned breakpoint (ERD §6) for switching
+    // between LeftNav and BottomTabBar, an unrelated concern from the stat tile grid this test
+    // guards, not a stray one-off value for this feature.
     const otherMobileWidths = [...appCss.matchAll(/max-width:\s*(\d+)px/g)]
       .map((match) => match[1])
-      .filter((width) => width !== '959' && width !== '960')
+      .filter((width) => width !== '959' && width !== '960' && width !== '599')
     expect(otherMobileWidths).toEqual([])
   })
 })

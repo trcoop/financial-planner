@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
@@ -28,23 +29,80 @@ function mockMatchMedia(isDesktop: boolean) {
   })) as unknown as typeof window.matchMedia
 }
 
-// App.tsx is now a thin composition of TopBar + PlanSection (FIN-98) — its own detailed
-// tab/form/stress-test/Settings/focus-management coverage moved to
-// src/ui/PlanSection.test.tsx, which App.tsx just mounts. This file only pins that App still
-// renders the whole shell end-to-end. (App.tsx's further thin-shell rewrite, e.g. breakpoint
-// switching to LeftNav/BottomTabBar, is FIN-100's scope, not this ticket's.)
+// App.tsx is now a thin shell (FIN-100): it owns only `activeSection` state and composes
+// TopBar + LeftNav + BottomTabBar + the active section's component. Detailed Plan-specific
+// coverage (tab/form/stress-test/Settings/focus-management) lives in
+// src/ui/PlanSection.test.tsx (FIN-98); this file only pins shell-level behavior — section
+// switching, and that TopBar/LeftNav/BottomTabBar all render.
 describe('App shell', () => {
   beforeEach(() => mockMatchMedia(true))
   afterEach(() => cleanup())
 
-  it('renders TopBar and PlanSection together, with the Projection tab active by default', () => {
+  it('renders Plan as the active section on initial load (refresh always lands on Plan)', () => {
+    render(<App />)
+    expect(screen.getByRole('tablist', { name: 'Views' })).toBeInTheDocument()
+    expect(screen.queryByText(/no calculators yet/i)).not.toBeInTheDocument()
+  })
+
+  it('renders TopBar, LeftNav, and BottomTabBar together', () => {
     render(<App />)
     expect(screen.getByText('Financial Planner')).toBeInTheDocument()
+    // Both LeftNav and BottomTabBar mount unconditionally (CSS-only breakpoint controls
+    // which is visible) — jsdom doesn't evaluate CSS media queries, so both are present in
+    // the DOM here regardless of viewport.
+    const navLandmarks = screen.getAllByRole('navigation', { name: 'Sections' })
+    expect(navLandmarks).toHaveLength(2)
+  })
+
+  it('marks Plan as aria-current="page" on both nav landmarks by default', () => {
+    render(<App />)
+    const planButtons = screen.getAllByRole('button', { name: 'Plan' })
+    const calculatorsButtons = screen.getAllByRole('button', { name: 'Calculators' })
+    expect(planButtons).toHaveLength(2)
+    expect(calculatorsButtons).toHaveLength(2)
+    for (const button of planButtons) {
+      expect(button).toHaveAttribute('aria-current', 'page')
+    }
+    for (const button of calculatorsButtons) {
+      expect(button).not.toHaveAttribute('aria-current')
+    }
+  })
+
+  it('switching to Calculators via LeftNav is a genuine unmount of Plan, not a CSS-hidden state', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const [leftNavCalculators] = screen.getAllByRole('button', { name: 'Calculators' })
+    await user.click(leftNavCalculators)
+
+    // Plan's whole subtree (TabBar, tabpanels) is gone from the DOM entirely — a real
+    // conditional unmount — not merely hidden via CSS/attributes.
+    expect(screen.queryByRole('tablist', { name: 'Views' })).not.toBeInTheDocument()
+    expect(screen.getByText(/no calculators yet/i)).toBeInTheDocument()
+
+    const planButtons = screen.getAllByRole('button', { name: 'Plan' })
+    const calculatorsButtons = screen.getAllByRole('button', { name: 'Calculators' })
+    for (const button of calculatorsButtons) {
+      expect(button).toHaveAttribute('aria-current', 'page')
+    }
+    for (const button of planButtons) {
+      expect(button).not.toHaveAttribute('aria-current')
+    }
+  })
+
+  it('switching back to Plan via BottomTabBar remounts PlanSection', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    const [, bottomCalculators] = screen.getAllByRole('button', { name: 'Calculators' })
+    await user.click(bottomCalculators)
+    expect(screen.getByText(/no calculators yet/i)).toBeInTheDocument()
+
+    const [, bottomPlan] = screen.getAllByRole('button', { name: 'Plan' })
+    await user.click(bottomPlan)
+
     expect(screen.getByRole('tablist', { name: 'Views' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Projection' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('tab', { name: 'Stress Test' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Current investment balance' })).toBeInTheDocument()
+    expect(screen.queryByText(/no calculators yet/i)).not.toBeInTheDocument()
   })
 
   it('has no leftover Drawer affordance anywhere in the shell', () => {

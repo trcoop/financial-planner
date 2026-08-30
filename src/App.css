@@ -2,19 +2,92 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
-  /* Drawer's collapse slides its pane off-canvas via a negative margin (see
-   * Drawer.module.css) rather than shrinking its width, so the pane briefly sits
-   * outside .body's box during the transition — clip it here rather than let it
-   * force a horizontal scrollbar on the page. */
+  /* Drawer's collapse used to slide its pane off-canvas via a negative margin; Drawer is gone
+   * (FIN-88) but LeftNav's dark fill butts directly against .main's edge, so keep the x-clip —
+   * it also guards against any transient overflow during a section switch. */
   overflow-x: hidden;
 }
 
-/* Flex (not grid) so the Drawer's pane can slide fully off-canvas for the collapse
- * (FIN-46) — a grid track can't be transitioned per-child the way a flex item's
- * margin can. .body is capped to the remaining viewport height (flex: 1 inside a
- * 100vh .shell) so a tall Drawer scrolls internally instead of growing the whole
- * page. */
+/* FIN-100: .body is now the shell-level row below TopBar — LeftNav (desktop) or nothing
+ * (mobile, see .navPane/.bottomNavPane below) beside .main, the scrollable pane that holds
+ * whichever section is active. Flex (not grid) for the same reason as before: a flex child's
+ * width/visibility can be toggled per-breakpoint without a grid-track rework. */
 .body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* FIN-100: LeftNav's wrapper (desktop primary nav) vs. BottomTabBar's wrapper (mobile primary
+ * nav). LeftNav/BottomTabBar both mount unconditionally in App.tsx — the CSS-only breakpoint
+ * here (not a JS conditional) is what actually controls which is visible, per ERD §3's
+ * RESOLVED (A): avoids a resize-triggered remount and its focus/state implications. Evaluated
+ * at T8 integration (this ticket) per RESOLVED (A)'s designated checkpoint — no visual glitch
+ * or focus/state bug was found from having both mounted simultaneously (BottomTabBar's markup
+ * just sits `display: none` off-screen at desktop widths and vice versa), so the CSS-only
+ * dual-mount ships as originally specified rather than falling back to `useMediaQuery`. */
+.navPane {
+  flex-shrink: 0;
+}
+
+.bottomNavPane {
+  display: none;
+  flex-shrink: 0;
+}
+
+/* Mobile breakpoint per ERD §6: exactly max-width: 599px (600px+ stays on desktop LeftNav).
+ * Deliberately separate from the app's other 959px/960px breakpoint (FIN-32, used by
+ * TabBar/.statTiles/etc. for content-density changes) — this one is specific to which primary
+ * nav (LeftNav vs. BottomTabBar) is visible and isn't meant to move in lockstep with that one. */
+@media (max-width: 599px) {
+  .navPane {
+    display: none;
+  }
+
+  .bottomNavPane {
+    display: flex;
+  }
+}
+
+@media (max-width: 959px) {
+  /* Desktop treats .shell as a fixed 100vh frame with independently-scrolling panes (LeftNav,
+   * .main) — appropriate for a side-by-side layout, but on mobile the section content is a
+   * single scrolling column, so that same fixed frame just traps .main's own internal scroll
+   * region and squeezes content out of view instead of letting the page grow and scroll
+   * normally (FIN-61: expanding the inputs made the rest of the page unreachable). Letting
+   * .shell grow past 100vh here is what makes the whole page scroll instead. */
+  .shell {
+    height: auto;
+    min-height: 100vh;
+    /* Desktop's overflow-x: hidden (above) clips content butting against LeftNav's edge, but
+     * per the CSS spec, setting one axis to something other than `visible` forces the other
+     * axis's computed value from `visible` to `auto` — so without this override, `.shell`
+     * silently became its own internal vertical scroll container on mobile, trapping the page
+     * instead of letting it grow and scroll normally (the actual cause of FIN-61's "can't
+     * scroll past expanded inputs" bug — `height: auto` above wasn't sufficient by itself). */
+    overflow-x: visible;
+  }
+
+  .body {
+    flex-direction: column;
+    flex: none;
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* FIN-100: renamed from the pre-shell-redesign "body"/"main" (see PlanSection.tsx) — these
+ * give PlanSection's own tabpanel area (Projection/Stress Test/Settings) the same flex-row
+ * gap/padding and flex-column scroll treatment the whole shell used to get directly, now one
+ * level deeper since PlanSection renders inside App's .main pane alongside LeftNav/BottomTabBar. */
+.planBody {
   display: flex;
   flex: 1;
   min-height: 0;
@@ -22,39 +95,7 @@
   padding: var(--space-6);
 }
 
-@media (max-width: 959px) {
-  /* Desktop treats .shell as a fixed 100vh frame with independently-scrolling panes (Drawer's
-   * .content, .main) — appropriate for a side-by-side layout, but on mobile the accordion and
-   * main content are stacked in one column, so that same fixed frame just traps the accordion's
-   * own internal scroll region and squeezes .main out of view instead of letting the page grow
-   * and scroll normally (FIN-61: expanding the inputs made the rest of the page unreachable).
-   * Letting .shell grow past 100vh here is what makes the whole page scroll instead. */
-  .shell {
-    height: auto;
-    min-height: 100vh;
-    /* Desktop's overflow-x: hidden (above) clips the Drawer's off-canvas slide, but per the CSS
-     * spec, setting one axis to something other than `visible` forces the other axis's computed
-     * value from `visible` to `auto` — so without this override, `.shell` silently became its
-     * own internal vertical scroll container on mobile, trapping the page instead of letting it
-     * grow and scroll normally (the actual cause of FIN-61's "can't scroll past expanded inputs"
-     * bug — `height: auto` above wasn't sufficient by itself). Mobile's collapse is a vertical
-     * accordion (Drawer.module.css), not a horizontal slide, so it doesn't need the x-clip. */
-    overflow-x: visible;
-  }
-
-  .body {
-    flex-direction: column;
-    flex: none;
-    padding: var(--space-4);
-  }
-
-  .main {
-    flex: none;
-    overflow-y: visible;
-  }
-}
-
-.main {
+.planMain {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
@@ -62,6 +103,19 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+@media (max-width: 959px) {
+  .planBody {
+    flex-direction: column;
+    flex: none;
+    padding: var(--space-4);
+  }
+
+  .planMain {
+    flex: none;
+    overflow-y: visible;
+  }
 }
 
 @media (min-width: 960px) {
