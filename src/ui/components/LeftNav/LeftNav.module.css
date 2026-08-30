@@ -1,0 +1,42 @@
+/* Dark unified TopBar+LeftNav look (ERD "App Navigation & Shell Redesign", FIN-93 Direction B).
+ * FIN-93 only landed light-mode surface/text tokens (see src/ui/theme.css) — no dark-surface
+ * token exists yet for this shell region, so the two dark values below are the ONE thing in this
+ * file not sourced from a token. Everything else (spacing, radius, type, focus ring, primary
+ * accent) reuses FIN-93 tokens as-is. */
+.leftNav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-2);
+  background: #12151c;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.item {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-family: var(--font-family-body);
+  font-size: var(--font-size-base);
+  color: rgba(255, 255, 255, 0.72);
+  text-align: left;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .item:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.itemActive {
+  color: #ffffff;
+  background: var(--color-primary);
+  font-family: var(--font-family-display);
+  font-weight: 600;
+}
