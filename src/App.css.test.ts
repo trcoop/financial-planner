@@ -78,7 +78,7 @@ describe('App.css .navPane/.bottomNavPane primary-nav breakpoint', () => {
     expect(navPaneMatch![1]).toMatch(/display:\s*none/)
 
     const bottomNavPanePattern =
-      /@media \(max-width: 599px\)\s*\{[\s\S]*?\.bottomNavPane\s*\{([^}]*)\}\s*\}/
+      /@media \(max-width: 599px\)\s*\{[\s\S]*?\.bottomNavPane\s*\{([^}]*)\}/
     const bottomNavPaneMatch = appCss.match(bottomNavPanePattern)
     expect(
       bottomNavPaneMatch,
@@ -90,5 +90,19 @@ describe('App.css .navPane/.bottomNavPane primary-nav breakpoint', () => {
     const wrongBreakpointPattern =
       /@media \(max-width: 959px\)\s*\{[\s\S]*?\.(?:navPane|bottomNavPane)\s*\{/
     expect(appCss).not.toMatch(wrongBreakpointPattern)
+  })
+
+  it('pins .bottomNavPane to the viewport bottom (not document flow) inside the 599px block', () => {
+    // Bug fix (round 2 review): BottomTabBar used to flow at the end of .shell's content, so a
+    // short section (e.g. Calculators) let it ride up under the content instead of staying
+    // pinned to the bottom of the screen. jsdom can't evaluate the @media query itself, but this
+    // asserts the fix's actual declarations are present, structurally nested where they need to
+    // be to take effect on mobile.
+    const bottomNavPanePattern =
+      /@media \(max-width: 599px\)\s*\{[\s\S]*?\.bottomNavPane\s*\{([^}]*)\}/
+    const match = appCss.match(bottomNavPanePattern)
+    expect(match, 'expected a .bottomNavPane rule nested inside an @media (max-width: 599px) block').not.toBeNull()
+    expect(match![1]).toMatch(/position:\s*fixed/)
+    expect(match![1]).toMatch(/bottom:\s*0/)
   })
 })

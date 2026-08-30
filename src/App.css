@@ -44,8 +44,30 @@
     display: none;
   }
 
+  /* Structural fix (this ticket, follow-up round): BottomTabBar previously just flowed at the
+   * end of .shell's document content, so on a short section (e.g. Calculators, which barely has
+   * any content yet) it rode up under the content instead of staying pinned to the bottom of the
+   * screen. Fixed-positioning it to the viewport (rather than flowing with .shell's content)
+   * keeps it visible at all times regardless of the active section's content length. `--space-*`
+   * padding (space-2 top/bottom) plus each item's own layout puts its real rendered height in
+   * the ~56-64px range; --bottom-nav-height is a fixed estimate rather than a measured value
+   * (jsdom/CSS can't read the other element's rendered height here), used both for this pane's
+   * own height and for the matching scroll-content padding below so nothing sits underneath it. */
   .bottomNavPane {
     display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: var(--bottom-nav-height, 64px);
+    /* Above .main's scrolling content (and anything else in the shell) so it's never occluded. */
+    z-index: 10;
+  }
+
+  /* Compensates for .bottomNavPane's fixed positioning above — without this, the last bit of
+   * .main's scrollable content sits underneath the fixed bar and is unreachable/obscured. */
+  .main {
+    padding-bottom: var(--bottom-nav-height, 64px);
   }
 }
 
