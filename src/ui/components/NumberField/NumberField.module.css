@@ -21,9 +21,14 @@
   width: 100%;
 }
 
+/* FIN-103: overrides the app-wide `:focus-visible` rule (theme.css's 3px `--focus-ring`,
+   still used as-is by buttons/tabs/etc.) — stacked on top of this input's own 1px border it
+   read as a much heavier, uneven focus state. A 1px ring plus a matching border color keeps
+   the focus indicator a full, subtle outline instead of a thick glow. */
 .input:focus-visible {
   outline: none;
-  box-shadow: var(--focus-ring);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 
 .error {
