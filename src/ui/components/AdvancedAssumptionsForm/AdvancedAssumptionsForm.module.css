@@ -4,6 +4,18 @@
   gap: var(--space-4);
 }
 
+/* FIN-101: full-width Settings tab (FIN-88/98) left these fields too wide/sparse on desktop —
+   pair them two-to-a-row above the app's 960px breakpoint (matches CoreInputsForm and
+   StressTestSection's .chartRow) rather than one stretched input per row. Mobile keeps the
+   single-column flex above, unchanged. */
+@media (min-width: 960px) {
+  .form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+}
+
 .fieldRow {
   display: flex;
   align-items: flex-end;
