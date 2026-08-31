@@ -13,6 +13,16 @@ interface NumberFieldProps {
   prefix?: string
   /** Visual adornment after the input, e.g. "%". Display only — not part of the value. */
   suffix?: string
+  /**
+   * Additive, optional escape hatch (FIN-109): called with the field's raw sanitized digit text
+   * on every keystroke, including when it becomes `''` (fully cleared) or `'-'` — the two cases
+   * `onChange` deliberately never fires for (see the "does not call onChange with NaN when
+   * clearing" contract this component already guarantees). `onChange`'s existing behavior is
+   * completely unchanged by this prop; it exists purely so a caller that needs to distinguish
+   * "cleared" from "still holding its last valid value" (e.g. a required-field validation
+   * message on blank) can do so without this component ever surfacing `NaN` through `onChange`.
+   */
+  onTextChange?: (text: string) => void
 }
 
 /** Comma-grouped for display (e.g. 250000 -> "250,000"); not used while the field is
@@ -46,6 +56,7 @@ export function NumberField({
   error,
   prefix,
   suffix,
+  onTextChange,
 }: NumberFieldProps) {
   const inputId = useId()
   const errorId = useId()
@@ -107,6 +118,7 @@ export function NumberField({
     setText(raw)
     pendingCursorRef.current = prefixLength + cursor
     const cleaned = raw.replace(/,/g, '')
+    onTextChange?.(cleaned)
     const num = Number(cleaned)
     if (cleaned !== '' && cleaned !== '-' && Number.isFinite(num)) {
       onChange(num)

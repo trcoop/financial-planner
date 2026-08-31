@@ -1,0 +1,82 @@
+.calculator {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  /* Keeps this component's own box from ever forcing horizontal page scroll at phone widths
+     (~360-430px, PRD Goal 4) regardless of what its children do. */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Mirrors CoreInputsForm's desktop two-column grid (FIN-101) so this standalone form reads as
+   part of the same component family above the app's 960px breakpoint. Single-column flex below
+   that keeps every field full-width and reachable without horizontal scroll on phone widths. */
+@media (min-width: 960px) {
+  .form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+}
+
+.engineError {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+}
+
+.calculateButton {
+  align-self: flex-start;
+}
+
+@media (min-width: 960px) {
+  .calculateButton {
+    grid-column: 1 / -1;
+  }
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.statRow {
+  display: grid;
+  /* `minmax(0, 1fr)` rather than plain `1fr` — grid items default to `min-width: auto`
+     (content-based), so a large formatted-currency value (up to $100,000,000+) could otherwise
+     force its own column wider than its `fr` share and blow out this row's width at phone
+     widths, the same class of overflow as the chart title-row fix above. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+@media (min-width: 640px) {
+  .statRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.chartRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (min-width: 960px) {
+  .chartRow {
+    flex-direction: row;
+  }
+
+  .chartRow > * {
+    flex: 1;
+    min-width: 0;
+  }
+}
