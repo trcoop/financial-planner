@@ -11,7 +11,6 @@ interface ToggleGroupProps {
   value: string
   onChange: (value: string) => void
   options: ToggleGroupOption[]
-  className?: string
 }
 
 /** Segmented two-button toggle for a small, fixed set of mutually-exclusive options (e.g.
@@ -19,7 +18,7 @@ interface ToggleGroupProps {
  * keyboard operability and ARIA come for free, matching `SelectField`'s accessibility bar —
  * rendered as a segmented control since showing both options at once is faster to scan and
  * select than opening a dropdown for a binary choice. */
-export function ToggleGroup({ label, value, onChange, options, className }: ToggleGroupProps) {
+export function ToggleGroup({ label, value, onChange, options }: ToggleGroupProps) {
   const groupName = useId()
   const labelId = useId()
 
@@ -28,7 +27,7 @@ export function ToggleGroup({ label, value, onChange, options, className }: Togg
     // shape exactly — legend's UA-default box formatting doesn't participate in normal block
     // flow the way a label does, which was throwing the toggle's row out of vertical alignment
     // with the text-field rows above/below it (round-1 visual review finding).
-    <div className={className ? `${styles.field} ${className}` : styles.field}>
+    <div className={styles.field}>
       <span id={labelId} className={styles.label}>
         {label}
       </span>

@@ -237,6 +237,12 @@ export function InvestmentCalculator() {
           suffix="%"
           error={errors.annualGrowthRate}
         />
+        <SelectField
+          label="Compounding frequency"
+          value={values.compoundingFrequency}
+          onChange={(value) => setValues((prev) => ({ ...prev, compoundingFrequency: value as CompoundingFrequency }))}
+          options={COMPOUNDING_OPTIONS}
+        />
         <NumberField
           label="Contribution amount"
           value={values.contributionAmount}
@@ -251,20 +257,6 @@ export function InvestmentCalculator() {
           prefix="$"
           error={errors.contributionAmount}
         />
-        {/* The three selection-style fields (dropdown/toggle, as opposed to free-typed numbers)
-            are grouped consecutively here rather than interleaved with the numeric fields above —
-            in a 2-column grid, splitting them left compounding frequency stranded mid-row while
-            contribution timing sat alone at the very start of the next row, which read as an
-            arbitrary pairing (round-1 visual review finding). Grouped, compounding frequency and
-            contribution frequency share a row, and contribution timing trails alone as the very
-            last field (see `.lastField` below spanning both columns) rather than looking broken
-            mid-form. */}
-        <SelectField
-          label="Compounding frequency"
-          value={values.compoundingFrequency}
-          onChange={(value) => setValues((prev) => ({ ...prev, compoundingFrequency: value as CompoundingFrequency }))}
-          options={COMPOUNDING_OPTIONS}
-        />
         <ToggleGroup
           label="Contribution frequency"
           value={values.contributionFrequency}
@@ -276,7 +268,6 @@ export function InvestmentCalculator() {
           value={values.contributionTiming}
           onChange={(value) => setValues((prev) => ({ ...prev, contributionTiming: value as ContributionTiming }))}
           options={CONTRIBUTION_TIMING_OPTIONS}
-          className={styles.lastField}
         />
 
         <Button type="submit" className={styles.calculateButton}>
