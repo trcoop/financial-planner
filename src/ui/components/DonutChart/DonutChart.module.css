@@ -1,0 +1,83 @@
+.card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  align-self: flex-start;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Caps the plot's rendered size so the donut stays a comfortable, legible size on a wide desktop
+ * card instead of stretching edge-to-edge — the SVG's own `viewBox` keeps the wedges' proportions
+ * correct at any size this scales to, including down at phone widths (~360-430px, FIN-105). */
+.plotWrapper {
+  width: 100%;
+  max-width: 240px;
+}
+
+.plot {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.wedge {
+  stroke: var(--color-bg);
+  stroke-width: 1.5;
+}
+
+/* Visible legend — every segment's label and formatted value as plain text, not conveyed by the
+ * swatch color alone (FIN-105 accessibility requirement). */
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  width: 100%;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.swatch {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.legendLabel {
+  color: var(--color-text-muted);
+}
+
+.legendValue {
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
