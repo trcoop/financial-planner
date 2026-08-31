@@ -44,6 +44,13 @@
   .calculateButton {
     grid-column: 1 / -1;
   }
+
+  /* Contribution timing is the trailing field in a 7-field/2-column grid, so it's always alone
+     on the last row — spanning both columns fills that row instead of leaving its right half
+     empty (same treatment as .calculateButton above). */
+  .lastField {
+    grid-column: 1 / -1;
+  }
 }
 
 .results {
