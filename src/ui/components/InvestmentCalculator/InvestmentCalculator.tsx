@@ -11,6 +11,7 @@ import { formatCurrency } from '../../utils/format'
 import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
 import { SelectField } from '../SelectField/SelectField'
+import { ToggleGroup } from './ToggleGroup'
 import { StatTile } from '../StatTile/StatTile'
 import { DonutChart } from '../DonutChart/DonutChart'
 import { PercentileLineChart, type LineChartRow, type LineChartSeries } from '../PercentileLineChart/PercentileLineChart'
@@ -216,6 +217,16 @@ export function InvestmentCalculator() {
           error={errors.startingAmount}
         />
         <NumberField
+          label="Years"
+          value={values.years}
+          onChange={(value) => setNumericField('years', value)}
+          onTextChange={(text) => setBlank('years', text.trim() === '')}
+          min={1}
+          max={100}
+          step={1}
+          error={errors.years}
+        />
+        <NumberField
           label="Growth rate"
           value={values.annualGrowthRate}
           onChange={(value) => setNumericField('annualGrowthRate', value)}
@@ -246,27 +257,17 @@ export function InvestmentCalculator() {
           prefix="$"
           error={errors.contributionAmount}
         />
-        <SelectField
+        <ToggleGroup
           label="Contribution frequency"
           value={values.contributionFrequency}
           onChange={(value) => setValues((prev) => ({ ...prev, contributionFrequency: value as ContributionFrequency }))}
           options={CONTRIBUTION_FREQUENCY_OPTIONS}
         />
-        <SelectField
+        <ToggleGroup
           label="Contribution timing"
           value={values.contributionTiming}
           onChange={(value) => setValues((prev) => ({ ...prev, contributionTiming: value as ContributionTiming }))}
           options={CONTRIBUTION_TIMING_OPTIONS}
-        />
-        <NumberField
-          label="Years"
-          value={values.years}
-          onChange={(value) => setNumericField('years', value)}
-          onTextChange={(text) => setBlank('years', text.trim() === '')}
-          min={1}
-          max={100}
-          step={1}
-          error={errors.years}
         />
 
         <Button type="submit" className={styles.calculateButton}>
