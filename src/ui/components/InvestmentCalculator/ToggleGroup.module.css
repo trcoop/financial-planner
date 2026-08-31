@@ -22,8 +22,15 @@
   justify-content: center;
   font-size: var(--font-size-base);
   /* Matches NumberField/SelectField's `.input` vertical rhythm (`--space-2 --space-3` padding,
-     1px border) so this row lines up with the text-field rows around it. */
+     1px border) so this row lines up with the text-field rows around it. `nowrap` + `min-width: 0`
+     keeps the longest label ("Start of period") from wrapping to two lines at narrow widths,
+     which was making that segment taller than its sibling and the rest of the form's rows
+     (round-1 visual review finding) — text that can't wrap just shrinks via `flex: 1` instead. */
   padding: var(--space-2) var(--space-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
   border-radius: var(--radius-sm);
   color: var(--color-text);
   background-color: var(--color-surface);
