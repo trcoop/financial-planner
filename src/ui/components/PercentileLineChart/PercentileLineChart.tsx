@@ -9,7 +9,11 @@ import styles from './PercentileLineChart.module.css'
  * component can back both the Plan tab's line chart and the Stress Test tab's percentile fan. */
 export interface LineChartRow {
   year: number
-  age: number
+  /** Optional (FIN-108): Plan and Stress Test always pass this and keep rendering "Age X" in the
+   * subtitle/tooltip/aria-label exactly as before. When absent (e.g. the Investment Calculator,
+   * which has no notion of the user's age), those same three places fall back to "Year X"
+   * phrasing instead. */
+  age?: number
   values: Record<string, number>
 }
 
@@ -140,8 +144,13 @@ const formatAxisValue = (value: number): string => {
   return `${sign}${formatCurrency(Math.round(abs / SUB_MILLION_ROUNDING) * SUB_MILLION_ROUNDING)}`
 }
 
+/** "Age X" when `row.age` is present (Plan, Stress Test — unaffected), else the FIN-108 "Year X"
+ * fallback (Investment Calculator, which has no age concept) — shared by the subtitle, the
+ * tooltip, and each hover target's aria-label so all three stay in sync. */
+const periodLabel = (row: LineChartRow): string => (row.age !== undefined ? `Age ${row.age}` : `Year ${row.year}`)
+
 const hoverLabel = (row: LineChartRow, series: LineChartSeries[]): string =>
-  `Age ${row.age}: ` + series.map((s) => `${s.label} ${formatCurrency(row.values[s.key] ?? 0)}`).join(', ')
+  `${periodLabel(row)}: ` + series.map((s) => `${s.label} ${formatCurrency(row.values[s.key] ?? 0)}`).join(', ')
 
 /**
  * A `Card`-based line chart plotting one or more value series over time — shared by the Plan
@@ -189,8 +198,8 @@ export function PercentileLineChart({
     flipY: boolean
   } | null>(null)
   const plotWrapperRef = useRef<HTMLDivElement>(null)
-  const firstAge = rows.at(0)?.age
-  const lastAge = rows.at(-1)?.age
+  const firstRow = rows.at(0)
+  const lastRow = rows.at(-1)
   const dataMaxValue = Math.max(1, ...rows.flatMap((row) => series.map((s) => row.values[s.key] ?? 0)))
   // Scales the plotted y-axis above the data's own peak so the highest line never touches the
   // top edge of the chart — without this, the permanent Medicare-start marker (which sits fixed
@@ -375,9 +384,10 @@ export function PercentileLineChart({
       <figure className={styles.figure} aria-label={title}>
         <div className={styles.titleRow}>
           <figcaption className={styles.title}>{title}</figcaption>
-          {firstAge !== undefined && lastAge !== undefined && (
+          {firstRow && lastRow && (
             <div className={styles.subtitle}>
-              Age {firstAge} → {lastAge}
+              {firstRow.age !== undefined ? `Age ${firstRow.age}` : `Year ${firstRow.year}`} →{' '}
+              {lastRow.age !== undefined ? lastRow.age : `Year ${lastRow.year}`}
             </div>
           )}
         </div>
@@ -545,7 +555,7 @@ export function PercentileLineChart({
 
               {hoveredRow && (
                 <output className={styles.tooltip} style={tooltipStyle}>
-                  <div className={styles.tooltipAge}>Age {hoveredRow.age}</div>
+                  <div className={styles.tooltipAge}>{periodLabel(hoveredRow)}</div>
                   {series.map((s) => (
                     <div key={s.key} className={styles.tooltipRow}>
                       <span className={styles.swatch} style={{ borderTopColor: s.color }} />{' '}

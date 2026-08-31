@@ -51,6 +51,14 @@ const planRows: LineChartRow[] = [
 
 const planSeries: LineChartSeries[] = [{ key: 'balance', label: 'Balance', color: 'blue' }]
 
+/** No-`age` rows (FIN-108) — the shape a future Investment Calculator call site will pass,
+ * since it has no notion of the user's age. */
+const noAgeRows: LineChartRow[] = [
+  { year: 0, values: { balance: 100_000 } },
+  { year: 1, values: { balance: 120_000 } },
+  { year: 2, values: { balance: 150_000 } },
+]
+
 describe('PercentileLineChart', () => {
   afterEach(() => cleanup())
 
@@ -373,5 +381,41 @@ describe('PercentileLineChart', () => {
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(onSelectRow).toHaveBeenCalledWith(rows[2])
+  })
+
+  describe('no-age rows (FIN-108 "Year X" fallback)', () => {
+    it('renders a "Year X → Year Y" subtitle instead of "Age" when rows have no age', () => {
+      render(<PercentileLineChart rows={noAgeRows} series={planSeries} title="Year-by-year balance" showLegend={false} />)
+      expect(screen.getByText('Year 0 → Year 2')).toBeInTheDocument()
+      expect(screen.queryByText(/^Age /)).not.toBeInTheDocument()
+    })
+
+    it('labels hover targets with "Year X" instead of "Age X" when rows have no age', () => {
+      render(<PercentileLineChart rows={noAgeRows} series={planSeries} title="Year-by-year balance" showLegend={false} />)
+      expect(screen.getByLabelText(/^Year 1: /)).toBeInTheDocument()
+      expect(screen.queryByLabelText(/^Age /)).not.toBeInTheDocument()
+    })
+
+    it('shows a tooltip with "Year X" instead of "Age X" on hovering a point with no age', async () => {
+      const user = userEvent.setup()
+      render(<PercentileLineChart rows={noAgeRows} series={planSeries} title="Year-by-year balance" showLegend={false} />)
+
+      await user.hover(screen.getByLabelText(/^Year 1: /))
+
+      const tooltip = screen.getByRole('status')
+      expect(tooltip).toHaveTextContent('Year 1')
+      expect(tooltip).not.toHaveTextContent('Age')
+      expect(tooltip).toHaveTextContent('$120,000')
+    })
+
+    it('renders "Age 0", not the Year fallback, when age is present but 0 (falsy-but-defined)', () => {
+      const zeroAgeRows: LineChartRow[] = [
+        { age: 0, year: 0, values: { balance: 100_000 } },
+        { age: 1, year: 1, values: { balance: 120_000 } },
+      ]
+      render(<PercentileLineChart rows={zeroAgeRows} series={planSeries} title="Balance by age" showLegend={false} />)
+      expect(screen.getByText('Age 0 → 1')).toBeInTheDocument()
+      expect(screen.getByLabelText(/^Age 0: /)).toBeInTheDocument()
+    })
   })
 })
