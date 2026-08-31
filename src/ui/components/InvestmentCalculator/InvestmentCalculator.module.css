@@ -36,13 +36,14 @@
   color: var(--color-error);
 }
 
-.calculateButton {
-  align-self: flex-start;
-}
-
+/* No `align-self` here — below 960px `.form` is a flex column and the default `stretch` is what
+   we want, so the button matches the full width of every field above it. `align-self: flex-start`
+   only applies at 960px+, where `.form` becomes a grid and the button would otherwise stretch
+   across its full spanned row instead of sitting left-aligned at its natural width. */
 @media (min-width: 960px) {
   .calculateButton {
     grid-column: 1 / -1;
+    align-self: flex-start;
   }
 }
 
