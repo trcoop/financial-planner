@@ -2,8 +2,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
-  /* Keeps this component's own box from ever forcing horizontal page scroll at phone widths
-     (~360-430px, PRD Goal 4) regardless of what its children do. */
+  /* Explicit `width: 100%` so this component always fills its parent's column rather than
+     shrink-to-fit sizing to its widest child's content — without it, a parent that lays this
+     out as a flex/grid item with default/`align-items: flex-start` alignment sizes the box to
+     the two-column form (narrow) before Calculate, then grows once the wider results/chart
+     content renders, visibly resizing the box on click. `max-width`/`min-width: 0` still guard
+     against ever forcing horizontal page scroll at phone widths (~360-430px, PRD Goal 4). */
+  width: 100%;
   min-width: 0;
   max-width: 100%;
 }
