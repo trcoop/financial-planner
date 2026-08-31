@@ -114,27 +114,20 @@
   box-sizing: border-box;
 }
 
+/* `.shell` (App.css) can grow past the viewport instead of scrolling internally — on mobile
+ * this was already known (FIN-61); FIN-109 found the same thing happens on desktop too, e.g. the
+ * Investment Calculator's results/charts pushing `.main`'s content past one screen's height. With
+ * plain `height: 100%` here, `body`'s box (and its background below) stopped at the original
+ * viewport height while `.shell`'s content kept growing past it, so scrolling past that point
+ * showed the browser's own default background instead of `--color-page-bg` (a black bar in dark
+ * mode). `height: auto` + `min-height: 100%` still guarantees a full-viewport background on short
+ * pages without capping taller ones — this now applies at every width, not just mobile, since the
+ * underlying cause isn't mobile-specific. */
 html,
 body,
 #root {
-  height: 100%;
-}
-
-/* Mobile's `.shell` (App.css) grows past the viewport instead of scrolling internally (FIN-61)
- * — with `height: 100%` still in force here, `body`'s box (and its background below) stopped at
- * the original viewport height while `.shell`'s content kept growing past it, so scrolling past
- * that point showed the browser's own default background instead of `--color-page-bg`. This also
- * silently capped every ancestor down to `.shell` at that same 100%, which is what forced
- * TopBar/TabBar to get flex-shrunk on mobile even with their own explicit heights (see those
- * components' `flex-shrink: 0` fixes) — `min-height` here still guarantees a full-viewport
- * background on short pages without capping taller ones. */
-@media (max-width: 959px) {
-  html,
-  body,
-  #root {
-    height: auto;
-    min-height: 100%;
-  }
+  height: auto;
+  min-height: 100%;
 }
 
 body {
