@@ -2,23 +2,17 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-1);
-  margin: 0;
-  padding: 0;
-  border: none;
 }
 
 .label {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   font-weight: 500;
-  padding: 0;
 }
 
 .segments {
   display: flex;
-  border-radius: var(--radius-sm);
-  box-shadow: inset 0 0 0 1px var(--color-border);
-  overflow: hidden;
+  gap: var(--space-2);
 }
 
 .segment {
@@ -27,19 +21,23 @@
   align-items: center;
   justify-content: center;
   font-size: var(--font-size-base);
+  /* Matches NumberField/SelectField's `.input` vertical rhythm (`--space-2 --space-3` padding,
+     1px border) so this row lines up with the text-field rows around it. */
   padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
   color: var(--color-text);
   background-color: var(--color-surface);
+  /* Unselected segments need their own visible boundary — without it they blended into the page
+     background and read as plain text rather than a selectable control (round-1 visual review
+     finding). */
+  box-shadow: inset 0 0 0 1px var(--color-border);
   cursor: pointer;
-}
-
-.segment:not(:first-child) {
-  box-shadow: inset 1px 0 0 0 var(--color-border);
 }
 
 .segmentSelected {
   background-color: var(--color-primary);
   color: var(--color-surface);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 
 .input {
@@ -54,10 +52,8 @@
   border: 0;
 }
 
-.input:focus-visible + * {
-  outline: none;
-}
-
 .segment:has(.input:focus-visible) {
   box-shadow: inset 0 0 0 1px var(--color-primary);
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
 }

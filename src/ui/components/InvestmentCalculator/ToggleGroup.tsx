@@ -20,11 +20,18 @@ interface ToggleGroupProps {
  * select than opening a dropdown for a binary choice. */
 export function ToggleGroup({ label, value, onChange, options }: ToggleGroupProps) {
   const groupName = useId()
+  const labelId = useId()
 
   return (
-    <fieldset className={styles.field}>
-      <legend className={styles.label}>{label}</legend>
-      <div className={styles.segments} role="radiogroup" aria-label={label}>
+    // Plain div/span (not fieldset/legend) so this matches SelectField/NumberField's own DOM
+    // shape exactly — legend's UA-default box formatting doesn't participate in normal block
+    // flow the way a label does, which was throwing the toggle's row out of vertical alignment
+    // with the text-field rows above/below it (round-1 visual review finding).
+    <div className={styles.field}>
+      <span id={labelId} className={styles.label}>
+        {label}
+      </span>
+      <div className={styles.segments} role="radiogroup" aria-labelledby={labelId}>
         {options.map((option) => (
           <label
             key={option.value}
@@ -42,6 +49,6 @@ export function ToggleGroup({ label, value, onChange, options }: ToggleGroupProp
           </label>
         ))}
       </div>
-    </fieldset>
+    </div>
   )
 }
