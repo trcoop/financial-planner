@@ -30,11 +30,19 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  /* Row-direction flex items default to `min-width: auto` (content-based), not 0 — with
+     `.subtitle`'s `white-space: nowrap` below, a long title + subtitle pair (e.g. the
+     Investment Calculator's standalone chart at phone widths, ~360-430px) couldn't shrink
+     below its combined content width and overflowed this card's box, widening the whole
+     component past the form above it. `flex-wrap` lets the subtitle drop to its own line
+     instead of forcing the row wider than its container. */
+  flex-wrap: wrap;
   gap: var(--space-3);
 }
 
 .title {
   margin: 0;
+  min-width: 0;
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--color-text);
@@ -42,6 +50,7 @@
 
 .subtitle {
   margin: 0;
+  min-width: 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   white-space: nowrap;
