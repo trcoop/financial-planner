@@ -14,6 +14,17 @@ async function chooseCompoundingFrequency(user: ReturnType<typeof userEvent.setu
 describe('InvestmentCalculator', () => {
   afterEach(() => cleanup())
 
+  it('defaults contribution amount to $6,000 and contribution frequency to annually', () => {
+    render(<InvestmentCalculator />)
+
+    // FIN-110: product owner explicitly requested a $6,000/annual default (paired with
+    // "we default to compounding annually" as the rationale) — pin both so a regression
+    // back to the old $500/monthly defaults fails this test.
+    expect(screen.getByLabelText('Contribution amount')).toHaveValue('$6,000')
+    expect(screen.getByRole('radio', { name: 'Annually' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Monthly' })).not.toBeChecked()
+  })
+
   it('shows a validation error and no results when starting amount is left blank', async () => {
     const user = userEvent.setup()
     render(<InvestmentCalculator />)

@@ -153,7 +153,7 @@ describe('TabBar', () => {
       // override any more (mobile reuses the base rule as-is).
       const baseTabMatch = css.match(/\n\.tab \{([\s\S]*?)\n\}/)
       const baseTabRule = baseTabMatch?.[1] ?? ''
-      expect(baseTabRule).toMatch(/padding:\s*[\w.%()-]+\s+0\s+var\(--space-\d\)\s+0\s*;/)
+      expect(baseTabRule).toMatch(/padding:\s*1\.5px\s+0\s+var\(--space-\d\)\s+0\s*;/)
     })
 
     // FIN-110 (visual-review follow-up, round 2): padding-top alone can no longer carry the
