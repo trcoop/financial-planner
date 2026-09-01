@@ -74,11 +74,6 @@
     z-index: 10;
   }
 
-  /* Compensates for .bottomNavPane's fixed positioning above — without this, the last bit of
-   * .main's scrollable content sits underneath the fixed bar and is unreachable/obscured. */
-  .main {
-    padding-bottom: var(--bottom-nav-height, 64px);
-  }
 }
 
 @media (max-width: 959px) {
@@ -106,6 +101,13 @@
   }
 }
 
+/* FIN-110: single source of truth for the inset around whatever section is active (Plan or
+ * Calculators) — previously each section hand-rolled its own matching padding (`.planBody`,
+ * `.unitsNote`, `.tabBar` all repeated var(--space-6)/var(--space-4)), and a section that forgot
+ * to (CalculatorsSection) rendered flush against the edges. Living here means a new section gets
+ * the same inset for free. `.tabBar`'s sticky mobile treatment needs to escape this via a
+ * negative-margin breakout (TabBar.module.css) since it must stay edge-to-edge for its opaque
+ * scroll backdrop to work. */
 .main {
   display: flex;
   flex-direction: column;
@@ -113,18 +115,20 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding: var(--space-6);
 }
 
 /* FIN-100: renamed from the pre-shell-redesign "body"/"main" (see PlanSection.tsx) — these
  * give PlanSection's own tabpanel area (Projection/Stress Test/Settings) the same flex-row
- * gap/padding and flex-column scroll treatment the whole shell used to get directly, now one
- * level deeper since PlanSection renders inside App's .main pane alongside LeftNav/BottomTabBar. */
+ * gap and flex-column scroll treatment the whole shell used to get directly, now one
+ * level deeper since PlanSection renders inside App's .main pane alongside LeftNav/BottomTabBar.
+ * FIN-110: padding moved up to `.main` (applies to every section, not just Plan's tabpanel
+ * area) — this keeps only the gap between its own children. */
 .planBody {
   display: flex;
   flex: 1;
   min-height: 0;
   gap: var(--space-6);
-  padding: var(--space-6);
 }
 
 .planMain {
@@ -155,12 +159,26 @@
   .planBody {
     flex-direction: column;
     flex: none;
-    padding: var(--space-4);
   }
 
   .planMain {
     flex: none;
     overflow-y: visible;
+  }
+
+  /* FIN-110: narrower inset below 960px, matching the old `.planBody`/`.tabBar` mobile value. */
+  .main {
+    padding: var(--space-4);
+  }
+}
+
+/* FIN-110: bottom-nav clearance (bottomNavPane is `position: fixed` below 599px, see above) has
+ * to compose with `.main`'s own padding rather than replace it — must come after both the base
+ * `.main` rule and the 959px mobile-padding rule above (same specificity, later source wins) so
+ * it doesn't get clobbered back down to plain var(--space-4). */
+@media (max-width: 599px) {
+  .main {
+    padding-bottom: calc(var(--space-4) + var(--bottom-nav-height, 64px));
   }
 }
 
@@ -248,7 +266,10 @@
 .unitsNote {
   flex-shrink: 0;
   margin: 0;
-  padding: var(--space-2) var(--space-6) 0;
+  /* FIN-110: horizontal inset used to be hand-matched here (var(--space-6)/var(--space-4)) to
+   * line up with `.planBody`'s own padding — now `.main` provides that inset for every section,
+   * so this only needs its own top gap. */
+  padding: var(--space-2) 0 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }

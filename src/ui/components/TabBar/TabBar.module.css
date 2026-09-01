@@ -1,8 +1,8 @@
-/* Direction B (FIN-90 round 3): container padding matches `.planBody`/`.unitsNote`'s own
- * left inset (var(--space-6) desktop, var(--space-4) mobile — see App.css) so the tab row's
- * left edge lines up with the content below it, per the mockup. Individual `.tab` buttons carry
- * no horizontal padding of their own (mirrors the mockup's near-zero per-tab side padding) so
- * that container inset is the only thing determining the row's left edge.
+/* Direction B (FIN-90 round 3): left edge lines up with the content below it, per the mockup.
+ * Individual `.tab` buttons carry no horizontal padding of their own (mirrors the mockup's
+ * near-zero per-tab side padding) so the container inset is the only thing determining the
+ * row's left edge. FIN-110: that inset now comes for free from `.main`'s own padding (App.css)
+ * rather than being hand-matched here — this rule only needs the vertical/gap layout.
  *
  * (FIN-90 round 4): the mockup separates this row from the page content below with a plain
  * background/color difference, not a rule line — no `border-bottom` here. Combined with the
@@ -11,7 +11,6 @@
 .tabBar {
   display: flex;
   gap: var(--space-6);
-  padding: 0 var(--space-6);
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
@@ -66,10 +65,18 @@
    mobile now reuses the exact same underline tab treatment as desktop (`.tab`/`.tabActive`
    above are untouched here) rather than the pill/button styling this used to override with —
    the mockup shows the same look at both sizes, distinguishing the active tab only by text
-   color and the underline. Only the container's own layout (horizontal inset matching
-   `.planBody`'s mobile padding, gap, and the sticky-on-scroll behavior) differs by breakpoint. */
+   color and the underline. Only the container's own layout (padding, gap, and the
+   sticky-on-scroll behavior) differs by breakpoint. */
 @media (max-width: 959px) {
   .tabBar {
+    /* FIN-110: `.main` now insets its content by var(--space-4) at this breakpoint (App.css),
+     * so this row's own edges sit flush with `.main`'s padding box — but this row is sticky
+     * with an opaque background (below), which needs to cover the full viewport width as
+     * content scrolls underneath it, not stop at `.main`'s padding edge. The negative margin
+     * breaks it back out to `.main`'s border edge; the matching padding then re-adds the same
+     * var(--space-4) inset for its own content (the tabs), so the tabs land at the same
+     * x-position as before — only the background now extends edge-to-edge. */
+    margin: 0 calc(-1 * var(--space-4));
     padding: var(--space-2) var(--space-4);
     /* FIN-90 round 4: --space-1 (4px) read as one continuous string of text once the pill
      * background (which used to visually separate tabs on its own) was removed — bump to
