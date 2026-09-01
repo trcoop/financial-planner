@@ -60,10 +60,30 @@
   min-height: 44px;
   display: flex;
   align-items: flex-start;
+  /* FIN-115: gap between an optional leading icon (Profile's mobile People/Accounts/Rates
+   * strip) and the label. 0 when a tab has no icon has no visible effect, so existing
+   * Projection/Stress Test/Profile tabs render unchanged. */
+  gap: var(--space-2);
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
   border-bottom: 2px solid transparent;
+}
+
+/* FIN-115: sized to match the tab label's line-height rather than LeftNav's 18px — this row's
+ * `align-items: flex-start` (above) keeps the icon pinned to the same near-zero top offset as
+ * the label text (the `.tab` padding-top comment above), so a same-height icon sits flush with
+ * the label's cap-height instead of looming over it the way LeftNav's icon does against its
+ * taller, vertically-centered row item. */
+.icon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  /* Nudges the icon down from flex-start to roughly align its vertical center with the label's
+   * cap-height/x-height, since `.tab` deliberately doesn't vertically center its content
+   * (see the padding-top comment above) — an uncorrected icon reads as floating too high next
+   * to the text. */
+  margin-top: 2px;
 }
 
 /* Scoped to real pointer devices (not `:hover` alone) for two reasons: a touch tap has no

@@ -1,3 +1,6 @@
 export { ChartIcon } from './ChartIcon'
 export { GridIcon } from './GridIcon'
 export { CalculatorIcon } from './CalculatorIcon'
+export { PeopleIcon } from './PeopleIcon'
+export { WalletIcon } from './WalletIcon'
+export { PercentIcon } from './PercentIcon'

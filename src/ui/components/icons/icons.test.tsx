@@ -3,11 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { ChartIcon } from './ChartIcon'
 import { GridIcon } from './GridIcon'
 import { CalculatorIcon } from './CalculatorIcon'
+import { PeopleIcon } from './PeopleIcon'
+import { WalletIcon } from './WalletIcon'
+import { PercentIcon } from './PercentIcon'
 
 describe.each([
   ['ChartIcon', ChartIcon],
   ['GridIcon', GridIcon],
   ['CalculatorIcon', CalculatorIcon],
+  ['PeopleIcon', PeopleIcon],
+  ['WalletIcon', WalletIcon],
+  ['PercentIcon', PercentIcon],
 ])('%s', (name, Icon) => {
   it('renders an inline svg', () => {
     const { container } = render(<Icon />)

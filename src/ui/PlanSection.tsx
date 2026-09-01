@@ -20,6 +20,7 @@ import {
   type LineChartSeries,
 } from './components/PercentileLineChart/PercentileLineChart'
 import { YearDetailPanel } from './components/YearDetailPanel/YearDetailPanel'
+import { PeopleIcon, WalletIcon, PercentIcon } from './components/icons'
 import { useProjectionState, PLANNING_HORIZON_END_AGE } from './hooks/useProjectionState'
 import { MEDICARE_PART_B_EVENT } from './medicareEvent'
 import { formatCurrency, formatPercent } from './utils/format'
@@ -48,12 +49,14 @@ const TABS: TabBarTab[] = [
  * FIN-115: Profile's own section-internal nav — People (default) / Accounts / Rates. Per the
  * Layout & Component System design spec's 2026-09-01 update, this is a left-hand nav rail on
  * desktop (a section-internal switcher, one level down from the app's top-level TopBar/TabBar
- * nav) and collapses to a horizontal scrollable strip on mobile.
+ * nav) and collapses to a horizontal scrollable strip on mobile. `icon` renders on both — the
+ * same list drives desktop LeftNav and mobile TabBar, so both already know how to render it
+ * (`NavItem.icon`/`TabBarTab.icon`, TabBar gained its own via FIN-115's icon follow-up).
  */
 const PROFILE_NAV_ITEMS: NavItem[] = [
-  { id: 'people', label: 'People' },
-  { id: 'accounts', label: 'Accounts' },
-  { id: 'rates', label: 'Rates' },
+  { id: 'people', label: 'People', icon: PeopleIcon },
+  { id: 'accounts', label: 'Accounts', icon: WalletIcon },
+  { id: 'rates', label: 'Rates', icon: PercentIcon },
 ]
 
 /** Plan has a single line (the deterministic balance) — one series, legend hidden (FIN-60). */

@@ -5,6 +5,10 @@ import styles from './TabBar.module.css'
 export interface TabBarTab {
   id: string
   label: string
+  /** Optional icon rendered beside the label (FIN-115: Profile's mobile People/Accounts/Rates
+   * strip). Existing tab lists (Projection/Stress Test/Profile) simply omit it and render
+   * unchanged — mirrors `NavItem.icon` on `LeftNav`. */
+  icon?: React.ComponentType<{ className?: string }>
 }
 
 interface TabBarProps {
@@ -59,6 +63,7 @@ export function TabBar({ tabs, activeTab, onTabChange, ariaLabel = 'Views' }: Ta
     <div className={styles.tabBar} role="tablist" aria-label={ariaLabel}>
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTab
+        const Icon = tab.icon
         return (
           <button
             key={tab.id}
@@ -75,6 +80,7 @@ export function TabBar({ tabs, activeTab, onTabChange, ariaLabel = 'Views' }: Ta
             onClick={() => onTabChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
+            {Icon ? <Icon className={styles.icon} /> : null}
             {tab.label}
           </button>
         )

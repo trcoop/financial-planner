@@ -448,6 +448,23 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
     const nav = screen.getByRole('navigation', { name: 'Profile sections' })
     expect(within(nav).getByRole('button', { name: 'Rates' })).toHaveAttribute('aria-current', 'page')
   })
+
+  it('renders an icon per item on both the desktop nav and the mobile strip', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    expect(within(nav).getByRole('button', { name: 'People' }).querySelector('svg')).toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'Accounts' }).querySelector('svg')).toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'Rates' }).querySelector('svg')).toBeInTheDocument()
+
+    const strip = screen.getByRole('tablist', { name: 'Profile sections' })
+    expect(within(strip).getByRole('tab', { name: 'People' }).querySelector('svg')).toBeInTheDocument()
+    expect(within(strip).getByRole('tab', { name: 'Accounts' }).querySelector('svg')).toBeInTheDocument()
+    expect(within(strip).getByRole('tab', { name: 'Rates' }).querySelector('svg')).toBeInTheDocument()
+  })
 })
 
 describe('PlanSection focus management (FIN-98: mount-triggers-focus on internal tab switch)', () => {

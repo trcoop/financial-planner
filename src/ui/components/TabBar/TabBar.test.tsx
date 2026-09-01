@@ -4,10 +4,17 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TabBar } from './TabBar'
+import { ChartIcon } from '../icons/ChartIcon'
+import { CalculatorIcon } from '../icons/CalculatorIcon'
 
 const tabs = [
   { id: 'projection', label: 'Projection' },
   { id: 'stress-test', label: 'Stress Test' },
+]
+
+const tabsWithIcons = [
+  { id: 'projection', label: 'Projection', icon: ChartIcon },
+  { id: 'stress-test', label: 'Stress Test', icon: CalculatorIcon },
 ]
 
 describe('TabBar', () => {
@@ -89,6 +96,20 @@ describe('TabBar', () => {
     fireEvent(stressTestTab, event)
     expect(onTabChange).toHaveBeenCalledWith('stress-test')
     expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('renders an icon per tab when the tab provides one (FIN-115, mirrors LeftNav)', () => {
+    render(<TabBar tabs={tabsWithIcons} activeTab="projection" onTabChange={() => {}} />)
+    const projectionTab = screen.getByRole('tab', { name: 'Projection' })
+    const stressTestTab = screen.getByRole('tab', { name: 'Stress Test' })
+    expect(projectionTab.querySelector('svg')).toBeInTheDocument()
+    expect(stressTestTab.querySelector('svg')).toBeInTheDocument()
+  })
+
+  it('renders without an icon when a tab omits one (existing tab lists are unaffected)', () => {
+    render(<TabBar tabs={tabs} activeTab="projection" onTabChange={() => {}} />)
+    const projectionTab = screen.getByRole('tab', { name: 'Projection' })
+    expect(projectionTab.querySelector('svg')).not.toBeInTheDocument()
   })
 
   it('defaults the tablist label to "Views"', () => {
