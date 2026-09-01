@@ -140,15 +140,19 @@ describe('TabBar', () => {
 
     // Direction B (FIN-90 round 3) dropped the mobile-only pill treatment entirely — mobile
     // now reuses the exact same underline `.tab` rule as desktop (no mobile-block override),
-    // with zero horizontal padding on the tab itself (`padding: var(--space-3) 0`, in the base
-    // rule read below rather than the mobile block) so labels get the most room possible.
+    // with zero horizontal padding on the tab itself (in the base rule read below rather than
+    // the mobile block) so labels get the most room possible. FIN-110 (visual-review
+    // follow-up) split the vertical value into asymmetric top/bottom (top trimmed to line up
+    // with the Calculators picker's label — see the `.tab` rule's own comment), so the shape
+    // is now `<top> 0 <bottom> 0` rather than a two-value shorthand; the left/right values
+    // (both 0) are what this test actually cares about.
     it('gives tabs no horizontal padding of their own, so two short labels fit without horizontal scrolling', () => {
       // The base `.tab` rule (not `.tabBar`/`.tabActive`) is the first `.tab { ... }` block in
       // the file, and it precedes every @media block — this file has no mobile-specific `.tab`
       // override any more (mobile reuses the base rule as-is).
       const baseTabMatch = css.match(/\n\.tab \{([\s\S]*?)\n\}/)
       const baseTabRule = baseTabMatch?.[1] ?? ''
-      expect(baseTabRule).toMatch(/padding:\s*var\(--space-\d\)\s+0\s*;/)
+      expect(baseTabRule).toMatch(/padding:\s*var\(--space-\d\)\s+0\s+var\(--space-\d\)\s+0\s*;/)
     })
 
     it('gives the tab bar the same outer horizontal padding as page content (--space-4, matching TopBar)', () => {

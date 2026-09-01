@@ -36,7 +36,15 @@
   font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--color-text-muted);
-  padding: var(--space-3) 0;
+  /* FIN-110 (visual-review follow-up): asymmetric top/bottom on purpose. Measured via
+   * Playwright: this padding-top pushed the tab label text ~12px below `.main`'s content
+   * edge, while the Calculators picker's "Calculator" label sits flush (~1.5px, just normal
+   * line-height slop) against that same edge — the two rows read as inconsistently inset.
+   * Trimmed top to --space-2 (8px) per Travis's "scale it back a little, not a lot": still a
+   * real click-target/visual-balance inset (not 0), just closer to flush. Bottom stays at
+   * --space-3 (12px) — that spacing before the active-tab underline (`border-bottom` below)
+   * is unrelated to the top-alignment issue and wasn't part of what looked off. */
+  padding: var(--space-2) 0 var(--space-3) 0;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
