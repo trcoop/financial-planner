@@ -36,15 +36,30 @@
   font-size: var(--font-size-base);
   font-weight: 600;
   color: var(--color-text-muted);
-  /* FIN-110 (visual-review follow-up): asymmetric top/bottom on purpose. Measured via
-   * Playwright: this padding-top pushed the tab label text ~12px below `.main`'s content
-   * edge, while the Calculators picker's "Calculator" label sits flush (~1.5px, just normal
-   * line-height slop) against that same edge — the two rows read as inconsistently inset.
-   * Trimmed top to --space-2 (8px) per Travis's "scale it back a little, not a lot": still a
-   * real click-target/visual-balance inset (not 0), just closer to flush. Bottom stays at
+  /* FIN-110 (visual-review follow-up round 2): the round-1 fix (trimming padding-top from
+   * --space-3/12px to --space-2/8px) only shrank the mismatch, it didn't remove it — Travis
+   * correctly called out that "8px vs ~1.5px" is still visibly inconsistent, just a smaller
+   * inconsistency. Re-measured via Playwright (text-node bounding box vs. `.main`'s content
+   * edge): at --space-2 the tab label sat ~4px below that edge, vs. the Calculators picker's
+   * "Calculator" label at ~1.5px (plain line-height slop). Genuine parity needs padding-top
+   * to match that ~1.5px offset directly (empirically a 1:1 relationship between padding-top
+   * and measured text offset here), which is smaller than any --space-* token — hence the
+   * literal `1.5px` below rather than a token.
+   *
+   * That's too little top padding to also serve as click/touch-target sizing (44px is the
+   * common a11y minimum, and this row has carried a real touch-target inset since FIN-90/
+   * FIN-61). So touch-target height is decoupled from padding-top entirely: `min-height: 44px`
+   * plus `display: flex; align-items: flex-start` guarantees a 44px-tall hit area while the
+   * text itself stays pinned to the top via the small padding-top, unaffected by how much
+   * extra height min-height adds below it. (Without `align-items: flex-start`, Chrome's
+   * default button-content centering would re-center the text within the taller box and
+   * undo the alignment — confirmed by measurement, not assumption.) Bottom stays at
    * --space-3 (12px) — that spacing before the active-tab underline (`border-bottom` below)
-   * is unrelated to the top-alignment issue and wasn't part of what looked off. */
-  padding: var(--space-2) 0 var(--space-3) 0;
+   * is unrelated to top alignment and wasn't part of what looked off. */
+  padding: 1.5px 0 var(--space-3) 0;
+  min-height: 44px;
+  display: flex;
+  align-items: flex-start;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
