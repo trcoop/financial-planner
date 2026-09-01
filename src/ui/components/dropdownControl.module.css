@@ -1,0 +1,45 @@
+/* FIN-110: single source of truth for the "dropdown" visual affordance — inset box-shadow
+ * border, CSS-drawn chevron, surface background — shared by every control that looks like a
+ * dropdown, regardless of what actually implements it underneath (a native `<select>` in
+ * SelectField, a custom button+popover in CalculatorPicker). Before this, the two matched only
+ * because their CSS was hand-copied in two places; a future tweak here (radius, chevron, focus
+ * ring) now only has to happen once. See SelectField.module.css for the chevron data-URI's
+ * `currentColor` caveat — the stroke color is baked in, not themeable via CSS custom property.
+ *
+ * `composes` (CSS Modules) rather than a shared React component: SelectField's `<select>` and
+ * CalculatorPicker's `<button>` are different elements with different behavior/ARIA — a shared
+ * component would have to abstract over that with little payoff, where a shared class gives the
+ * same "edit once, both update" property for the part that's actually supposed to be identical:
+ * the skin. */
+.control {
+  font: inherit;
+  font-size: var(--font-size-base);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  padding: var(--space-2) var(--space-3);
+  /* Room for the chevron on the right so it never overlaps the longest option's text. */
+  padding-right: calc(var(--space-3) + 20px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%2357606a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: 10px 6px;
+  cursor: pointer;
+}
+
+.control:hover {
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.control:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+/* CalculatorPicker's trigger sets this while its popover is open; native `<select>` never has
+ * this attribute, so this rule is inert (and harmless) for SelectField. */
+.control[aria-expanded='true'] {
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
