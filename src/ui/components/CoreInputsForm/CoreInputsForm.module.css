@@ -15,3 +15,28 @@
     gap: var(--space-4);
   }
 }
+
+/* FIN-113: the spouse Checkbox sits in a grid row next to a NumberField, which has a label
+   above its input. This spacer reproduces NumberField's .label sizing exactly (same font-size/
+   weight, no line-height override, since a line-height:1 override here previously made the
+   spacer noticeably shorter than the real label and threw off the alignment below it) so it
+   reserves the identical height. The child-selector rule then pins the Checkbox's own row to
+   NumberField's fixed 44px input height so the two vertically center on the same axis, instead
+   of the checkbox centering within its own much-shorter content height. */
+.checkboxLabelSpacer {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  visibility: hidden;
+}
+
+.checkboxRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.checkboxRow > div {
+  display: flex;
+  align-items: center;
+  height: 44px;
+}

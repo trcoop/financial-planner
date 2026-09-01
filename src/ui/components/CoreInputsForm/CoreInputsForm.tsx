@@ -1,5 +1,6 @@
+import { Checkbox } from '../Checkbox/Checkbox'
 import { NumberField } from '../NumberField/NumberField'
-import { CORE_FIELD_RANGES, rangeError } from './validation'
+import { CORE_FIELD_RANGES, rangeError, SPOUSE_AGE_RANGE } from './validation'
 import styles from './CoreInputsForm.module.css'
 
 export interface CoreInputValues {
@@ -9,10 +10,22 @@ export interface CoreInputValues {
   currentAnnualIncome: number
   /** Plain percentage (e.g. 15 for 15%), not a 0-1 fraction — matches the field's display. */
   annualContributionRatePercent: number
+  hasSpouse: boolean
+  /** Only meaningful when `hasSpouse` is true. Preserved (not cleared) when `hasSpouse` is
+   * toggled off, so re-checking restores the previously entered value. */
+  spouseAge?: number
 }
 
+/** Seeded into `spouseAge` when the spouse checkbox is checked and no age has been entered yet. */
+const DEFAULT_SPOUSE_AGE = 35
+
+/** The core numeric fields driven by `FIELDS`/`CORE_FIELD_RANGES` — excludes `hasSpouse`
+ * (boolean, its own `Checkbox`) and `spouseAge` (conditionally rendered, its own `NumberField`
+ * below) since neither fits this fixed 1:1 numeric-field-per-row layout. */
+type CoreNumericFieldKey = Exclude<keyof CoreInputValues, 'hasSpouse' | 'spouseAge'>
+
 interface FieldSpec {
-  key: keyof CoreInputValues
+  key: CoreNumericFieldKey
   label: string
   min: number
   max: number
@@ -20,7 +33,7 @@ interface FieldSpec {
   suffix?: string
 }
 
-const LABELS: Record<keyof CoreInputValues, string> = {
+const LABELS: Record<CoreNumericFieldKey, string> = {
   currentAge: 'Current age',
   retirementAge: 'Retirement age',
   initialBalance: 'Current investment balance',
@@ -42,6 +55,13 @@ const FIELDS: FieldSpec[] = CORE_FIELD_RANGES.map((range) => ({
   ...ADORNMENTS[range.key],
 }))
 
+/** currentAge renders first, then the spouse checkbox + conditional age field (grouped with the
+ * primary's age rather than tacked on at the end of the form), then the remaining fields
+ * (retirementAge onward) — so the spouse block sits between currentAge and retirementAge. */
+const FIRST_FIELD_KEY: CoreNumericFieldKey = 'currentAge'
+const LEAD_FIELDS = FIELDS.filter((field) => field.key === FIRST_FIELD_KEY)
+const TRAILING_FIELDS = FIELDS.filter((field) => field.key !== FIRST_FIELD_KEY)
+
 interface CoreInputsFormProps {
   values: CoreInputValues
   onChange: (values: CoreInputValues) => void
@@ -57,24 +77,55 @@ export const DEFAULT_CORE_VALUES: CoreInputValues = {
   initialBalance: 250000,
   currentAnnualIncome: 85000,
   annualContributionRatePercent: 15,
+  hasSpouse: false,
+  spouseAge: undefined,
 }
 
 export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
+  const renderField = (field: FieldSpec) => (
+    <NumberField
+      key={field.key}
+      label={field.label}
+      value={values[field.key]}
+      min={field.min}
+      max={field.max}
+      prefix={field.prefix}
+      suffix={field.suffix}
+      error={rangeError(values[field.key], field.min, field.max)}
+      onChange={(value) => onChange({ ...values, [field.key]: value })}
+    />
+  )
+
   return (
     <form aria-label="Core financial details" className={styles.form}>
-      {FIELDS.map((field) => (
-        <NumberField
-          key={field.key}
-          label={field.label}
-          value={values[field.key]}
-          min={field.min}
-          max={field.max}
-          prefix={field.prefix}
-          suffix={field.suffix}
-          error={rangeError(values[field.key], field.min, field.max)}
-          onChange={(value) => onChange({ ...values, [field.key]: value })}
+      {LEAD_FIELDS.map(renderField)}
+      <div className={styles.checkboxRow}>
+        <span className={styles.checkboxLabelSpacer} aria-hidden="true">
+          &nbsp;
+        </span>
+        <Checkbox
+          label="Has a spouse"
+          checked={values.hasSpouse}
+          onChange={(checked) =>
+            onChange({
+              ...values,
+              hasSpouse: checked,
+              spouseAge: checked && values.spouseAge === undefined ? DEFAULT_SPOUSE_AGE : values.spouseAge,
+            })
+          }
         />
-      ))}
+      </div>
+      {values.hasSpouse && (
+        <NumberField
+          label="Spouse's age"
+          value={values.spouseAge ?? DEFAULT_SPOUSE_AGE}
+          min={SPOUSE_AGE_RANGE.min}
+          max={SPOUSE_AGE_RANGE.max}
+          error={rangeError(values.spouseAge ?? DEFAULT_SPOUSE_AGE, SPOUSE_AGE_RANGE.min, SPOUSE_AGE_RANGE.max)}
+          onChange={(value) => onChange({ ...values, spouseAge: value })}
+        />
+      )}
+      {TRAILING_FIELDS.map(renderField)}
     </form>
   )
 }

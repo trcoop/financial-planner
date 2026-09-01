@@ -16,6 +16,8 @@ const CORE: CoreInputValues = {
   initialBalance: 250000,
   currentAnnualIncome: 85000,
   annualContributionRatePercent: 15,
+  hasSpouse: false,
+  spouseAge: undefined,
 }
 
 const ADVANCED: AdvancedAssumptionValues = {
