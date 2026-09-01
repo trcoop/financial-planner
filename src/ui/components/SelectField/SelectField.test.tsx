@@ -75,7 +75,8 @@ describe('SelectField', () => {
     expect(trigger).toHaveFocus()
 
     await user.keyboard('{Enter}')
-    expect(screen.getByRole('listbox')).toHaveFocus()
+    // Select-only-combobox pattern: focus stays on the trigger the whole time (see Dropdown.tsx).
+    expect(trigger).toHaveFocus()
     await user.keyboard('{ArrowDown}')
     await user.keyboard('{Enter}')
     expect(onChange).toHaveBeenCalledWith('monthly')

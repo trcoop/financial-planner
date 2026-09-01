@@ -41,8 +41,22 @@ const VIEWPORT_MARGIN = 8
  * navigation/selection control (listbox/menu semantics), not `Tooltip`'s supplementary-info
  * popover, so it reuses `Tooltip.tsx`'s portal-rendering / viewport-aware-positioning /
  * outside-click / Escape-to-close patterns but opens on click (primary interaction) rather than
- * hover, and adds full listbox keyboard operability (roving `tabindex`/`aria-activedescendant`)
- * that `Tooltip` doesn't need. See ERD: Investment Calculator §1.
+ * hover.
+ *
+ * Keyboard model follows the WAI-ARIA Authoring Practices Guide's "Select-Only Combobox"
+ * (a.k.a. "Collapsible Dropdown Listbox") pattern — the same model Radix UI, React Aria, and
+ * Headless UI's `Listbox`/`Select` all implement, and the one a native `<select>` itself uses:
+ * DOM focus never leaves the trigger for the whole time the popover is open. The trigger's
+ * `onKeyDown` handles every key (open, close, move, select) regardless of `isOpen`, and
+ * `aria-activedescendant` on the (permanently focused) trigger points at the id of the
+ * currently-highlighted option — that id just needs to resolve in the same document, which is
+ * fine even though the listbox it lives in is portaled elsewhere in the DOM. The listbox div
+ * itself is never focused and has no `onKeyDown` of its own; it's purely a rendering target.
+ * An earlier version moved real DOM focus into the portaled listbox on open (roving tabindex),
+ * which was a timing/reliability hazard — after the popover's first open, subsequent
+ * ArrowDown/ArrowUp presses silently went nowhere in real browsers (portal mount timing was
+ * unreliable enough that focus didn't consistently land, or stay, on the listbox), even though
+ * jsdom's `.focus()` in tests couldn't reproduce the gap. See ERD: Investment Calculator §1.
  */
 export function Dropdown({
   options,
@@ -68,7 +82,6 @@ export function Dropdown({
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
-  const listboxRef = useRef<HTMLDivElement>(null)
   const popoverId = useId()
   const optionIdPrefix = useId()
 
@@ -110,15 +123,18 @@ export function Dropdown({
     }
   }
 
+  // Select-only-combobox pattern: the trigger's onKeyDown handles every key, whether the popover
+  // is open or closed, because DOM focus never leaves the trigger. When closed, ArrowDown/Up/
+  // Enter/Space open the popover; when already open they move or activate the highlighted option.
   const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
-    if (isOpen) return
-    if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown') {
-      event.preventDefault()
-      openAt(selectedIndex)
+    if (!isOpen) {
+      if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault()
+        openAt(selectedIndex)
+      }
+      return
     }
-  }
 
-  const handleListboxKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
@@ -153,11 +169,6 @@ export function Dropdown({
         break
     }
   }
-
-  // Focus the listbox itself (roving tabindex via aria-activedescendant) whenever it opens.
-  useEffect(() => {
-    if (isOpen) listboxRef.current?.focus()
-  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -231,6 +242,12 @@ export function Dropdown({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={isOpen ? popoverId : undefined}
+        // Select-only-combobox pattern: aria-activedescendant lives on the focused trigger, not
+        // on the (never-focused) portaled listbox, and only points anywhere while open. Same
+        // oxlint caveat as aria-invalid below — its ARIA-1.1 role table doesn't yet list
+        // aria-activedescendant as valid on a plain `button`, but the APG combobox pattern puts
+        // it exactly here; the resulting lint warning is expected.
+        aria-activedescendant={isOpen ? optionId(activeIndex) : undefined}
         // oxlint's ARIA-1.1 role table doesn't yet list `aria-invalid` as valid on `button`
         // (eslint-disable comments don't suppress this rule in oxlint), but ARIA 1.2 added it
         // for exactly this case — a custom widget standing in for a form control. SelectField
@@ -253,21 +270,19 @@ export function Dropdown({
             className={styles.popover}
             style={position ? { top: position.top, left: position.left } : { visibility: 'hidden' }}
           >
-            {/* A native <select>/<option> can't be portaled, positioned relative to the trigger,
-                or driven by the roving-tabindex/aria-activedescendant pattern the ERD specifies
-                (§1) — this custom listbox implements that pattern by hand, so the jsx-a11y lint
-                suggestions below (prefer native form-control tags) don't apply here. */}
+            {/* A native <select>/<option> can't be portaled or positioned relative to the
+                trigger — this custom listbox implements the select-only-combobox pattern by
+                hand, so the jsx-a11y lint suggestions below (prefer native form-control tags)
+                don't apply here. It's never focused and has no key handling of its own: per the
+                pattern, the always-focused trigger owns aria-activedescendant and all keyboard
+                interaction; this div is purely a rendering target for the portaled options. */}
             <div
               role="listbox"
-              ref={listboxRef}
-              tabIndex={-1}
               className={styles.listbox}
-              aria-activedescendant={optionId(activeIndex)}
               aria-label={selectedOption ? `${ariaLabel} (currently ${selectedOption.label})` : ariaLabel}
-              onKeyDown={handleListboxKeyDown}
             >
               {options.map((option, index) => (
-                // eslint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- keyboard activation is handled by the listbox's onKeyDown (roving focus); this option is intentionally not independently focusable or key-handled.
+                // eslint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- keyboard activation is handled by the trigger's onKeyDown (select-only-combobox pattern); this option is intentionally not independently focusable or key-handled.
                 <div
                   key={option.id}
                   id={optionId(index)}

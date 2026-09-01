@@ -46,17 +46,20 @@ describe('Dropdown', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 
-  it('opens on Enter and moves focus into the listbox with the current option active', async () => {
+  it('opens on Enter and keeps DOM focus on the trigger, with the current option active via aria-activedescendant', async () => {
+    // Select-only-combobox pattern (WAI-ARIA APG): focus never leaves the trigger. The listbox
+    // itself is never focused — the trigger's aria-activedescendant is what tracks the active
+    // option, even though the listbox it names lives in a portal elsewhere in the DOM.
     const user = userEvent.setup()
     setup()
     const trigger = screen.getByRole('button', { name: /Investment Calculator/ })
     trigger.focus()
     await user.keyboard('{Enter}')
 
+    expect(trigger).toHaveFocus()
     const listbox = screen.getByRole('listbox')
-    expect(listbox).toHaveFocus()
     const options = within(listbox).getAllByRole('option')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[0].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[0].id)
     expect(options[0]).toHaveAttribute('aria-selected', 'true')
   })
 
@@ -69,7 +72,7 @@ describe('Dropdown', () => {
 
     const listbox = screen.getByRole('listbox')
     const options = within(listbox).getAllByRole('option')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[1].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[1].id)
     expect(options[1]).toHaveAttribute('aria-selected', 'true')
   })
 
@@ -133,30 +136,42 @@ describe('Dropdown', () => {
     await user.keyboard('{ArrowDown}')
     const listbox = screen.getByRole('listbox')
     const options = within(listbox).getAllByRole('option')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[0].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[0].id)
   })
 
-  it('moves the active option with ArrowDown/ArrowUp (roving focus)', async () => {
+  it('moves the active option with repeated sequential ArrowDown/ArrowUp presses, all handled by the trigger', async () => {
+    // Regression test for the real bug: an earlier implementation moved DOM focus into the
+    // portaled listbox on open and handled arrow keys there. The *first* ArrowDown (which opens
+    // the popover) worked because it's handled by the trigger regardless, but every ArrowDown
+    // after that relied on focus having actually landed on the listbox div — which was flaky
+    // across portal-mount timing/browsers, so the second and later presses silently did nothing.
+    // Under the select-only-combobox pattern focus never moves, so this must advance every time.
     const user = userEvent.setup()
     setup()
     const trigger = screen.getByRole('button', { name: /Investment Calculator/ })
     trigger.focus()
     await user.keyboard('{Enter}')
+    expect(trigger).toHaveFocus()
     const listbox = screen.getByRole('listbox')
     const options = within(listbox).getAllByRole('option')
 
     await user.keyboard('{ArrowDown}')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[1].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[1].id)
+    expect(trigger).toHaveFocus()
 
     await user.keyboard('{ArrowDown}')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[2].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[2].id)
+    expect(trigger).toHaveFocus()
 
     // stays at the last option
     await user.keyboard('{ArrowDown}')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[2].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[2].id)
 
     await user.keyboard('{ArrowUp}')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[1].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[1].id)
+
+    await user.keyboard('{ArrowUp}')
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[0].id)
   })
 
   it('Home/End jump the active option to the first/last', async () => {
@@ -169,10 +184,10 @@ describe('Dropdown', () => {
     const options = within(listbox).getAllByRole('option')
 
     await user.keyboard('{End}')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[2].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[2].id)
 
     await user.keyboard('{Home}')
-    expect(listbox).toHaveAttribute('aria-activedescendant', options[0].id)
+    expect(trigger).toHaveAttribute('aria-activedescendant', options[0].id)
   })
 
   it('selects the active option with Enter, closes the popover, and returns focus to the trigger', async () => {
