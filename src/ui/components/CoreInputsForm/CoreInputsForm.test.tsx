@@ -11,6 +11,8 @@ const DEFAULT_VALUES: CoreInputValues = {
   initialBalance: 250000,
   currentAnnualIncome: 85000,
   annualContributionRatePercent: 15,
+  hasSpouse: false,
+  spouseAge: undefined,
 }
 
 function ControlledForm({ initial = DEFAULT_VALUES }: { initial?: CoreInputValues }) {
@@ -124,6 +126,67 @@ describe('CoreInputsForm', () => {
 
     it('pairs fields two-to-a-row on desktop', () => {
       expect(desktopBlock).toMatch(/\.form\s*\{[^}]*grid-template-columns:\s*1fr 1fr;/)
+    })
+  })
+
+  describe('spouse capture (FIN-113)', () => {
+    it('renders a "Has a spouse" checkbox', () => {
+      render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
+      expect(screen.getByLabelText('Has a spouse')).toBeInTheDocument()
+    })
+
+    it('does not render the spouse age field when hasSpouse is false', () => {
+      render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
+      expect(screen.queryByLabelText("Spouse's age")).not.toBeInTheDocument()
+    })
+
+    it('renders the spouse age field when hasSpouse is true', () => {
+      render(<CoreInputsForm values={{ ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 32 }} onChange={vi.fn()} />)
+      expect(screen.getByLabelText("Spouse's age")).toHaveValue('32')
+    })
+
+    it('seeds spouseAge to a reasonable default when checked and spouseAge is undefined', () => {
+      const onChange = vi.fn()
+      render(<CoreInputsForm values={DEFAULT_VALUES} onChange={onChange} />)
+
+      fireEvent.click(screen.getByLabelText('Has a spouse'))
+
+      expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 35 })
+    })
+
+    it('does not overwrite an existing spouseAge when re-checked', () => {
+      const onChange = vi.fn()
+      const values = { ...DEFAULT_VALUES, hasSpouse: false, spouseAge: 40 }
+      render(<CoreInputsForm values={values} onChange={onChange} />)
+
+      fireEvent.click(screen.getByLabelText('Has a spouse'))
+
+      expect(onChange).toHaveBeenLastCalledWith({ ...values, hasSpouse: true })
+    })
+
+    it('unchecking hides the age field but preserves spouseAge in state', () => {
+      const onChange = vi.fn()
+      const values = { ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 40 }
+      render(<CoreInputsForm values={values} onChange={onChange} />)
+
+      fireEvent.click(screen.getByLabelText('Has a spouse'))
+
+      expect(onChange).toHaveBeenLastCalledWith({ ...values, hasSpouse: false, spouseAge: 40 })
+    })
+
+    it('shows a range validation error for spouse age out of range, same pattern as currentAge', () => {
+      render(<CoreInputsForm values={{ ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 150 }} onChange={vi.fn()} />)
+      expect(screen.getByRole('alert')).toHaveTextContent(/between 18 and 100/i)
+    })
+
+    it('round-trips spouseAge changes through onChange', () => {
+      const onChange = vi.fn()
+      const values = { ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 32 }
+      render(<CoreInputsForm values={values} onChange={onChange} />)
+
+      fireEvent.change(screen.getByLabelText("Spouse's age"), { target: { value: '33' } })
+
+      expect(onChange).toHaveBeenLastCalledWith({ ...values, spouseAge: 33 })
     })
   })
 })

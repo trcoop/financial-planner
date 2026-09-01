@@ -130,6 +130,25 @@ describe('loadAssumptions edge cases', () => {
     })
   })
 
+  it('fills in hasSpouse/spouseAge defaults for a record persisted before FIN-113', () => {
+    // Simulates a pre-FIN-113 persisted record that predates the spouse fields entirely.
+    const preSpouseCore = JSON.stringify({
+      core: {
+        currentAge: 40,
+        retirementAge: 65,
+        initialBalance: 100000,
+        currentAnnualIncome: 90000,
+        annualContributionRatePercent: 10,
+      },
+      advanced: {},
+    })
+    vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preSpouseCore }))
+
+    const loaded = loadAssumptions()
+    expect(loaded?.core.hasSpouse).toBe(DEFAULT_CORE_VALUES.hasSpouse)
+    expect(loaded?.core.spouseAge).toBe(DEFAULT_CORE_VALUES.spouseAge)
+  })
+
   it('falls back to defaults per-field when core/advanced are object-shaped but wrong type', () => {
     const wrongType = JSON.stringify({ core: 'not an object', advanced: ['also', 'wrong'] })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: wrongType }))
