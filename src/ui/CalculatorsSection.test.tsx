@@ -28,7 +28,8 @@ describe('CalculatorsSection', () => {
   it('renders the calculator picker dropdown with Investment Calculator selected by default', () => {
     render(<CalculatorsSection />)
 
-    expect(screen.getByRole('button', { name: /investment calculator/i })).toBeInTheDocument()
+    const trigger = screen.getByRole('button', { name: 'Calculator' })
+    expect(trigger).toHaveTextContent(/investment calculator/i)
   })
 
   it('renders the InvestmentCalculator in place by default', () => {
@@ -41,7 +42,7 @@ describe('CalculatorsSection', () => {
     const user = userEvent.setup()
     render(<CalculatorsSection />)
 
-    await user.click(screen.getByRole('button', { name: /investment calculator/i }))
+    await user.click(screen.getByRole('button', { name: 'Calculator' }))
     await user.click(screen.getByRole('option', { name: /investment calculator/i }))
 
     expect(screen.getByRole('region', { name: /investment calculator/i })).toBeInTheDocument()
@@ -70,7 +71,7 @@ describe('CalculatorsSection', () => {
     const user = userEvent.setup()
     render(<CalculatorsSection calculators={stubCalculators} />)
 
-    await user.click(screen.getByRole('button', { name: /investment calculator/i }))
+    await user.click(screen.getByRole('button', { name: 'Calculator' }))
     await user.click(screen.getByRole('option', { name: /second calculator/i }))
 
     expect(screen.getByRole('region', { name: /second calculator/i })).toBeInTheDocument()

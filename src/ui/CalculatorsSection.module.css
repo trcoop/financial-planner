@@ -1,0 +1,27 @@
+/* FIN-110 (visual review round): the plain `<h1>` here previously inherited the UA-default-ish
+ * global `h1` rule from index.css (Vite template leftover — 56px font-size, 32px top/bottom
+ * margin, 20px at <1024px) since this was the only `<h1>` in the app and nothing overrode it.
+ * That's what produced the "large empty gap above the selector" Travis flagged — not `.main`'s
+ * padding, and not anything copied from Plan's TabBar layout. `margin: 0` here removes it; sizing
+ * matches `.sectionHeading` (PlanSection's own local tab headings, App.css) so this reads at a
+ * comparable weight to the rest of the app's headings rather than the oversized template default. */
+.heading {
+  margin: 0;
+  font-size: var(--font-size-lg, 1.125rem);
+  font-weight: 600;
+}
+
+/* Groups the page title + calculator picker into one "switcher" zone positioned where Plan's
+ * TabBar sits (top of `.main`'s content, no extra offset above it) and visually separated from
+ * the selected calculator's own form content below — Plan achieves that same separation via
+ * TabBar's underline tabs plus a background change on scroll; there's no tab row here to carry
+ * that job, so a plain hairline (`--color-border-subtle`, the same token Card/panel hairlines use
+ * elsewhere) plus deliberate padding underneath does it instead. */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: var(--space-5);
+  margin-bottom: var(--space-5);
+  border-bottom: 1px solid var(--color-border-subtle);
+}

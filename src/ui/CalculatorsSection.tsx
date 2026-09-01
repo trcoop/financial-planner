@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SelectField } from './components/SelectField/SelectField'
 import { InvestmentCalculator } from './components/InvestmentCalculator/InvestmentCalculator'
+import styles from './CalculatorsSection.module.css'
 
 export interface CalculatorEntry {
   id: string
@@ -37,12 +38,12 @@ export function CalculatorsSection({ calculators = CALCULATORS }: CalculatorsSec
 
   return (
     <section data-testid="calculators-section" data-selected-id={selectedId}>
-      <header>
-        <h1 ref={headingRef} tabIndex={-1}>
+      <header className={styles.header}>
+        <h1 ref={headingRef} tabIndex={-1} className={styles.heading}>
           Calculators
         </h1>
         <SelectField
-          ariaLabel="Choose calculator"
+          label="Calculator"
           fullWidth={false}
           options={calculators.map(({ id, label }) => ({ value: id, label }))}
           value={selected.id}
