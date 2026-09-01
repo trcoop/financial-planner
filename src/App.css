@@ -320,7 +320,12 @@
 @media (min-width: 960px) {
   .profileLayout {
     flex-direction: row;
-    align-items: flex-start;
+    /* Default (stretch, so no explicit declaration needed) rather than flex-start: lets the
+     * nav's `.leftNav`/`.inline` `height: 100%` actually have a row height to fill, matching how
+     * the app-level LeftNav spans .body's full height beside .main. `.profileContent` is a plain
+     * flex column with normal block-flowing children (forms, placeholder text), so stretching
+     * its own box taller just adds trailing whitespace below its content — it doesn't stretch
+     * the children themselves, so a short placeholder tab's text doesn't look distorted. */
   }
 
   .profileNavDesktop {

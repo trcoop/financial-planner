@@ -44,6 +44,16 @@
     color: #ffffff;
     background: rgba(255, 255, 255, 0.08);
   }
+
+  /* `.itemActive` (one class selector) loses specificity to `.item:hover` (class + pseudo-class)
+   * even though it comes later in source order — the active item's button carries both classes,
+   * so without this override hovering the already-selected item flashed to the plain hover
+   * color/background instead of keeping its active look. Re-asserting the active styling here,
+   * at equal specificity to `.item:hover` but later in source order, wins back the active look. */
+  .itemActive:hover {
+    color: #ffffff;
+    background: var(--color-primary);
+  }
 }
 
 .itemActive {
@@ -53,13 +63,16 @@
 }
 
 /* FIN-115: light variant for reuse as an in-page section-internal switcher (e.g. Profile's
- * People/Accounts/Rates nav) rather than the app-chrome shell. Overrides just the surface/text
- * colors so it sits naturally on a light `Card`/panel background instead of the dark shell. */
+ * People/Accounts/Rates nav) rather than the app-chrome shell. The app-level (dark) LeftNav
+ * reads as "separated but borderless" purely because it and `.main` are two adjacent flat
+ * colors (dark chrome vs. light content) — the color change itself is the boundary, no box
+ * needed. Inside Profile, the nav and content both start on white, so this variant gets the
+ * same effect the same way: a flat, distinct background (the app's muted page-gray token,
+ * `--color-page-bg` — distinct from `--color-bg` white and from `--color-surface`'s card tint)
+ * rather than faking a boundary with a border/radius "card" floating next to the content. */
 .inline {
   width: 200px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
+  background: var(--color-page-bg);
 }
 
 .inline .item {
@@ -70,6 +83,12 @@
   .inline .item:hover {
     color: var(--color-text);
     background: var(--color-surface-hover);
+  }
+
+  /* Same specificity bug as `.itemActive:hover` above, same fix. */
+  .inline .itemActive:hover {
+    color: #ffffff;
+    background: var(--color-primary);
   }
 }
 
