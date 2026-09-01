@@ -91,6 +91,17 @@ describe('TabBar', () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
+  it('defaults the tablist label to "Views"', () => {
+    render(<TabBar tabs={tabs} activeTab="projection" onTabChange={() => {}} />)
+    expect(screen.getByRole('tablist', { name: 'Views' })).toBeInTheDocument()
+  })
+
+  it('accepts a custom ariaLabel (FIN-115: reuse as the mobile Profile strip)', () => {
+    render(<TabBar tabs={tabs} activeTab="projection" onTabChange={() => {}} ariaLabel="Profile sections" />)
+    expect(screen.getByRole('tablist', { name: 'Profile sections' })).toBeInTheDocument()
+    expect(screen.queryByRole('tablist', { name: 'Views' })).not.toBeInTheDocument()
+  })
+
   // jsdom (this project's Vitest environment) doesn't load real stylesheets
   // or evaluate `@media` — `vite.config.ts` test config has no `css: true`,
   // so CSS module imports resolve to identity proxies and getComputedStyle

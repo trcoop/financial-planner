@@ -11,9 +11,14 @@ interface TabBarProps {
   tabs: TabBarTab[]
   activeTab: string
   onTabChange: (tabId: string) => void
+  /** Accessible name for the `role="tablist"` container. Defaults to "Views" (the original
+   * Projection/Stress Test/Profile usage). FIN-115 reuses TabBar as the mobile Profile
+   * People/Accounts/Rates strip — passing a distinct label there ("Profile sections") keeps
+   * the two tablists on the page distinguishable to a screen-reader user. */
+  ariaLabel?: string
 }
 
-export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
+export function TabBar({ tabs, activeTab, onTabChange, ariaLabel = 'Views' }: TabBarProps) {
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   function focusTabAt(index: number) {
@@ -51,7 +56,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
   }
 
   return (
-    <div className={styles.tabBar} role="tablist" aria-label="Views">
+    <div className={styles.tabBar} role="tablist" aria-label={ariaLabel}>
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTab
         return (

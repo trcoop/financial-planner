@@ -51,3 +51,29 @@
   background: var(--color-primary);
   font-weight: 700;
 }
+
+/* FIN-115: light variant for reuse as an in-page section-internal switcher (e.g. Profile's
+ * People/Accounts/Rates nav) rather than the app-chrome shell. Overrides just the surface/text
+ * colors so it sits naturally on a light `Card`/panel background instead of the dark shell. */
+.inline {
+  width: 200px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.inline .item {
+  color: var(--color-text-muted);
+}
+
+@media (hover: hover) {
+  .inline .item:hover {
+    color: var(--color-text);
+    background: var(--color-surface-hover);
+  }
+}
+
+.inline .itemActive {
+  color: #ffffff;
+  background: var(--color-primary);
+}

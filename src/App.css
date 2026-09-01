@@ -295,3 +295,52 @@
   outline: none;
   box-shadow: none;
 }
+
+/* FIN-115: Profile's own section-internal nav shell (People/Accounts/Rates). Desktop shows the
+ * LeftNav rail beside the content; mobile shows TabBar's horizontal strip above it instead.
+ * Both mount unconditionally (see PlanSection.tsx) — this CSS-only breakpoint is what actually
+ * controls which is visible, the same dual-mount pattern App.css already uses for
+ * .navPane/.bottomNavPane above, at the app's shared 960px content-density breakpoint (FIN-32)
+ * rather than the app-shell's separate 599px primary-nav breakpoint. */
+.profileLayout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+}
+
+.profileNavDesktop {
+  display: none;
+}
+
+.profileNavMobile {
+  display: block;
+}
+
+@media (min-width: 960px) {
+  .profileLayout {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .profileNavDesktop {
+    display: block;
+  }
+
+  .profileNavMobile {
+    display: none;
+  }
+}
+
+.profileContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  flex: 1;
+}
+
+.profilePlaceholder {
+  margin: 0;
+  color: var(--color-text-muted);
+}

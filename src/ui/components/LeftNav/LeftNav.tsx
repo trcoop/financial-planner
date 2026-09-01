@@ -18,6 +18,20 @@ export interface LeftNavProps {
   items: NavItem[]
   activeId: NavItem['id']
   onSelect: (id: NavItem['id']) => void
+  /** Accessible name for the `<nav>` landmark. Defaults to "Sections" (the app-shell usage);
+   * callers embedding LeftNav as a section-internal switcher (FIN-115) should pass something
+   * more specific (e.g. "Profile sections") so a screen-reader user can tell the page's `<nav>`
+   * landmarks apart. */
+  ariaLabel?: string
+  /**
+   * FIN-115: `'shell'` (default) is the original dark app-chrome look, used for the app's
+   * top-level Plan/Calculators switcher. `'inline'` is a light variant for reuse *inside* a
+   * page section (e.g. Profile's People/Accounts/Rates switcher), where the dark sidebar would
+   * read as stray app chrome rather than in-page navigation. DOM and keyboard/aria behavior are
+   * identical either way — only the CSS class changes — per design-spec §6 ("add an optional
+   * prop rather than build a parallel component" when the underlying behavior is the same).
+   */
+  variant?: 'shell' | 'inline'
 }
 
 /**
@@ -38,7 +52,7 @@ export interface LeftNavProps {
  * No app-state knowledge lives here: which items exist, which is active, and
  * what happens on selection are all owned by the caller (FIN-100/FIN-89).
  */
-export function LeftNav({ items, activeId, onSelect }: LeftNavProps) {
+export function LeftNav({ items, activeId, onSelect, ariaLabel = 'Sections', variant = 'shell' }: LeftNavProps) {
   const itemRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   function focusItemAt(index: number) {
@@ -76,7 +90,10 @@ export function LeftNav({ items, activeId, onSelect }: LeftNavProps) {
   }
 
   return (
-    <nav className={styles.leftNav} aria-label="Sections">
+    <nav
+      className={variant === 'inline' ? `${styles.leftNav} ${styles.inline}` : styles.leftNav}
+      aria-label={ariaLabel}
+    >
       {items.map((item, index) => {
         const isActive = item.id === activeId
         const Icon = item.icon

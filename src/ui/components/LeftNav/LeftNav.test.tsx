@@ -111,6 +111,23 @@ describe('LeftNav', () => {
     expect(onSelect).toHaveBeenCalledWith('calculators')
   })
 
+  it('defaults the nav landmark label to "Sections"', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} />)
+    expect(screen.getByRole('navigation', { name: 'Sections' })).toBeInTheDocument()
+  })
+
+  it('accepts a custom ariaLabel (FIN-115: reuse as a section-internal nav)', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} ariaLabel="Profile sections" />)
+    expect(screen.getByRole('navigation', { name: 'Profile sections' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
+  })
+
+  it('renders the inline variant without changing button semantics (FIN-115)', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} variant="inline" />)
+    expect(screen.getByRole('navigation')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Plan' })).toHaveAttribute('aria-current', 'page')
+  })
+
   it('selects the focused item on Space, via the keydown handler', () => {
     const onSelect = vi.fn()
     render(<LeftNav items={items} activeId="plan" onSelect={onSelect} />)
