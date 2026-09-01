@@ -5,15 +5,24 @@ import styles from './TabBar.module.css'
 export interface TabBarTab {
   id: string
   label: string
+  /** Optional icon rendered beside the label (FIN-115: Profile's mobile People/Accounts/Rates
+   * strip). Existing tab lists (Projection/Stress Test/Profile) simply omit it and render
+   * unchanged — mirrors `NavItem.icon` on `LeftNav`. */
+  icon?: React.ComponentType<{ className?: string }>
 }
 
 interface TabBarProps {
   tabs: TabBarTab[]
   activeTab: string
   onTabChange: (tabId: string) => void
+  /** Accessible name for the `role="tablist"` container. Defaults to "Views" (the original
+   * Projection/Stress Test/Profile usage). FIN-115 reuses TabBar as the mobile Profile
+   * People/Accounts/Rates strip — passing a distinct label there ("Profile sections") keeps
+   * the two tablists on the page distinguishable to a screen-reader user. */
+  ariaLabel?: string
 }
 
-export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
+export function TabBar({ tabs, activeTab, onTabChange, ariaLabel = 'Views' }: TabBarProps) {
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   function focusTabAt(index: number) {
@@ -51,9 +60,10 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
   }
 
   return (
-    <div className={styles.tabBar} role="tablist" aria-label="Views">
+    <div className={styles.tabBar} role="tablist" aria-label={ariaLabel}>
       {tabs.map((tab, index) => {
         const isActive = tab.id === activeTab
+        const Icon = tab.icon
         return (
           <button
             key={tab.id}
@@ -70,6 +80,7 @@ export function TabBar({ tabs, activeTab, onTabChange }: TabBarProps) {
             onClick={() => onTabChange(tab.id)}
             onKeyDown={(event) => handleKeyDown(event, index)}
           >
+            {Icon ? <Icon className={styles.icon} /> : null}
             {tab.label}
           </button>
         )

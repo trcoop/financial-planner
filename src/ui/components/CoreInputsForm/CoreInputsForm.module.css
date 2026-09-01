@@ -4,7 +4,7 @@
   gap: var(--space-4);
 }
 
-/* FIN-101: full-width Settings tab (FIN-88/98) left these fields too wide/sparse on desktop —
+/* FIN-101: full-width Profile tab (FIN-88/98, renamed from Settings by FIN-115) left these fields too wide/sparse on desktop —
    pair them two-to-a-row above the app's 960px breakpoint (matches StressTestSection's
    .chartRow) rather than one stretched input per row. Mobile keeps the single-column flex
    above, unchanged. */

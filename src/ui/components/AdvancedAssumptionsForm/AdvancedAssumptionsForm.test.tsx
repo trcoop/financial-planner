@@ -6,9 +6,9 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
   AdvancedAssumptionsForm,
-  DEFAULT_ADVANCED_VALUES,
   type AdvancedAssumptionValues,
 } from './AdvancedAssumptionsForm'
+import { DEFAULT_ADVANCED_VALUES } from './defaults'
 
 const DEFAULT_VALUES: AdvancedAssumptionValues = {
   annualRaisePercent: 3,

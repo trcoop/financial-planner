@@ -97,17 +97,17 @@ function mockMatchMedia(isDesktop: boolean) {
 // src/ui/hooks/useProjectionState.test.ts (FIN-33) without needing to render PlanSection at all.
 // This file covers what's actually PlanSection's job: composing components and wiring
 // props/state between them (tab switching, forms, stress test, and — since FIN-98/FIN-88 — the
-// Settings tab that replaced the old Drawer).
+// Profile tab that replaced the old Drawer).
 describe('PlanSection', () => {
   beforeEach(() => mockMatchMedia(true))
   afterEach(() => cleanup())
 
-  it('renders its own TabBar with Projection, Stress Test, and Settings tabs', () => {
+  it('renders its own TabBar with Projection, Stress Test, and Profile tabs', () => {
     render(<PlanSection />)
     expect(screen.getByRole('tablist', { name: 'Views' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Projection' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Stress Test' })).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Profile' })).toBeInTheDocument()
   })
 
   it('defaults to the Projection tab, showing StatTiles and the chart, not the ProjectionTable', () => {
@@ -185,7 +185,7 @@ describe('PlanSection', () => {
       render(<PlanSection />)
       expect(screen.getByText('Run a stress test to see this')).toBeInTheDocument()
 
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
       await user.type(ageInput, '40')
@@ -211,7 +211,7 @@ describe('PlanSection', () => {
       })
       expect(screen.getByText('87%')).toBeInTheDocument()
 
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
       await user.type(ageInput, '40')
@@ -237,7 +237,7 @@ describe('PlanSection', () => {
       })
       expect(screen.getByText('87%')).toBeInTheDocument()
 
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
       await user.type(ageInput, '40')
@@ -263,7 +263,7 @@ describe('PlanSection', () => {
 
     expect(screen.getByTestId('percentile-chart-retirement-marker')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: 'Settings' }))
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
     const retirementAgeInput = screen.getByLabelText('Retirement age')
     await user.clear(retirementAgeInput)
     await user.type(retirementAgeInput, '20')
@@ -278,7 +278,7 @@ describe('PlanSection', () => {
 
     expect(screen.getByTestId('percentile-chart-medicare-marker')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('tab', { name: 'Settings' }))
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
     const ageInput = screen.getByLabelText('Current age')
     await user.clear(ageInput)
     await user.type(ageInput, '65')
@@ -293,7 +293,7 @@ describe('PlanSection', () => {
   })
 })
 
-describe('PlanSection Settings tab (FIN-98/FIN-88: replaces the Drawer)', () => {
+describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
   beforeEach(() => mockMatchMedia(true))
   afterEach(() => cleanup())
 
@@ -301,8 +301,8 @@ describe('PlanSection Settings tab (FIN-98/FIN-88: replaces the Drawer)', () => 
     const user = userEvent.setup()
     render(<PlanSection />)
 
-    await user.click(screen.getByRole('tab', { name: 'Settings' }))
-    expect(screen.getByRole('tab', { name: 'Settings' })).toHaveAttribute('aria-selected', 'true')
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    expect(screen.getByRole('tab', { name: 'Profile' })).toHaveAttribute('aria-selected', 'true')
 
     expect(screen.getByLabelText('Current age')).toBeInTheDocument()
     expect(screen.getByLabelText('Retirement age')).toBeInTheDocument()
@@ -314,11 +314,11 @@ describe('PlanSection Settings tab (FIN-98/FIN-88: replaces the Drawer)', () => 
     expect(screen.queryByRole('button', { name: /expand/i })).not.toBeInTheDocument()
   })
 
-  it('reflects a value changed in Settings once switched to Projection', async () => {
+  it('reflects a value changed in Profile once switched to Projection', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
 
-    await user.click(screen.getByRole('tab', { name: 'Settings' }))
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
     const balanceInput = screen.getByRole('textbox', { name: 'Current investment balance' })
     await user.clear(balanceInput)
     await user.type(balanceInput, '500000')
@@ -327,11 +327,11 @@ describe('PlanSection Settings tab (FIN-98/FIN-88: replaces the Drawer)', () => 
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
   })
 
-  it('clicking Reset from Settings triggers the existing reset confirmation flow', async () => {
+  it('clicking Reset from Profile triggers the existing reset confirmation flow', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
 
-    await user.click(screen.getByRole('tab', { name: 'Settings' }))
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
     await user.click(screen.getByRole('button', { name: 'Reset to defaults' }))
 
     expect(screen.getByRole('alertdialog')).toBeInTheDocument()
@@ -344,7 +344,7 @@ describe('PlanSection Settings tab (FIN-98/FIN-88: replaces the Drawer)', () => 
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<PlanSection />)
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
       await user.type(ageInput, '50')
@@ -363,6 +363,110 @@ describe('PlanSection Settings tab (FIN-98/FIN-88: replaces the Drawer)', () => 
   })
 })
 
+describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () => {
+  beforeEach(() => mockMatchMedia(true))
+  afterEach(() => cleanup())
+
+  it('shows a left-hand nav with People, Accounts, and Rates, defaulting to People', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    expect(within(nav).getByRole('button', { name: 'People' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('button', { name: 'Accounts' })).not.toHaveAttribute('aria-current')
+    expect(within(nav).getByRole('button', { name: 'Rates' })).not.toHaveAttribute('aria-current')
+
+    // People is the default sub-tab, so its content (the input forms) is already showing.
+    expect(screen.getByLabelText('Current age')).toBeInTheDocument()
+  })
+
+  it('also renders a mobile tab strip (TabBar semantics) for the same People/Accounts/Rates switch', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+    const strip = screen.getByRole('tablist', { name: 'Profile sections' })
+    expect(within(strip).getByRole('tab', { name: 'People' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(strip).getByRole('tab', { name: 'Accounts' })).toHaveAttribute('aria-selected', 'false')
+    expect(within(strip).getByRole('tab', { name: 'Rates' })).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('switches to the Accounts placeholder when Accounts is selected from the desktop nav', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
+
+    expect(screen.getByText('Accounts coming soon.')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Current age')).not.toBeInTheDocument()
+  })
+
+  it('shows an empty Rates placeholder with no fields and no add button', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    await user.click(within(nav).getByRole('button', { name: 'Rates' }))
+
+    expect(screen.getByText('Coming soon.')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /add/i })).not.toBeInTheDocument()
+  })
+
+  it('persists the selected Profile sub-tab across switching away to another top-level tab and back', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
+
+    await user.click(screen.getByRole('tab', { name: 'Projection' }))
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+    expect(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Accounts' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(screen.getByText('Accounts coming soon.')).toBeInTheDocument()
+  })
+
+  it('keeps the desktop nav and mobile strip in sync — selecting from one updates the other', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const strip = screen.getByRole('tablist', { name: 'Profile sections' })
+    await user.click(within(strip).getByRole('tab', { name: 'Rates' }))
+
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    expect(within(nav).getByRole('button', { name: 'Rates' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('renders an icon per item on both the desktop nav and the mobile strip', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    expect(within(nav).getByRole('button', { name: 'People' }).querySelector('svg')).toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'Accounts' }).querySelector('svg')).toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'Rates' }).querySelector('svg')).toBeInTheDocument()
+
+    const strip = screen.getByRole('tablist', { name: 'Profile sections' })
+    expect(within(strip).getByRole('tab', { name: 'People' }).querySelector('svg')).toBeInTheDocument()
+    expect(within(strip).getByRole('tab', { name: 'Accounts' }).querySelector('svg')).toBeInTheDocument()
+    expect(within(strip).getByRole('tab', { name: 'Rates' }).querySelector('svg')).toBeInTheDocument()
+  })
+})
+
 describe('PlanSection focus management (FIN-98: mount-triggers-focus on internal tab switch)', () => {
   beforeEach(() => mockMatchMedia(true))
   afterEach(() => cleanup())
@@ -376,20 +480,20 @@ describe('PlanSection focus management (FIN-98: mount-triggers-focus on internal
     expect(screen.getByRole('heading', { name: 'Stress Test' })).toHaveFocus()
   })
 
-  it('moves focus to the Settings heading when switching to that tab', async () => {
+  it('moves focus to the Profile heading when switching to that tab', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
 
-    await user.click(screen.getByRole('tab', { name: 'Settings' }))
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
 
-    expect(screen.getByRole('heading', { name: 'Settings' })).toHaveFocus()
+    expect(screen.getByRole('heading', { name: 'Profile' })).toHaveFocus()
   })
 
   it('moves focus back to the Projection heading when switching back', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
 
-    await user.click(screen.getByRole('tab', { name: 'Settings' }))
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
 
     expect(screen.getByRole('heading', { name: 'Projection' })).toHaveFocus()
@@ -416,7 +520,7 @@ describe('PlanSection persistence (FIN-43)', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       const { unmount } = render(<PlanSection />)
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
       await user.type(ageInput, '42')
@@ -424,7 +528,7 @@ describe('PlanSection persistence (FIN-43)', () => {
 
       unmount()
       render(<PlanSection />)
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
 
       expect(screen.getByLabelText('Current age')).toHaveValue('42')
     } finally {
@@ -452,7 +556,7 @@ describe('PlanSection persistence (FIN-43)', () => {
       })
       mockedSave.mockClear() // ignore the mount-time save
 
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
       await user.type(ageInput, '5')
@@ -504,7 +608,7 @@ describe('PlanSection persistence (FIN-43)', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<PlanSection />)
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
       await user.type(ageInput, '50')
@@ -542,7 +646,7 @@ describe('PlanSection stock/bond allocation wiring (FIN-56)', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<PlanSection />)
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       await user.click(screen.getByText('Advanced assumptions'))
 
       const allocationInput = screen.getByLabelText('Stock allocation (vs. bonds)')
@@ -577,7 +681,7 @@ describe('PlanSection return assumption wiring (FIN-57, FIN-64)', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     try {
       render(<PlanSection />)
-      await user.click(screen.getByRole('tab', { name: 'Settings' }))
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
       await user.click(screen.getByText('Advanced assumptions'))
 
       const stockReturnInput = screen.getByLabelText('Stock return assumption')

@@ -12,6 +12,7 @@ import {
 } from './components'
 import type { StressTestSectionHandle } from './components'
 import { TabBar, type TabBarTab } from './components/TabBar/TabBar'
+import { LeftNav, type NavItem } from './components/LeftNav/LeftNav'
 import type { ChartRow } from './components/ChartContainer/types'
 import {
   PercentileLineChart,
@@ -19,6 +20,7 @@ import {
   type LineChartSeries,
 } from './components/PercentileLineChart/PercentileLineChart'
 import { YearDetailPanel } from './components/YearDetailPanel/YearDetailPanel'
+import { PeopleIcon, WalletIcon, PercentIcon } from './components/icons'
 import { useProjectionState, PLANNING_HORIZON_END_AGE } from './hooks/useProjectionState'
 import { MEDICARE_PART_B_EVENT } from './medicareEvent'
 import { formatCurrency, formatPercent } from './utils/format'
@@ -28,15 +30,33 @@ import { clearAssumptions, loadAssumptions, saveAssumptions } from '../storage'
 const RECALCULATION_DEBOUNCE_MS = 300
 
 /**
- * FIN-98/FIN-88: PlanSection's own local TabBar — Projection / Stress Test / Settings — replaces
+ * FIN-98/FIN-88: PlanSection's own local TabBar — Projection / Stress Test / Profile — replaces
  * the old always-visible Drawer with a third tab that takes over its input-editing job. This
  * TabBar is local to PlanSection, not part of any shared/global nav config (LeftNav/BottomTabBar,
  * FIN-100's concern).
+ *
+ * FIN-115: the third tab was renamed Settings -> Profile and now hosts its own nested
+ * People/Accounts/Rates nav (see PROFILE_NAV_ITEMS below) rather than showing the input forms
+ * directly.
  */
 const TABS: TabBarTab[] = [
   { id: 'projection', label: 'Projection' },
   { id: 'stress-test', label: 'Stress Test' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'profile', label: 'Profile' },
+]
+
+/**
+ * FIN-115: Profile's own section-internal nav — People (default) / Accounts / Rates. Per the
+ * Layout & Component System design spec's 2026-09-01 update, this is a left-hand nav rail on
+ * desktop (a section-internal switcher, one level down from the app's top-level TopBar/TabBar
+ * nav) and collapses to a horizontal scrollable strip on mobile. `icon` renders on both — the
+ * same list drives desktop LeftNav and mobile TabBar, so both already know how to render it
+ * (`NavItem.icon`/`TabBarTab.icon`, TabBar gained its own via FIN-115's icon follow-up).
+ */
+const PROFILE_NAV_ITEMS: NavItem[] = [
+  { id: 'people', label: 'People', icon: PeopleIcon },
+  { id: 'accounts', label: 'Accounts', icon: WalletIcon },
+  { id: 'rates', label: 'Rates', icon: PercentIcon },
 ]
 
 /** Plan has a single line (the deterministic balance) — one series, legend hidden (FIN-60). */
@@ -51,6 +71,10 @@ export function PlanSection(_props: PlanSectionProps) {
     () => loadAssumptions()?.advanced ?? DEFAULT_ADVANCED_VALUES,
   )
   const [activeTab, setActiveTab] = useState<string>(TABS[0].id)
+  // FIN-115: which Profile sub-section (People/Accounts/Rates) is showing. Plain React state,
+  // scoped to this mount — same pattern as `activeTab` above; no persistence requirement per
+  // the ticket ("persists within the Profile section during a session").
+  const [profileTab, setProfileTab] = useState<string>(PROFILE_NAV_ITEMS[0].id)
   const [selectedRow, setSelectedRow] = useState<ChartRow | undefined>(undefined)
   // Lifted out of StressTestSection (via its `onSuccessRateChange` seam) purely so the
   // Projection tab's "chance of success" StatTile can show it — StressTestSection itself
@@ -248,25 +272,90 @@ export function PlanSection(_props: PlanSectionProps) {
 
               <section
                 role="tabpanel"
-                id="tabpanel-settings"
-                aria-labelledby="tab-settings"
-                hidden={activeTab !== 'settings'}
+                id="tabpanel-profile"
+                aria-labelledby="tab-profile"
+                hidden={activeTab !== 'profile'}
                 className="tabPanel"
               >
                 <h2
                   ref={(el) => {
-                    headingRefs.current['settings'] = el
+                    headingRefs.current['profile'] = el
                   }}
                   tabIndex={-1}
                   className="sectionHeading"
                 >
-                  Settings
+                  Profile
                 </h2>
-                <CoreInputsForm values={coreValues} onChange={setCoreValues} />
-                <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
-                <Button variant="secondary" onClick={handleReset}>
-                  Reset to defaults
-                </Button>
+
+                {/* FIN-115: nav shell only — desktop left-hand nav + mobile horizontal strip,
+                  * both driving the same `profileTab` state. Both mount unconditionally; CSS
+                  * (`.profileNavDesktop`/`.profileNavMobile` in App.css) controls which is
+                  * visible per breakpoint, matching the app-shell's existing LeftNav/BottomTabBar
+                  * dual-mount pattern (App.css) rather than a JS matchMedia conditional. */}
+                <div className="profileLayout">
+                  <div className="profileNavDesktop">
+                    {/* Reuse justification (design spec §6): LeftNav is already a generic,
+                      * presentational, keyboard-navigable vertical nav-rail primitive — exactly
+                      * the DOM/interaction shape this needs. The PM/Eng addendum on this ticket
+                      * says desktop's left-hand nav "is a new component (no existing vertical
+                      * nav-rail primitive in the app)" — that premise doesn't hold, LeftNav
+                      * already exists, so building a second nav-rail component from scratch
+                      * would be exactly the "matching CSS is not the same as sharing a
+                      * component" anti-pattern §6 warns about. The only real mismatch was
+                      * visual (LeftNav's dark app-chrome styling + hardcoded "Sections" label,
+                      * appropriate for the app's top-level Plan/Calculators switcher, not for a
+                      * nested in-page nav) — so LeftNav gained two optional props (`ariaLabel`,
+                      * `variant`) rather than a whole new component, per §6's own preferred fix.
+                      * Flagged for the orchestrator to reconcile with the ticket's addendum. */}
+                    <LeftNav
+                      items={PROFILE_NAV_ITEMS}
+                      activeId={profileTab}
+                      onSelect={setProfileTab}
+                      ariaLabel="Profile sections"
+                      variant="inline"
+                    />
+                  </div>
+                  <div className="profileNavMobile">
+                    <TabBar
+                      tabs={PROFILE_NAV_ITEMS}
+                      activeTab={profileTab}
+                      onTabChange={setProfileTab}
+                      ariaLabel="Profile sections"
+                    />
+                  </div>
+
+                  <div className="profileContent">
+                    {profileTab === 'people' ? (
+                      <>
+                        {/* FIN-116 will replace this with the real People tab (pre-loaded self,
+                          * "+ Spouse" button, Person model). Until then, the actual input forms
+                          * (CoreInputsForm/AdvancedAssumptionsForm) stay mounted here rather than
+                          * being dropped from the Profile view entirely — this is the app's only
+                          * way to edit plan inputs today, and this ticket is nav-shell-only, so
+                          * removing them with nowhere else to land would break input editing
+                          * with no ticket yet covering where they go. FIN-116 should read this
+                          * comment before restructuring the People tab. */}
+                        <CoreInputsForm values={coreValues} onChange={setCoreValues} />
+                        <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
+                        <Button variant="secondary" onClick={handleReset}>
+                          Reset to defaults
+                        </Button>
+                      </>
+                    ) : null}
+
+                    {profileTab === 'accounts' ? (
+                      // FIN-117 builds out the real Accounts tab (Account model, CRUD, owner
+                      // linking, contribution toggle). Placeholder only for this ticket.
+                      <p className="profilePlaceholder">Accounts coming soon.</p>
+                    ) : null}
+
+                    {profileTab === 'rates' ? (
+                      // Rates is a stub for this release (nav entry + empty state only) per the
+                      // PRD — no fields, no add button, real content is a future spec.
+                      <p className="profilePlaceholder">Coming soon.</p>
+                    ) : null}
+                  </div>
+                </div>
               </section>
             </>
           )}

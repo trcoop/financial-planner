@@ -119,7 +119,7 @@
 }
 
 /* FIN-100: renamed from the pre-shell-redesign "body"/"main" (see PlanSection.tsx) — these
- * give PlanSection's own tabpanel area (Projection/Stress Test/Settings) the same flex-row
+ * give PlanSection's own tabpanel area (Projection/Stress Test/Profile) the same flex-row
  * gap and flex-column scroll treatment the whole shell used to get directly, now one
  * level deeper since PlanSection renders inside App's .main pane alongside LeftNav/BottomTabBar.
  * FIN-110: padding moved up to `.main` (applies to every section, not just Plan's tabpanel
@@ -274,7 +274,7 @@
   color: var(--color-text-muted);
 }
 
-/* FIN-98: heading for each of PlanSection's own tabpanels (Projection/Stress Test/Settings).
+/* FIN-98: heading for each of PlanSection's own tabpanels (Projection/Stress Test/Profile).
  * `tabIndex={-1}` (set in PlanSection.tsx) makes each one focusable only programmatically — the
  * mount-triggers-focus effect there focuses it on every tab switch, so this is purely a visual
  * label, not a second way to tab into the panel. */
@@ -294,4 +294,58 @@
 .sectionHeading:focus-visible {
   outline: none;
   box-shadow: none;
+}
+
+/* FIN-115: Profile's own section-internal nav shell (People/Accounts/Rates). Desktop shows the
+ * LeftNav rail beside the content; mobile shows TabBar's horizontal strip above it instead.
+ * Both mount unconditionally (see PlanSection.tsx) — this CSS-only breakpoint is what actually
+ * controls which is visible, the same dual-mount pattern App.css already uses for
+ * .navPane/.bottomNavPane above, at the app's shared 960px content-density breakpoint (FIN-32)
+ * rather than the app-shell's separate 599px primary-nav breakpoint. */
+.profileLayout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+}
+
+.profileNavDesktop {
+  display: none;
+}
+
+.profileNavMobile {
+  display: block;
+}
+
+@media (min-width: 960px) {
+  .profileLayout {
+    flex-direction: row;
+    /* Default (stretch, so no explicit declaration needed) rather than flex-start: lets the
+     * nav's `.leftNav`/`.inline` `height: 100%` actually have a row height to fill, matching how
+     * the app-level LeftNav spans .body's full height beside .main. `.profileContent` is a plain
+     * flex column with normal block-flowing children (forms, placeholder text), so stretching
+     * its own box taller just adds trailing whitespace below its content — it doesn't stretch
+     * the children themselves, so a short placeholder tab's text doesn't look distorted. */
+  }
+
+  .profileNavDesktop {
+    display: block;
+  }
+
+  .profileNavMobile {
+    display: none;
+  }
+}
+
+.profileContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+  flex: 1;
+}
+
+.profilePlaceholder {
+  margin: 0;
+  color: var(--color-text-muted);
 }

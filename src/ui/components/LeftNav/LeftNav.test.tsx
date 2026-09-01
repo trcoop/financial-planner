@@ -111,6 +111,40 @@ describe('LeftNav', () => {
     expect(onSelect).toHaveBeenCalledWith('calculators')
   })
 
+  it('defaults the nav landmark label to "Sections"', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} />)
+    expect(screen.getByRole('navigation', { name: 'Sections' })).toBeInTheDocument()
+  })
+
+  it('accepts a custom ariaLabel (FIN-115: reuse as a section-internal nav)', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} ariaLabel="Profile sections" />)
+    expect(screen.getByRole('navigation', { name: 'Profile sections' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Sections' })).not.toBeInTheDocument()
+  })
+
+  it('renders the inline variant without changing button semantics (FIN-115)', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} variant="inline" />)
+    expect(screen.getByRole('navigation')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Plan' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('applies the inline-variant class to the nav element when variant="inline" (FIN-115)', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} variant="inline" />)
+    // This project's Vitest config has no `css: true`, but CSS Modules under the Vite/React
+    // plugin still generate scoped/hashed class names in tests (confirmed by running this
+    // assertion: the actual className was `_leftNav_<hash> _inline_<hash>`, not the literal
+    // string "inline") — so `toHaveClass('inline')`'s exact-match semantics can't be used
+    // directly. Asserting a substring match on the rendered className is the correct check
+    // here, and (unlike the previous version of this test) actually fails if the
+    // `variant === 'inline'` branch in LeftNav.tsx is deleted.
+    expect(screen.getByRole('navigation').className).toMatch(/inline/)
+  })
+
+  it('does not apply the inline-variant class for the default "shell" variant', () => {
+    render(<LeftNav items={items} activeId="plan" onSelect={() => {}} />)
+    expect(screen.getByRole('navigation').className).not.toMatch(/inline/)
+  })
+
   it('selects the focused item on Space, via the keydown handler', () => {
     const onSelect = vi.fn()
     render(<LeftNav items={items} activeId="plan" onSelect={onSelect} />)
