@@ -55,12 +55,12 @@ const FIELDS: FieldSpec[] = CORE_FIELD_RANGES.map((range) => ({
   ...ADORNMENTS[range.key],
 }))
 
-/** currentAge/retirementAge render first, then the spouse checkbox + conditional age field
- * (grouped with the other age inputs rather than tacked on at the end of the form), then the
- * remaining financial fields. */
-const AGE_FIELD_KEYS: ReadonlySet<CoreNumericFieldKey> = new Set(['currentAge', 'retirementAge'])
-const AGE_FIELDS = FIELDS.filter((field) => AGE_FIELD_KEYS.has(field.key))
-const OTHER_FIELDS = FIELDS.filter((field) => !AGE_FIELD_KEYS.has(field.key))
+/** currentAge renders first, then the spouse checkbox + conditional age field (grouped with the
+ * primary's age rather than tacked on at the end of the form), then the remaining fields
+ * (retirementAge onward) — so the spouse block sits between currentAge and retirementAge. */
+const FIRST_FIELD_KEY: CoreNumericFieldKey = 'currentAge'
+const LEAD_FIELDS = FIELDS.filter((field) => field.key === FIRST_FIELD_KEY)
+const TRAILING_FIELDS = FIELDS.filter((field) => field.key !== FIRST_FIELD_KEY)
 
 interface CoreInputsFormProps {
   values: CoreInputValues
@@ -98,7 +98,7 @@ export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
 
   return (
     <form aria-label="Core financial details" className={styles.form}>
-      {AGE_FIELDS.map(renderField)}
+      {LEAD_FIELDS.map(renderField)}
       <Checkbox
         label="Has a spouse"
         checked={values.hasSpouse}
@@ -120,7 +120,7 @@ export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
           onChange={(value) => onChange({ ...values, spouseAge: value })}
         />
       )}
-      {OTHER_FIELDS.map(renderField)}
+      {TRAILING_FIELDS.map(renderField)}
     </form>
   )
 }
