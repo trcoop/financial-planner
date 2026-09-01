@@ -179,10 +179,9 @@ export function CalculatorPicker({ options, selectedId, onSelect }: CalculatorPi
         onClick={handleTriggerClick}
         onKeyDown={handleTriggerKeyDown}
       >
-        <span className={styles.label}>{selectedOption?.label}</span>
-        <span className={styles.chevron} aria-hidden="true">
-          ▾
-        </span>
+        {/* FIN-110: chevron is now a CSS background-image on .trigger (matches SelectField's
+          * native-select chevron), not a text glyph — no markup needed for it here. */}
+        {selectedOption?.label}
       </button>
       {isOpen &&
         createPortal(

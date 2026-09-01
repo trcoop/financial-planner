@@ -24,11 +24,12 @@ function setup(overrides: Partial<React.ComponentProps<typeof CalculatorPicker>>
 }
 
 describe('CalculatorPicker', () => {
-  it('renders the trigger with the current selection label and a chevron', () => {
+  it('renders the trigger with the current selection label', () => {
+    // FIN-110: chevron is a CSS background-image (matches SelectField's native-select
+    // chevron), not text content, so there's nothing to assert on beyond the label.
     setup()
     const trigger = screen.getByRole('button', { name: /Investment Calculator/ })
     expect(trigger).toBeInTheDocument()
-    expect(trigger).toHaveTextContent('▾')
   })
 
   it('opens a listbox popover on click and closes it again on a second click', async () => {
