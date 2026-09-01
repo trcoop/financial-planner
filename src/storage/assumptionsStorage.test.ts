@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { STORAGE_KEY } from './schema'
 import { clearAssumptions, loadAssumptions, saveAssumptions } from './assumptionsStorage'
-import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/CoreInputsForm'
-import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
+import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
+import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 
 /** Minimal in-memory fake matching the `Storage` interface, swapped in for `window.localStorage`
  * per-test so tests don't depend on jsdom's real localStorage implementation (and so we can

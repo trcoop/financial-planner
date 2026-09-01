@@ -67,20 +67,6 @@ interface CoreInputsFormProps {
   onChange: (values: CoreInputValues) => void
 }
 
-export const DEFAULT_CORE_VALUES: CoreInputValues = {
-  currentAge: 35,
-  // 65 (FIN-64): traditional/Medicare-eligibility retirement age, and paired with the fixed
-  // 100 planning horizon end age gives a round 35-year retirement — see
-  // AdvancedAssumptionsForm's DEFAULT_ADVANCED_VALUES.withdrawalRatePercent for the
-  // withdrawal rate that horizon implies.
-  retirementAge: 65,
-  initialBalance: 250000,
-  currentAnnualIncome: 85000,
-  annualContributionRatePercent: 15,
-  hasSpouse: false,
-  spouseAge: undefined,
-}
-
 export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
   const renderField = (field: FieldSpec) => (
     <NumberField

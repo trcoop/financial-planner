@@ -246,13 +246,14 @@ export function Dropdown({
         // on the (never-focused) portaled listbox, and only points anywhere while open. Same
         // oxlint caveat as aria-invalid below — its ARIA-1.1 role table doesn't yet list
         // aria-activedescendant as valid on a plain `button`, but the APG combobox pattern puts
-        // it exactly here; the resulting lint warning is expected.
+        // it exactly here; suppressed below as a deliberate, correct ARIA combobox pattern.
+        // oxlint-disable-next-line jsx-a11y/role-supports-aria-props -- APG combobox pattern: aria-activedescendant on the focused trigger button is correct (ARIA 1.2), oxlint's role table just hasn't caught up.
         aria-activedescendant={isOpen ? optionId(activeIndex) : undefined}
-        // oxlint's ARIA-1.1 role table doesn't yet list `aria-invalid` as valid on `button`
-        // (eslint-disable comments don't suppress this rule in oxlint), but ARIA 1.2 added it
-        // for exactly this case — a custom widget standing in for a form control. SelectField
-        // relies on it to mark this trigger invalid and link it to its error message, matching
-        // how a native `<select>` would use it; the one resulting lint warning is expected.
+        // oxlint's ARIA-1.1 role table doesn't yet list `aria-invalid` as valid on `button`, but
+        // ARIA 1.2 added it for exactly this case — a custom widget standing in for a form
+        // control. SelectField relies on it to mark this trigger invalid and link it to its
+        // error message, matching how a native `<select>` would use it.
+        // oxlint-disable-next-line jsx-a11y/role-supports-aria-props -- APG combobox pattern: aria-invalid on the trigger button mirrors a native <select>'s invalid state (ARIA 1.2), oxlint's role table just hasn't caught up.
         aria-invalid={ariaInvalid ? true : undefined}
         aria-describedby={ariaDescribedBy}
         onClick={handleTriggerClick}
@@ -277,15 +278,17 @@ export function Dropdown({
                 pattern, the always-focused trigger owns aria-activedescendant and all keyboard
                 interaction; this div is purely a rendering target for the portaled options. */}
             <div
+              // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- deliberate ARIA combobox pattern: this listbox is portaled and positioned relative to the trigger, which a native <select>/<datalist> can't do.
               role="listbox"
               className={styles.listbox}
               aria-label={selectedOption ? `${ariaLabel} (currently ${selectedOption.label})` : ariaLabel}
             >
               {options.map((option, index) => (
-                // eslint-disable-next-line jsx-a11y/prefer-tag-over-role, jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- keyboard activation is handled by the trigger's onKeyDown (select-only-combobox pattern); this option is intentionally not independently focusable or key-handled.
+                // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/interactive-supports-focus -- deliberate ARIA combobox pattern: keyboard activation is handled by the trigger's onKeyDown (select-only-combobox pattern); this option is intentionally not independently focusable or key-handled.
                 <div
                   key={option.id}
                   id={optionId(index)}
+                  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- deliberate ARIA combobox pattern: a native <option> can't be portaled/positioned this way.
                   role="option"
                   aria-selected={option.id === selectedId}
                   className={`${styles.option} ${index === activeIndex && isActiveHighlightVisible ? styles.optionActive : ''}`}

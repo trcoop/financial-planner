@@ -1,7 +1,7 @@
 import type { CoreInputValues } from '../ui/components/CoreInputsForm/CoreInputsForm'
-import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/CoreInputsForm'
+import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
-import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
+import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 import { STORAGE_KEY, type PersistedAssumptions } from './schema'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
