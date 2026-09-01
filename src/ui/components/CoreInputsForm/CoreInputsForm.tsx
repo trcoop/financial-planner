@@ -55,6 +55,13 @@ const FIELDS: FieldSpec[] = CORE_FIELD_RANGES.map((range) => ({
   ...ADORNMENTS[range.key],
 }))
 
+/** currentAge/retirementAge render first, then the spouse checkbox + conditional age field
+ * (grouped with the other age inputs rather than tacked on at the end of the form), then the
+ * remaining financial fields. */
+const AGE_FIELD_KEYS: ReadonlySet<CoreNumericFieldKey> = new Set(['currentAge', 'retirementAge'])
+const AGE_FIELDS = FIELDS.filter((field) => AGE_FIELD_KEYS.has(field.key))
+const OTHER_FIELDS = FIELDS.filter((field) => !AGE_FIELD_KEYS.has(field.key))
+
 interface CoreInputsFormProps {
   values: CoreInputValues
   onChange: (values: CoreInputValues) => void
@@ -75,21 +82,23 @@ export const DEFAULT_CORE_VALUES: CoreInputValues = {
 }
 
 export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
+  const renderField = (field: FieldSpec) => (
+    <NumberField
+      key={field.key}
+      label={field.label}
+      value={values[field.key]}
+      min={field.min}
+      max={field.max}
+      prefix={field.prefix}
+      suffix={field.suffix}
+      error={rangeError(values[field.key], field.min, field.max)}
+      onChange={(value) => onChange({ ...values, [field.key]: value })}
+    />
+  )
+
   return (
     <form aria-label="Core financial details" className={styles.form}>
-      {FIELDS.map((field) => (
-        <NumberField
-          key={field.key}
-          label={field.label}
-          value={values[field.key]}
-          min={field.min}
-          max={field.max}
-          prefix={field.prefix}
-          suffix={field.suffix}
-          error={rangeError(values[field.key], field.min, field.max)}
-          onChange={(value) => onChange({ ...values, [field.key]: value })}
-        />
-      ))}
+      {AGE_FIELDS.map(renderField)}
       <Checkbox
         label="Has a spouse"
         checked={values.hasSpouse}
@@ -111,6 +120,7 @@ export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
           onChange={(value) => onChange({ ...values, spouseAge: value })}
         />
       )}
+      {OTHER_FIELDS.map(renderField)}
     </form>
   )
 }
