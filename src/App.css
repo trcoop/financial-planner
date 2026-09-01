@@ -119,7 +119,7 @@
 }
 
 /* FIN-100: renamed from the pre-shell-redesign "body"/"main" (see PlanSection.tsx) — these
- * give PlanSection's own tabpanel area (Projection/Stress Test/Settings) the same flex-row
+ * give PlanSection's own tabpanel area (Projection/Stress Test/Profile) the same flex-row
  * gap and flex-column scroll treatment the whole shell used to get directly, now one
  * level deeper since PlanSection renders inside App's .main pane alongside LeftNav/BottomTabBar.
  * FIN-110: padding moved up to `.main` (applies to every section, not just Plan's tabpanel
@@ -274,7 +274,7 @@
   color: var(--color-text-muted);
 }
 
-/* FIN-98: heading for each of PlanSection's own tabpanels (Projection/Stress Test/Settings).
+/* FIN-98: heading for each of PlanSection's own tabpanels (Projection/Stress Test/Profile).
  * `tabIndex={-1}` (set in PlanSection.tsx) makes each one focusable only programmatically — the
  * mount-triggers-focus effect there focuses it on every tab switch, so this is purely a visual
  * label, not a second way to tab into the panel. */
