@@ -15,3 +15,21 @@
     gap: var(--space-4);
   }
 }
+
+/* FIN-113: the spouse Checkbox sits in a grid row next to a NumberField, which has a label
+   above its input. Checkbox has no such label, so it renders shorter than its row and (per
+   NumberField's .field flex-direction: column with no justify-content, i.e. content packed to
+   the top) visibly higher than the paired input. This spacer reserves the same label-row height,
+   invisibly, so the checkbox lines up with the input beside it instead of the label above it. */
+.checkboxLabelSpacer {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  line-height: 1;
+  visibility: hidden;
+}
+
+.checkboxRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}

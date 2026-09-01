@@ -99,17 +99,22 @@ export function CoreInputsForm({ values, onChange }: CoreInputsFormProps) {
   return (
     <form aria-label="Core financial details" className={styles.form}>
       {LEAD_FIELDS.map(renderField)}
-      <Checkbox
-        label="Has a spouse"
-        checked={values.hasSpouse}
-        onChange={(checked) =>
-          onChange({
-            ...values,
-            hasSpouse: checked,
-            spouseAge: checked && values.spouseAge === undefined ? DEFAULT_SPOUSE_AGE : values.spouseAge,
-          })
-        }
-      />
+      <div className={styles.checkboxRow}>
+        <span className={styles.checkboxLabelSpacer} aria-hidden="true">
+          &nbsp;
+        </span>
+        <Checkbox
+          label="Has a spouse"
+          checked={values.hasSpouse}
+          onChange={(checked) =>
+            onChange({
+              ...values,
+              hasSpouse: checked,
+              spouseAge: checked && values.spouseAge === undefined ? DEFAULT_SPOUSE_AGE : values.spouseAge,
+            })
+          }
+        />
+      </div>
       {values.hasSpouse && (
         <NumberField
           label="Spouse's age"
