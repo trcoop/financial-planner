@@ -41,7 +41,7 @@ describe('App shell', () => {
   it('renders Plan as the active section on initial load (refresh always lands on Plan)', () => {
     render(<App />)
     expect(screen.getByRole('tablist', { name: 'Views' })).toBeInTheDocument()
-    expect(screen.queryByText(/no calculators yet/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: /investment calculator/i })).not.toBeInTheDocument()
   })
 
   it('renders TopBar, LeftNav, and BottomTabBar together', () => {
@@ -78,7 +78,7 @@ describe('App shell', () => {
     // Plan's whole subtree (TabBar, tabpanels) is gone from the DOM entirely — a real
     // conditional unmount — not merely hidden via CSS/attributes.
     expect(screen.queryByRole('tablist', { name: 'Views' })).not.toBeInTheDocument()
-    expect(screen.getByText(/no calculators yet/i)).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /investment calculator/i })).toBeInTheDocument()
 
     const planButtons = screen.getAllByRole('button', { name: 'Plan' })
     const calculatorsButtons = screen.getAllByRole('button', { name: 'Calculators' })
@@ -96,13 +96,13 @@ describe('App shell', () => {
 
     const [, bottomCalculators] = screen.getAllByRole('button', { name: 'Calculators' })
     await user.click(bottomCalculators)
-    expect(screen.getByText(/no calculators yet/i)).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: /investment calculator/i })).toBeInTheDocument()
 
     const [, bottomPlan] = screen.getAllByRole('button', { name: 'Plan' })
     await user.click(bottomPlan)
 
     expect(screen.getByRole('tablist', { name: 'Views' })).toBeInTheDocument()
-    expect(screen.queryByText(/no calculators yet/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: /investment calculator/i })).not.toBeInTheDocument()
   })
 
   it('moves focus to the new view\'s heading on every section switch (LeftNav)', async () => {
