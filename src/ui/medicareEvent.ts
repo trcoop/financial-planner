@@ -84,3 +84,33 @@ export function medicarePartBEvent(generalInflationRate: number): MedicarePartBE
     growthRate: generalInflationRate + medicalInflationSpread(),
   }
 }
+
+/**
+ * Builds the spouse's Medicare Part B event for the deterministic/GBM projection branch.
+ *
+ * `startAge`: expressed in the *primary's* age terms (the plan projects on a single age axis),
+ * as `currentAge + (65 - spouseAge)`. The spouse reaches Medicare eligibility (age 65) in
+ * `65 - spouseAge` years from now; since both ages advance in lockstep (one year of plan time
+ * ages both people by one year), that same year-offset applies to the primary's own age, giving
+ * a startAge that is constant for the life of the plan (not recomputed per period). E.g.
+ * `currentAge=40, spouseAge=38` → offset `65-38=27` → `startAge=40+27=67`: the spouse turns 65
+ * when the primary is 67. If the spouse is older than the primary, the offset is negative and
+ * `startAge` can be less than `currentAge` (the spouse hits 65 before the primary's "now").
+ *
+ * Same cost assumption and `growthRate` derivation as {@link medicarePartBEvent} — there is no
+ * separate cost basis for a spouse's Part B premium, since CMS sets the same standard premium
+ * per beneficiary regardless of whose plan they're attached to.
+ */
+export function spouseMedicarePartBEvent(
+  currentAge: number,
+  spouseAge: number,
+  generalInflationRate: number,
+): MedicarePartBEvent {
+  return {
+    ...MEDICARE_PART_B_EVENT,
+    id: 'medicareSpousePartB',
+    label: "Spouse's Medicare Part B",
+    startAge: currentAge + (65 - spouseAge),
+    growthRate: generalInflationRate + medicalInflationSpread(),
+  }
+}
