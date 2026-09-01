@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { HISTORICAL_ANNUAL_INFLATION } from '../engine/inflationData'
 import { HISTORICAL_ANNUAL_MEDICAL_INFLATION } from '../engine/medicalInflationData'
-import { MEDICARE_PART_B_EVENT, medicalInflationSpread, medicarePartBEvent } from './medicareEvent'
+import {
+  MEDICARE_PART_B_EVENT,
+  medicalInflationSpread,
+  medicarePartBEvent,
+  spouseMedicarePartBEvent,
+} from './medicareEvent'
 
 describe('MEDICARE_PART_B_EVENT', () => {
   it('matches the ERD §5 definition exactly, minus growthRate (now computed per plan)', () => {
@@ -91,6 +96,52 @@ describe('medicarePartBEvent', () => {
   it('tracks a different inflation assumption with a different growthRate', () => {
     const low = medicarePartBEvent(0.01)
     const high = medicarePartBEvent(0.05)
+
+    expect(high.growthRate - low.growthRate).toBeCloseTo(0.04, 10)
+  })
+})
+
+describe('spouseMedicarePartBEvent', () => {
+  it('computes startAge as currentAge + (65 - spouseAge)', () => {
+    const event = spouseMedicarePartBEvent(40, 38, 0.03)
+
+    expect(event.startAge).toBe(67)
+  })
+
+  it('computes startAge equal to currentAge when spouse is also 65', () => {
+    const event = spouseMedicarePartBEvent(70, 65, 0.03)
+
+    expect(event.startAge).toBe(70)
+  })
+
+  it('computes a startAge earlier than currentAge when spouse is older', () => {
+    const event = spouseMedicarePartBEvent(60, 65, 0.03)
+
+    expect(event.startAge).toBe(60)
+  })
+
+  it('sets growthRate to the given general inflation rate plus the historical spread', () => {
+    const event = spouseMedicarePartBEvent(40, 38, 0.03)
+
+    expect(event.growthRate).toBeCloseTo(0.03 + medicalInflationSpread(), 10)
+  })
+
+  it('carries the other static fields matching the primary Medicare Part B event', () => {
+    const event = spouseMedicarePartBEvent(40, 38, 0.025)
+
+    expect(event).toMatchObject({
+      type: 'recurringCost',
+      id: 'medicareSpousePartB',
+      label: "Spouse's Medicare Part B",
+      endAge: undefined,
+      annualAmount: 2_434.8,
+      recurrenceIntervalYears: 1,
+    })
+  })
+
+  it('tracks a different inflation assumption with a different growthRate', () => {
+    const low = spouseMedicarePartBEvent(40, 38, 0.01)
+    const high = spouseMedicarePartBEvent(40, 38, 0.05)
 
     expect(high.growthRate - low.growthRate).toBeCloseTo(0.04, 10)
   })
