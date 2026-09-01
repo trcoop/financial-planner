@@ -10,31 +10,10 @@
   font-weight: 500;
 }
 
-/* Mirrors NumberField.module.css's `.input` treatment (FIN-101/FIN-103) so the two
-   controls read as one family: `appearance: none` drops native select chrome, the
-   border is an inset box-shadow rather than a stroked border, and focus swaps to a
-   matching 1px ring instead of the app-wide 3px `--focus-ring`.
-
-   Travis's round-1 visual review of FIN-109 (which reuses this already-merged FIN-107
-   primitive) caught that dropping native chrome via `appearance: none` left no visual
-   cue this is a dropdown at all — it read as a plain text field until clicked. A small
-   CSS-drawn chevron (an inline SVG `background-image`, not a font icon, matching this
-   app's zero-network-calls constraint) restores that affordance without reintroducing
-   any of the native platform-inconsistent select styling `appearance: none` was added
-   to remove.
-
-   FIN-110: the border/chevron/padding/focus treatment itself now lives in
-   dropdownControl.module.css's `.control` (composed below) — CalculatorPicker's
-   trigger button composes the same class, so this is the one place either gets edited.
-   `currentColor` isn't usable inside a `background-image` data URI, so the stroke color
-   is baked in directly there — `%2357606a` is `--color-text-muted`'s hex value
-   URL-encoded (`#` -> `%23`); if that token's value ever changes, update it there. */
-.select {
-  composes: control from '../dropdownControl.module.css';
-  appearance: none;
-  -webkit-appearance: none;
-  width: 100%;
-}
+/* FIN-110: this field no longer owns any dropdown-control visuals — it renders `Dropdown`
+   (src/ui/components/Dropdown/Dropdown.tsx), which owns its own trigger/popover/listbox CSS
+   (Dropdown.module.css) including the border/chevron/padding/focus treatment and the
+   `fullWidth` sizing this field needs. Nothing here composes that anymore. */
 
 .error {
   margin: 0;

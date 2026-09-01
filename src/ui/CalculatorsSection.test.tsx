@@ -25,7 +25,7 @@ describe('CalculatorsSection', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveFocus()
   })
 
-  it('renders the CalculatorPicker with Investment Calculator selected by default', () => {
+  it('renders the calculator picker dropdown with Investment Calculator selected by default', () => {
     render(<CalculatorsSection />)
 
     expect(screen.getByRole('button', { name: /investment calculator/i })).toBeInTheDocument()

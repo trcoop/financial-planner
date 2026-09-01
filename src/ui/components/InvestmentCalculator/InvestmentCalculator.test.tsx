@@ -3,6 +3,14 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import { InvestmentCalculator } from './InvestmentCalculator'
 
+// FIN-110: "Compounding frequency" is now a Dropdown-backed SelectField (trigger button +
+// popover listbox), not a native <select> — `user.selectOptions` no longer applies. This opens
+// the popover and clicks the option by its visible label instead.
+async function chooseCompoundingFrequency(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(screen.getByLabelText('Compounding frequency'))
+  await user.click(screen.getByRole('option', { name: label }))
+}
+
 describe('InvestmentCalculator', () => {
   afterEach(() => cleanup())
 
@@ -98,7 +106,7 @@ describe('InvestmentCalculator', () => {
     await user.type(screen.getByLabelText('Starting amount'), '1000')
     await user.clear(screen.getByLabelText('Growth rate'))
     await user.type(screen.getByLabelText('Growth rate'), '12')
-    await user.selectOptions(screen.getByLabelText('Compounding frequency'), 'monthly')
+    await chooseCompoundingFrequency(user, 'Monthly')
     await user.clear(screen.getByLabelText('Contribution amount'))
     await user.clear(screen.getByLabelText('Years'))
     await user.type(screen.getByLabelText('Years'), '1')
@@ -141,7 +149,7 @@ describe('InvestmentCalculator', () => {
     await user.type(screen.getByLabelText('Starting amount'), '0')
     await user.clear(screen.getByLabelText('Growth rate'))
     await user.type(screen.getByLabelText('Growth rate'), '10')
-    await user.selectOptions(screen.getByLabelText('Compounding frequency'), 'annually')
+    await chooseCompoundingFrequency(user, 'Annually')
     await user.clear(screen.getByLabelText('Contribution amount'))
     await user.type(screen.getByLabelText('Contribution amount'), '1000')
     await user.click(screen.getByRole('radio', { name: 'Annually' }))

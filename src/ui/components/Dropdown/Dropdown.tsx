@@ -1,33 +1,60 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import styles from './CalculatorPicker.module.css'
+import styles from './Dropdown.module.css'
 
-export interface CalculatorPickerOption {
+export interface DropdownOption {
   id: string
   label: string
 }
 
-export interface CalculatorPickerProps {
-  /** All calculators available to switch between. */
-  options: CalculatorPickerOption[]
-  /** id of the currently-selected calculator. */
+export interface DropdownProps {
+  /** All choices the user can pick between. */
+  options: DropdownOption[]
+  /** id of the currently-selected option. */
   selectedId: string
-  /** Called with the id of the newly-picked calculator. */
+  /** Called with the id of the newly-picked option. */
   onSelect: (id: string) => void
+  /** Id applied to the trigger button — pass this as a `<label htmlFor>` target for field use. */
+  id?: string
+  /** Extra class applied to the trigger button (e.g. layout overrides from a consuming field). */
+  className?: string
+  /**
+   * Accessible name used both as the trigger's fallback label context and to build the
+   * popover listbox's `aria-label` (which needs its own name distinct from the trigger's,
+   * per WCAG, since it's a separate widget). E.g. "Choose calculator" or "Compounding frequency".
+   */
+  ariaLabel: string
+  /** Stretches the trigger + container to fill the width of their parent (form-field use). */
+  fullWidth?: boolean
+  /** Marks the trigger invalid (error styling) and links it to an error message. */
+  ariaInvalid?: boolean
+  ariaDescribedBy?: string
 }
 
 const VIEWPORT_MARGIN = 8
 
 /**
- * Header control (FIN-106) for switching between calculators — a trigger button showing the
- * current calculator's name that opens a portaled popover listbox of all calculators. This is a
- * navigation control (listbox/menu semantics), not `Tooltip`'s supplementary-info popover, so it
- * reuses `Tooltip.tsx`'s portal-rendering / viewport-aware-positioning / outside-click /
- * Escape-to-close patterns but opens on click (primary interaction) rather than hover, and adds
- * full listbox keyboard operability (roving `tabindex`/`aria-activedescendant`) that `Tooltip`
- * doesn't need. See ERD: Investment Calculator §1.
+ * Generic trigger-button + portaled-popover-listbox control (FIN-106, generalized in FIN-110).
+ * The single implementation behind both the header's calculator picker and SelectField's
+ * form-field dropdowns (e.g. compounding frequency) — Travis's FIN-110 visual review asked for
+ * one real shared component rather than two components that merely shared CSS. This is a
+ * navigation/selection control (listbox/menu semantics), not `Tooltip`'s supplementary-info
+ * popover, so it reuses `Tooltip.tsx`'s portal-rendering / viewport-aware-positioning /
+ * outside-click / Escape-to-close patterns but opens on click (primary interaction) rather than
+ * hover, and adds full listbox keyboard operability (roving `tabindex`/`aria-activedescendant`)
+ * that `Tooltip` doesn't need. See ERD: Investment Calculator §1.
  */
-export function CalculatorPicker({ options, selectedId, onSelect }: CalculatorPickerProps) {
+export function Dropdown({
+  options,
+  selectedId,
+  onSelect,
+  id,
+  className,
+  ariaLabel,
+  fullWidth,
+  ariaInvalid,
+  ariaDescribedBy,
+}: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
@@ -168,19 +195,29 @@ export function CalculatorPicker({ options, selectedId, onSelect }: CalculatorPi
   }, [isOpen])
 
   return (
-    <div className={styles.container}>
+    <div className={fullWidth ? `${styles.container} ${styles.containerFullWidth}` : styles.container}>
       <button
         type="button"
-        className={styles.trigger}
+        id={id}
+        className={[styles.trigger, fullWidth ? styles.triggerFullWidth : '', className ?? '']
+          .filter(Boolean)
+          .join(' ')}
         ref={triggerRef}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={isOpen ? popoverId : undefined}
+        // oxlint's ARIA-1.1 role table doesn't yet list `aria-invalid` as valid on `button`
+        // (eslint-disable comments don't suppress this rule in oxlint), but ARIA 1.2 added it
+        // for exactly this case — a custom widget standing in for a form control. SelectField
+        // relies on it to mark this trigger invalid and link it to its error message, matching
+        // how a native `<select>` would use it; the one resulting lint warning is expected.
+        aria-invalid={ariaInvalid ? true : undefined}
+        aria-describedby={ariaDescribedBy}
         onClick={handleTriggerClick}
         onKeyDown={handleTriggerKeyDown}
       >
-        {/* FIN-110: chevron is now a CSS background-image on .trigger (matches SelectField's
-          * native-select chevron), not a text glyph — no markup needed for it here. */}
+        {/* FIN-110: chevron is a CSS background-image on .trigger, not a text glyph — no markup
+          * needed for it here. */}
         {selectedOption?.label}
       </button>
       {isOpen &&
@@ -201,7 +238,7 @@ export function CalculatorPicker({ options, selectedId, onSelect }: CalculatorPi
               tabIndex={-1}
               className={styles.listbox}
               aria-activedescendant={optionId(activeIndex)}
-              aria-label={selectedOption ? `Choose calculator (currently ${selectedOption.label})` : 'Choose calculator'}
+              aria-label={selectedOption ? `${ariaLabel} (currently ${selectedOption.label})` : ariaLabel}
               onKeyDown={handleListboxKeyDown}
             >
               {options.map((option, index) => (

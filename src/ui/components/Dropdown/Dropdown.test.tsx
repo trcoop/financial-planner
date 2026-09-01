@@ -1,7 +1,7 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { CalculatorPicker } from './CalculatorPicker'
+import { Dropdown } from './Dropdown'
 
 afterEach(() => cleanup())
 
@@ -11,22 +11,21 @@ const OPTIONS = [
   { id: 'payroll', label: 'Payroll Calculator' },
 ]
 
-function setup(overrides: Partial<React.ComponentProps<typeof CalculatorPicker>> = {}) {
+function setup(overrides: Partial<React.ComponentProps<typeof Dropdown>> = {}) {
   const onSelect = vi.fn()
   const props = {
     options: OPTIONS,
     selectedId: 'investment',
     onSelect,
+    ariaLabel: 'Choose calculator',
     ...overrides,
   }
-  render(<CalculatorPicker {...props} />)
+  render(<Dropdown {...props} />)
   return { onSelect }
 }
 
-describe('CalculatorPicker', () => {
+describe('Dropdown', () => {
   it('renders the trigger with the current selection label', () => {
-    // FIN-110: chevron is a CSS background-image (matches SelectField's native-select
-    // chevron), not text content, so there's nothing to assert on beyond the label.
     setup()
     const trigger = screen.getByRole('button', { name: /Investment Calculator/ })
     expect(trigger).toBeInTheDocument()
@@ -199,5 +198,28 @@ describe('CalculatorPicker', () => {
 
     expect(onSelect).not.toHaveBeenCalled()
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('associates with an external label via the id prop (labelable button)', () => {
+    render(
+      <>
+        <label htmlFor="freq">Compounding frequency</label>
+        <Dropdown
+          id="freq"
+          options={OPTIONS}
+          selectedId="investment"
+          onSelect={vi.fn()}
+          ariaLabel="Compounding frequency"
+        />
+      </>,
+    )
+    expect(screen.getByLabelText('Compounding frequency')).toBeInTheDocument()
+  })
+
+  it('applies fullWidth styling hooks and forwards aria-invalid/aria-describedby', () => {
+    setup({ fullWidth: true, ariaInvalid: true, ariaDescribedBy: 'err-id' })
+    const trigger = screen.getByRole('button', { name: /Investment Calculator/ })
+    expect(trigger).toHaveAttribute('aria-invalid', 'true')
+    expect(trigger).toHaveAttribute('aria-describedby', 'err-id')
   })
 })

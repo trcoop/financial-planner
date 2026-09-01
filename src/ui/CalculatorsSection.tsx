@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { CalculatorPicker } from './components/CalculatorPicker/CalculatorPicker'
+import { SelectField } from './components/SelectField/SelectField'
 import { InvestmentCalculator } from './components/InvestmentCalculator/InvestmentCalculator'
 
 export interface CalculatorEntry {
@@ -10,7 +10,7 @@ export interface CalculatorEntry {
 
 // Plain local array of calculators (ERD decision — no router/registry framework). Adding a future
 // second calculator only requires one more entry here plus its own component; nothing about
-// `CalculatorPicker`, `LeftNav`, `TopBar`, or `BottomTabBar` needs to change.
+// `SelectField`, `LeftNav`, `TopBar`, or `BottomTabBar` needs to change.
 const CALCULATORS: CalculatorEntry[] = [
   { id: 'investment', label: 'Investment Calculator', component: InvestmentCalculator },
 ]
@@ -41,10 +41,12 @@ export function CalculatorsSection({ calculators = CALCULATORS }: CalculatorsSec
         <h1 ref={headingRef} tabIndex={-1}>
           Calculators
         </h1>
-        <CalculatorPicker
-          options={calculators.map(({ id, label }) => ({ id, label }))}
-          selectedId={selected.id}
-          onSelect={setSelectedId}
+        <SelectField
+          ariaLabel="Choose calculator"
+          fullWidth={false}
+          options={calculators.map(({ id, label }) => ({ value: id, label }))}
+          value={selected.id}
+          onChange={setSelectedId}
         />
       </header>
 
