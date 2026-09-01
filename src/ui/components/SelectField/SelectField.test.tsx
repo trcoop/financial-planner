@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SelectField } from './SelectField'
@@ -11,7 +11,7 @@ const frequencyOptions = [
 describe('SelectField', () => {
   afterEach(() => cleanup())
 
-  it('associates the label with the select control', () => {
+  it('associates the label with the control', () => {
     render(
       <SelectField
         label="Compounding frequency"
@@ -23,7 +23,8 @@ describe('SelectField', () => {
     expect(screen.getByLabelText('Compounding frequency')).toBeInTheDocument()
   })
 
-  it('renders an option per entry in options, with the current value selected', () => {
+  it('shows the current value as the trigger label, and lists every option when opened', async () => {
+    const user = userEvent.setup()
     render(
       <SelectField
         label="Compounding frequency"
@@ -32,10 +33,13 @@ describe('SelectField', () => {
         options={frequencyOptions}
       />,
     )
-    const select = screen.getByLabelText('Compounding frequency') as HTMLSelectElement
-    expect(select).toHaveValue('monthly')
-    expect(screen.getByRole('option', { name: 'Annually' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: 'Monthly' })).toBeInTheDocument()
+    const trigger = screen.getByLabelText('Compounding frequency')
+    expect(trigger).toHaveTextContent('Monthly')
+
+    await user.click(trigger)
+    const listbox = screen.getByRole('listbox')
+    expect(within(listbox).getByRole('option', { name: 'Annually' })).toBeInTheDocument()
+    expect(within(listbox).getByRole('option', { name: 'Monthly' })).toBeInTheDocument()
   })
 
   it('calls onChange with the selected value when the user picks a different option', async () => {
@@ -49,8 +53,9 @@ describe('SelectField', () => {
         options={frequencyOptions}
       />,
     )
-    const select = screen.getByLabelText('Compounding frequency')
-    await user.selectOptions(select, 'Monthly')
+    const trigger = screen.getByLabelText('Compounding frequency')
+    await user.click(trigger)
+    await user.click(screen.getByRole('option', { name: 'Monthly' }))
     expect(onChange).toHaveBeenCalledWith('monthly')
   })
 
@@ -66,8 +71,14 @@ describe('SelectField', () => {
       />,
     )
     await user.tab()
-    expect(screen.getByLabelText('Compounding frequency')).toHaveFocus()
-    await user.selectOptions(screen.getByLabelText('Compounding frequency'), 'Monthly')
+    const trigger = screen.getByLabelText('Compounding frequency')
+    expect(trigger).toHaveFocus()
+
+    await user.keyboard('{Enter}')
+    // Select-only-combobox pattern: focus stays on the trigger the whole time (see Dropdown.tsx).
+    expect(trigger).toHaveFocus()
+    await user.keyboard('{ArrowDown}')
+    await user.keyboard('{Enter}')
     expect(onChange).toHaveBeenCalledWith('monthly')
   })
 
@@ -94,11 +105,11 @@ describe('SelectField', () => {
         error="Please choose a frequency"
       />,
     )
-    const select = screen.getByLabelText('Compounding frequency')
-    expect(select).toHaveAttribute('aria-invalid', 'true')
+    const trigger = screen.getByLabelText('Compounding frequency')
+    expect(trigger).toHaveAttribute('aria-invalid', 'true')
 
     const error = screen.getByRole('alert')
     expect(error).toHaveTextContent('Please choose a frequency')
-    expect(select).toHaveAttribute('aria-describedby', error.id)
+    expect(trigger).toHaveAttribute('aria-describedby', error.id)
   })
 })

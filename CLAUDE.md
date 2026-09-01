@@ -62,6 +62,16 @@ that talks to the network.
   for constraints or prior decisions relevant to the new work. When a new PRD
   defers something, add a bullet there (what's deferred, why, and which PRD
   raised it) rather than only noting it inline in the PRD.
+- Before any UI work (`src/ui/`), check the "Layout & Component System —
+  Design Spec" document
+  (https://linear.app/travis-playground/document/layout-and-component-system-design-spec-5b588fa57c61)
+  — not just the ticket's own linked doc. It covers the app shell, the
+  component library, and the component-reuse principle (§6): a new component
+  needs a concrete reason (different DOM/semantics), not just a different
+  context or a missing prop — prefer extending an existing component.
+  Keep this doc current: when a UI decision changes or clarifies that
+  principle, add it there, the same way PRD deferrals go in the
+  Deferred/Future doc.
 - Branch naming: `FIN-123-short-description` (ticket ID first) so Linear's
   GitHub integration (already connected) auto-links the branch/PR to the
   ticket and auto-transitions its status.

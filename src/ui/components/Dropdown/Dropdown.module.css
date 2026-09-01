@@ -1,0 +1,103 @@
+/* FIN-110: single implementation of the "dropdown" control — trigger button + portaled
+ * popover listbox — used by every `SelectField` (the header's calculator switcher and
+ * InvestmentCalculator's form fields alike; a label is just optional markup SelectField adds
+ * around this, not a separate component). Previously the header switcher was its own
+ * component (CalculatorPicker, custom button+popover) sharing only a CSS class with
+ * SelectField's native `<select>` via `composes`; Travis's FIN-110 visual review asked for one
+ * real component instead, so this file now owns the entire visual treatment (border/chevron/
+ * padding/focus) that used to live in the now-deleted dropdownControl.module.css. */
+
+.container {
+  position: relative;
+  display: inline-flex;
+}
+
+.containerFullWidth {
+  display: flex;
+  width: 100%;
+}
+
+.trigger {
+  font: inherit;
+  font-size: var(--font-size-base);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  padding: var(--space-2) var(--space-3);
+  /* Room for the chevron on the right so it never overlaps the longest option's text. */
+  padding-right: calc(var(--space-3) + 20px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6' fill='none'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%2357606a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: 10px 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  text-align: left;
+}
+
+.triggerFullWidth {
+  width: 100%;
+}
+
+.trigger:hover {
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+/* FIN-110: unlike Button/NumberField, this trigger doesn't sit near a clipped edge, so there's
+   no reason to trade away the app-wide 3px `--focus-ring` (theme.css) for a 1px inset ring —
+   and it shouldn't, because that inset treatment is only 1px different from `.trigger:hover`
+   above, which made the focus state nearly invisible to a sighted keyboard user (Travis's
+   FIN-110 visual review). Falling through to the global `:focus-visible` rule gives a clearly
+   distinct outward ring instead. */
+
+.trigger[aria-expanded='true'] {
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.trigger[aria-invalid='true'] {
+  box-shadow: inset 0 0 0 1px var(--color-error);
+}
+
+.popover {
+  position: fixed;
+  z-index: 50;
+  width: max-content;
+  min-width: 200px;
+  max-width: min(320px, calc(100vw - 2 * var(--space-4)));
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+}
+
+.listbox {
+  outline: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.option {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.option[aria-selected='true'] {
+  font-weight: 600;
+}
+
+/* FIN-110: `--color-primary-subtle` previously wasn't a token this app defined, so this was
+   silently falling back to `--color-surface` — nearly identical to the popover's own
+   `--color-bg` and barely visible. A flat grey (`--color-surface-hover`) fixed the contrast but
+   read as generic/off-theme next to this app's blue accent (Travis's FIN-110 visual review, round
+   2) — `--color-primary-subtle` (theme.css) is now a real token, a light on-brand tint of
+   `--color-primary`, so use that instead. */
+.optionActive {
+  background: var(--color-primary-subtle);
+}
