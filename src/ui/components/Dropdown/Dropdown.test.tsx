@@ -82,6 +82,17 @@ describe('Dropdown', () => {
     expect(screen.getByRole('listbox')).toBeInTheDocument()
   })
 
+  it('is explicitly in the Tab order (tabIndex=0), not just implicitly focusable as a <button>', () => {
+    // FIN-110 regression: macOS Safari/Firefox skip plain <button>s in the Tab order by
+    // default (only tabbing to them when "Full Keyboard Access" is on), so the trigger needs
+    // an explicit tabIndex to stay reliably reachable via Tab — this is what actually broke
+    // "Tab into the field, press ArrowDown" for Travis; jsdom's `.focus()` doesn't model
+    // Safari's Tab-order skipping, so it can't otherwise catch a regression here.
+    setup()
+    const trigger = screen.getByRole('button', { name: /Investment Calculator/ })
+    expect(trigger).toHaveAttribute('tabIndex', '0')
+  })
+
   it('opens on ArrowDown with the current selection as the active option', async () => {
     const user = userEvent.setup()
     setup()

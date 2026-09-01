@@ -203,6 +203,18 @@ export function Dropdown({
           .filter(Boolean)
           .join(' ')}
         ref={triggerRef}
+        // FIN-110: root cause of "Tab into the field, ArrowDown does nothing" (Travis's FIN-110
+        // visual review) — macOS Safari (and Firefox on macOS) only include plain <button>
+        // elements in the Tab order when "Full Keyboard Access" is turned on; by default Tab
+        // skips right over a native <button> with no explicit `tabindex`, landing focus on the
+        // *next* focusable field instead. ArrowDown then does nothing because it's not a
+        // meaningful key for whatever silently ended up focused — this control never received
+        // the keydown at all. jsdom/Testing Library's `.focus()` calls don't reproduce this,
+        // which is why the existing Dropdown.test.tsx ArrowDown test passed. An explicit
+        // `tabIndex={0}` opts this element back into the Tab order unconditionally in Safari
+        // regardless of that setting (Chromium/Firefox-on-Windows/Linux already tab to plain
+        // buttons and are unaffected).
+        tabIndex={0}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={isOpen ? popoverId : undefined}
