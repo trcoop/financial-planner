@@ -132,4 +132,33 @@ describe('InvestmentCalculator', () => {
     expect(contributionsTile).toHaveTextContent('$0')
     expect(growthTile).toHaveTextContent('$60')
   })
+
+  it('reflects a ToggleGroup selection change in the calculation (contribution timing)', async () => {
+    const user = userEvent.setup()
+    render(<InvestmentCalculator />)
+
+    await user.clear(screen.getByLabelText('Starting amount'))
+    await user.type(screen.getByLabelText('Starting amount'), '0')
+    await user.clear(screen.getByLabelText('Growth rate'))
+    await user.type(screen.getByLabelText('Growth rate'), '10')
+    await user.selectOptions(screen.getByLabelText('Compounding frequency'), 'annually')
+    await user.clear(screen.getByLabelText('Contribution amount'))
+    await user.type(screen.getByLabelText('Contribution amount'), '1000')
+    await user.click(screen.getByRole('radio', { name: 'Annually' }))
+    await user.clear(screen.getByLabelText('Years'))
+    await user.type(screen.getByLabelText('Years'), '1')
+
+    // Default contribution timing is "end" - the year's only contribution lands after growth is
+    // applied to a $0 starting balance, so it grows 0% and the final balance is exactly $1,000.
+    await user.click(screen.getByRole('button', { name: 'Calculate' }))
+    expect(screen.getByText('Final Balance').closest('section')).toHaveTextContent('$1,000')
+
+    // Switching the ToggleGroup to "Start of period" moves that same contribution to the start of
+    // the year, so it grows for the full year at 10%: (0 + 1000) * 1.10 = $1,100. This exercises
+    // the control's actual checked/onChange wiring end-to-end (a mutation review found no existing
+    // test did) rather than only the DOM shape the control renders at its hardcoded default.
+    await user.click(screen.getByRole('radio', { name: 'Start of period' }))
+    await user.click(screen.getByRole('button', { name: 'Calculate' }))
+    expect(screen.getByText('Final Balance').closest('section')).toHaveTextContent('$1,100')
+  })
 })
