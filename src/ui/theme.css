@@ -72,6 +72,10 @@
      the same hue/chroma at a darker lightness, mirroring the previous #1d4ed8 -> #1e40af step. */
   --color-primary: oklch(0.58 0.16 250);
   --color-primary-hover: oklch(0.48 0.16 250);
+  /* A light, on-brand tint of --color-primary for hover/active row backgrounds (e.g. Dropdown's
+     option list) — derived from the same accent hue rather than a separate arbitrary grey, so it
+     reads as "this app's blue, lightly", not a generic UI-kit grey. */
+  --color-primary-subtle: color-mix(in oklch, var(--color-primary) 14%, var(--color-bg));
   --color-success: #15803d;
   --color-warning: #b45309;
   --color-error: #b91c1c;

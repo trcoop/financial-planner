@@ -57,6 +57,14 @@ export function Dropdown({
 }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
+  // FIN-110: `activeIndex` always tracks *some* option (for aria-activedescendant, which must
+  // point somewhere the instant the listbox opens), but Travis's round-2 visual review flagged
+  // the popover auto-highlighting the current selection on open as looking unintentional — the
+  // highlight should only appear once the user actually starts moving through the list (hover or
+  // arrow keys), not as a static "you are here" marker. This tracks that separately so the CSS
+  // highlight can stay off until real interaction happens, then persists for the rest of this
+  // open/close cycle.
+  const [isActiveHighlightVisible, setIsActiveHighlightVisible] = useState(false)
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
@@ -84,6 +92,7 @@ export function Dropdown({
 
   const openAt = (index: number) => {
     setActiveIndex(index)
+    setIsActiveHighlightVisible(false)
     setIsOpen(true)
   }
 
@@ -113,18 +122,22 @@ export function Dropdown({
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault()
+        setIsActiveHighlightVisible(true)
         setActiveIndex((index) => Math.min(index + 1, options.length - 1))
         break
       case 'ArrowUp':
         event.preventDefault()
+        setIsActiveHighlightVisible(true)
         setActiveIndex((index) => Math.max(index - 1, 0))
         break
       case 'Home':
         event.preventDefault()
+        setIsActiveHighlightVisible(true)
         setActiveIndex(0)
         break
       case 'End':
         event.preventDefault()
+        setIsActiveHighlightVisible(true)
         setActiveIndex(options.length - 1)
         break
       case 'Enter':
@@ -260,8 +273,11 @@ export function Dropdown({
                   id={optionId(index)}
                   role="option"
                   aria-selected={option.id === selectedId}
-                  className={`${styles.option} ${index === activeIndex ? styles.optionActive : ''}`}
-                  onMouseEnter={() => setActiveIndex(index)}
+                  className={`${styles.option} ${index === activeIndex && isActiveHighlightVisible ? styles.optionActive : ''}`}
+                  onMouseEnter={() => {
+                    setIsActiveHighlightVisible(true)
+                    setActiveIndex(index)
+                  }}
                   onClick={() => {
                     onSelect(option.id)
                     close()

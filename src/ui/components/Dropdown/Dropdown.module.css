@@ -92,11 +92,12 @@
   font-weight: 600;
 }
 
-/* FIN-110: `--color-primary-subtle` isn't a token this app defines (theme.css has no such
-   variable), so this was silently falling back to `--color-surface` — nearly identical to the
-   popover's own `--color-bg` and barely visible (Travis's FIN-110 visual review). `--color-
-   surface-hover` is the token the rest of the app already uses for a hovered/active row's
-   background (theme.css), so reuse it here for a clearly visible highlight. */
+/* FIN-110: `--color-primary-subtle` previously wasn't a token this app defined, so this was
+   silently falling back to `--color-surface` — nearly identical to the popover's own
+   `--color-bg` and barely visible. A flat grey (`--color-surface-hover`) fixed the contrast but
+   read as generic/off-theme next to this app's blue accent (Travis's FIN-110 visual review, round
+   2) — `--color-primary-subtle` (theme.css) is now a real token, a light on-brand tint of
+   `--color-primary`, so use that instead. */
 .optionActive {
-  background: var(--color-surface-hover);
+  background: var(--color-primary-subtle);
 }

@@ -93,6 +93,38 @@ describe('Dropdown', () => {
     expect(trigger).toHaveAttribute('tabIndex', '0')
   })
 
+  it('does not visually highlight the current selection on open until the user hovers or presses an arrow key', async () => {
+    // FIN-110 round 2: the popover previously highlighted the current selection the instant it
+    // opened, which read as an unintentional "stuck" highlight rather than a deliberate one —
+    // `aria-activedescendant`/`aria-selected` still track the current selection immediately (for
+    // a11y), but the *visual* highlight class should only appear once the user actually starts
+    // moving through the list.
+    const user = userEvent.setup()
+    setup({ selectedId: 'mortgage' })
+    const trigger = screen.getByRole('button', { name: /Mortgage Calculator/ })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+
+    const listbox = screen.getByRole('listbox')
+    const options = within(listbox).getAllByRole('option')
+    expect(options[1].className).not.toMatch(/optionActive/)
+
+    await user.keyboard('{ArrowDown}')
+    expect(options[2].className).toMatch(/optionActive/)
+  })
+
+  it('highlights an option on hover even before any keyboard interaction', async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(screen.getByRole('button', { name: /Investment Calculator/ }))
+    const listbox = screen.getByRole('listbox')
+    const options = within(listbox).getAllByRole('option')
+    expect(options[0].className).not.toMatch(/optionActive/)
+
+    await user.hover(options[2])
+    expect(options[2].className).toMatch(/optionActive/)
+  })
+
   it('opens on ArrowDown with the current selection as the active option', async () => {
     const user = userEvent.setup()
     setup()
