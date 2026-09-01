@@ -41,8 +41,8 @@ const DEFAULT_VALUES: FormValues = {
   startingAmount: 10_000,
   annualGrowthRate: 6,
   compoundingFrequency: 'annually',
-  contributionAmount: 500,
-  contributionFrequency: 'monthly',
+  contributionAmount: 6_000,
+  contributionFrequency: 'annually',
   contributionTiming: 'end',
   years: 20,
 }
