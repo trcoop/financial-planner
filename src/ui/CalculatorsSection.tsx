@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CalculatorPicker } from './components/CalculatorPicker/CalculatorPicker'
 import { InvestmentCalculator } from './components/InvestmentCalculator/InvestmentCalculator'
 
-export interface CalculatorsSectionProps {}
-
-interface CalculatorEntry {
+export interface CalculatorEntry {
   id: string
   label: string
   component: () => React.ReactElement
@@ -17,25 +15,34 @@ const CALCULATORS: CalculatorEntry[] = [
   { id: 'investment', label: 'Investment Calculator', component: InvestmentCalculator },
 ]
 
-export function CalculatorsSection(_props: CalculatorsSectionProps) {
+export interface CalculatorsSectionProps {
+  /**
+   * Test-only seam: overrides the production `CALCULATORS` list so tests can exercise picker
+   * swaps between two calculators without a real second calculator existing yet. Not intended
+   * for production use.
+   */
+  calculators?: CalculatorEntry[]
+}
+
+export function CalculatorsSection({ calculators = CALCULATORS }: CalculatorsSectionProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
-  const [selectedId, setSelectedId] = useState(CALCULATORS[0].id)
+  const [selectedId, setSelectedId] = useState(calculators[0].id)
 
   useEffect(() => {
     headingRef.current?.focus()
   }, [])
 
-  const selected = CALCULATORS.find((entry) => entry.id === selectedId) ?? CALCULATORS[0]
+  const selected = calculators.find((entry) => entry.id === selectedId) ?? calculators[0]
   const SelectedCalculator = selected.component
 
   return (
-    <section>
+    <section data-testid="calculators-section" data-selected-id={selectedId}>
       <header>
         <h1 ref={headingRef} tabIndex={-1}>
           Calculators
         </h1>
         <CalculatorPicker
-          options={CALCULATORS.map(({ id, label }) => ({ id, label }))}
+          options={calculators.map(({ id, label }) => ({ id, label }))}
           selectedId={selected.id}
           onSelect={setSelectedId}
         />
