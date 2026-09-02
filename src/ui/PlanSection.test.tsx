@@ -3,6 +3,14 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlanSection } from './PlanSection'
 import { STORAGE_KEY } from '../storage'
+import * as useProjectionStateModule from './hooks/useProjectionState'
+
+// FIN-114 follow-up: useProjectionState gained a `people` param so it can derive a spouse and
+// include `spouseMedicarePartBEvent`, but nothing verified PlanSection actually passed its real
+// `people` state through — it was calling the hook with only 3 args, so the spousal event was
+// silently never included in the live plan regardless of what a user entered on the People tab.
+// Spying (not mocking) the real hook lets this test assert on the actual call args it receives.
+vi.spyOn(useProjectionStateModule, 'useProjectionState')
 
 /** Minimal in-memory fake matching the `Storage` interface, mirroring the one used by
  * `src/storage/assumptionsStorage.test.ts` (FIN-41) — this environment's `window.localStorage`
@@ -126,6 +134,52 @@ describe('PlanSection', () => {
     render(<PlanSection />)
     const tile = screen.getByRole('region', { name: 'Current investment balance' })
     expect(tile).toHaveTextContent('$250,000')
+  })
+
+  // FIN-114 follow-up: adding a spouse via the People tab must actually reach
+  // useProjectionState's `people` param, since that's what lets it derive a spouse and include
+  // spouseMedicarePartBEvent in the real, rendered plan. Asserts on the hook's real call args
+  // (see the `vi.spyOn` above) rather than on projection output, since a spouse's Medicare
+  // event doesn't move any currently-asserted-on number by itself.
+  it('passes the current People list into useProjectionState, so a spouse reaches the projection', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    await user.click(screen.getByRole('tab', { name: 'People' }))
+    await user.click(screen.getByRole('button', { name: '+ Spouse' }))
+
+    await waitFor(() => {
+      const lastCall = vi.mocked(useProjectionStateModule.useProjectionState).mock.calls.at(-1)
+      const peopleArg = lastCall?.[3]
+      expect(peopleArg?.some((person) => !person.isPrimary)).toBe(true)
+    })
+  })
+
+  // FIN-121: closes the coverage gap the peer review flagged — the FIN-114 test above only
+  // asserts the spouse reaches `useProjectionState`'s `people` param, not that it actually
+  // produces a visible chart marker. Real (unmocked) projection output, since the marker only
+  // appears once `PlanSection` derives `spouseMedicareStartAge` from `events` and confirms it
+  // lands on a plotted row.
+  it('shows a spouse Medicare-start marker once a spouse is added via the People tab', async () => {
+    // Unlike the rest of this describe block, this test's `waitFor` runs long enough for FIN-43's
+    // persistence effect to actually fire and write the added spouse to `localStorage` — which
+    // would otherwise leak into every later test in this file, since this top-level describe
+    // (unlike "PlanSection persistence (FIN-43)" below) never stubs it. Stub it for just this one
+    // test rather than the whole block, to keep this a one-test fix.
+    vi.stubGlobal('localStorage', createFakeStorage())
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    expect(screen.queryByTestId('percentile-chart-spouse-medicare-marker')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    await user.click(screen.getByRole('tab', { name: 'People' }))
+    await user.click(screen.getByRole('button', { name: '+ Spouse' }))
+    await user.click(screen.getByRole('tab', { name: 'Projection' }))
+
+    await waitFor(() => expect(screen.getByTestId('percentile-chart-spouse-medicare-marker')).toBeInTheDocument())
+    vi.unstubAllGlobals()
   })
 
   // FIN-116 follow-up: the primary Person's age/retirementAge fields on the People tab used to

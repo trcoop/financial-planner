@@ -57,6 +57,15 @@ export interface PercentileLineChartProps {
    * `rows`, same as `retirementAge`. */
   medicareStartAge?: number
   /**
+   * Age at which a second, spouse Medicare-start marker renders (FIN-121), same suppression
+   * rule as {@link medicareStartAge} (computed at the call site; renders nothing if the age
+   * isn't present in `rows`). Kept as a separate prop rather than generalizing to an array —
+   * there is at most one spouse in today's People model (see `useProjectionState`'s doc
+   * comment on `spouse`), so a second fixed slot covers it without the extra generality of an
+   * arbitrary-length marker list.
+   */
+  spouseMedicareStartAge?: number
+  /**
    * Called with the newly selected row whenever a time slice is clicked/tapped (FIN-60). This
    * component owns selection ("active period") state internally (uncontrolled) and lifts the
    * selected row up via this callback — mirroring `ChartContainer`'s `onSelectRow` contract so
@@ -177,6 +186,7 @@ export function PercentileLineChart({
   title,
   retirementAge,
   medicareStartAge,
+  spouseMedicareStartAge,
   onSelectRow,
   defaultSelectedYear,
   showLegend = true,
@@ -343,8 +353,6 @@ export function PercentileLineChart({
   const retirementIndex = retirementAge === undefined ? -1 : rows.findIndex((row) => row.age === retirementAge)
   const retirementX = retirementIndex >= 0 ? xForIndex(retirementIndex, lastIndex) : null
 
-  const medicareIndex = medicareStartAge === undefined ? -1 : rows.findIndex((row) => row.age === medicareStartAge)
-  const medicareX = medicareIndex >= 0 ? xForIndex(medicareIndex, lastIndex) : null
   // Y-position clears the highest plotted line's value across a small window of nearby rows,
   // not just the marker's own exact row — anchoring to a single row let a line climbing steeply
   // just a few years to either side (e.g. balance still rising toward retirement shortly after
@@ -355,26 +363,37 @@ export function PercentileLineChart({
   // the note below). Not tracking engine internals — `rows`/`series` are already the chart's own
   // presentational data.
   const MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS = 5
-  const medicareWindowStart = medicareIndex >= 0 ? Math.max(0, medicareIndex - MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS) : -1
-  const medicareWindowEnd =
-    medicareIndex >= 0 ? Math.min(rows.length - 1, medicareIndex + MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS) : -1
-  const medicareTopValue =
-    medicareIndex >= 0
-      ? Math.max(
-          0,
-          ...rows
-            .slice(medicareWindowStart, medicareWindowEnd + 1)
-            .flatMap((row) => series.map((s) => row.values[s.key] ?? 0)),
-        )
-      : 0
-  // Y-position tracks that windowed value (not a fixed offset from the chart's top edge) — a
-  // fixed-from-top offset put the marker right at the container edge on charts whose lines climb
-  // steeply toward the right (e.g. Stress Test's p90), since the chart's own top edge is set by
-  // the *overall* series max, which can sit well above this particular row's value. Tracking the
-  // windowed value keeps a consistent visual clearance above the line in both the Plan tab's
-  // single-line chart and Stress Test's three-line fan.
-  const medicareY = medicareIndex >= 0 ? yForValue(medicareTopValue, maxValue) : null
-  const medicareYPercent = medicareY !== null ? (medicareY / VIEW_HEIGHT) * 100 : null
+  // Shared by both the primary's and spouse's Medicare markers (FIN-121) — same placement rule
+  // for each, just computed against a different `startAge`.
+  function medicareMarkerPosition(startAge: number | undefined) {
+    const index = startAge === undefined ? -1 : rows.findIndex((row) => row.age === startAge)
+    if (index < 0) return { x: null, yPercent: null }
+    const x = xForIndex(index, lastIndex)
+    const windowStart = Math.max(0, index - MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS)
+    const windowEnd = Math.min(rows.length - 1, index + MEDICARE_MARKER_CLEARANCE_WINDOW_YEARS)
+    const topValue = Math.max(
+      0,
+      ...rows.slice(windowStart, windowEnd + 1).flatMap((row) => series.map((s) => row.values[s.key] ?? 0)),
+    )
+    // Y-position tracks that windowed value (not a fixed offset from the chart's top edge) — a
+    // fixed-from-top offset put the marker right at the container edge on charts whose lines
+    // climb steeply toward the right (e.g. Stress Test's p90), since the chart's own top edge is
+    // set by the *overall* series max, which can sit well above this particular row's value.
+    // Tracking the windowed value keeps a consistent visual clearance above the line in both the
+    // Plan tab's single-line chart and Stress Test's three-line fan.
+    const y = yForValue(topValue, maxValue)
+    return { x, yPercent: (y / VIEW_HEIGHT) * 100 }
+  }
+  const { x: medicareX, yPercent: medicareYPercent } = medicareMarkerPosition(medicareStartAge)
+  const { x: spouseMedicareX, yPercent: spouseMedicareYPercent } = medicareMarkerPosition(spouseMedicareStartAge)
+  // With default ages (primary and spouse both 35), the two Medicare events start in the same
+  // plan year and land on the same row — same `x` and, since both derive from the same windowed
+  // topValue, the same `y` too. Left alone the two badges would render exactly on top of each
+  // other, silently hiding one. Detected by shared `x` (same row) rather than comparing the raw
+  // ages, since that's the actual on-screen collision this exists to avoid. The spouse marker is
+  // the one that moves — `.medicareMarkerStacked` renders it further above the line so both
+  // stay visible and clickable.
+  const medicareMarkersCoincide = medicareX !== null && medicareX === spouseMedicareX
 
   const selectedIndex = selectedYear === undefined ? -1 : rows.findIndex((row) => row.year === selectedYear)
   const selectedX = selectedIndex >= 0 ? xForIndex(selectedIndex, lastIndex) : null
@@ -504,6 +523,35 @@ export function PercentileLineChart({
                   </span>
                   <span className={styles.medicareLabel} aria-hidden="true">
                     Medicare starts.
+                  </span>
+                </button>
+              )}
+
+              {/* Spouse's Medicare-start marker (FIN-121) — same treatment as the primary's
+                  marker above, at the spouse's own age-65 point on the primary's age axis. A
+                  distinct testid/label rather than merging into one marker: the two can land at
+                  different (or, with default ages, the same) x-positions, and collapsing them
+                  would silently drop whichever one happens to overlap. */}
+              {spouseMedicareX !== null && spouseMedicareYPercent !== null && (
+                <button
+                  type="button"
+                  data-testid="percentile-chart-spouse-medicare-marker"
+                  className={
+                    medicareMarkersCoincide
+                      ? `${styles.medicareMarker} ${styles.medicareMarkerStacked}`
+                      : styles.medicareMarker
+                  }
+                  style={{
+                    left: `${(spouseMedicareX / VIEW_WIDTH) * 100}%`,
+                    top: `${spouseMedicareYPercent}%`,
+                  }}
+                  title="Spouse's Medicare starts."
+                >
+                  <span className={styles.medicareIcon} aria-hidden="true">
+                    +
+                  </span>
+                  <span className={styles.medicareLabel} aria-hidden="true">
+                    Spouse's Medicare starts.
                   </span>
                 </button>
               )}

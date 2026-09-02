@@ -23,6 +23,7 @@ import type { StressTestSectionHandle } from './components'
 import { TabBar, type TabBarTab } from './components/TabBar/TabBar'
 import { LeftNav, type NavItem } from './components/LeftNav/LeftNav'
 import type { ChartRow } from './components/ChartContainer/types'
+import type { PlanEvent } from '../engine/types'
 import {
   PercentileLineChart,
   type LineChartRow,
@@ -163,8 +164,8 @@ export function PlanSection(_props: PlanSectionProps) {
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
   // result — while a field is out of range. See useProjectionState for the full behavior.
-  const { rows, error, projectedBalanceAtRetirement, assumptions, debouncedCore, debouncedAdvanced } =
-    useProjectionState(effectiveCoreValues, advancedValues, RECALCULATION_DEBOUNCE_MS)
+  const { rows, error, projectedBalanceAtRetirement, assumptions, debouncedCore, debouncedAdvanced, events } =
+    useProjectionState(effectiveCoreValues, advancedValues, RECALCULATION_DEBOUNCE_MS, people)
 
   // Persists once per settled (debounced) change, riding useProjectionState's existing ~300ms
   // debounce rather than introducing a second one (ERD §6.1). Fires once on mount too (the
@@ -244,6 +245,20 @@ export function PlanSection(_props: PlanSectionProps) {
       ? MEDICARE_PART_B_EVENT.startAge
       : undefined
 
+  // FIN-114 added a spouse Medicare event to `events` (via useProjectionState) but never gave
+  // it a chart marker — read its startAge straight from `events` (the single source of truth
+  // per useProjectionState's own doc comment) rather than recomputing the age-offset math here.
+  // Same suppression rule as the primary marker: only show it if it actually lands on a
+  // plotted row.
+  const spouseMedicareEvent = events.find(
+    (event): event is Extract<PlanEvent, { type: 'recurringCost' }> =>
+      event.type === 'recurringCost' && event.id === 'medicareSpousePartB',
+  )
+  const spouseMedicareStartAge =
+    spouseMedicareEvent && rows.some((row) => row.age === spouseMedicareEvent.startAge)
+      ? spouseMedicareEvent.startAge
+      : undefined
+
   return (
     <>
       <TabBar tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
@@ -314,6 +329,7 @@ export function PlanSection(_props: PlanSectionProps) {
                     defaultSelectedYear={retirementRow?.year}
                     retirementAge={effectiveCoreValues.retirementAge}
                     medicareStartAge={medicareStartAge}
+                    spouseMedicareStartAge={spouseMedicareStartAge}
                     showLegend={false}
                   />
                   <YearDetailPanel row={selectedRow ?? retirementRow} />
