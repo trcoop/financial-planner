@@ -11,6 +11,11 @@ research/
 .design-work/
 .playwright-mcp/
 
+# Isolated git worktrees the harness creates for background subagents (e.g. the peer-review-loop
+# reviewer) — already referenced as a known local artifact by vite.config.ts's Vitest exclude,
+# but never itself declared ignored — not committed.
+.claude/worktrees/
+
 # Logs
 logs
 *.log
@@ -24,6 +29,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.ladle-build
 *.local
 
 # Editor directories and files

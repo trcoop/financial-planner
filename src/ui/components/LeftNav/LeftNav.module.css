@@ -9,6 +9,8 @@
   gap: var(--space-2);
   width: 232px;
   padding: var(--space-5) var(--space-3);
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: documented
+     dark-chrome exception above, no --color-chrome-bg token yet (pending FIN-124 cleanup). */
   background: #12151c;
   height: 100%;
   box-sizing: border-box;
@@ -25,6 +27,8 @@
   font-family: var(--font-family-display);
   font-size: var(--font-size-sm);
   font-weight: 600;
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+     documented dark-chrome exception as .leftNav's background above. */
   color: rgba(255, 255, 255, 0.72);
   text-align: left;
   padding: var(--space-3) var(--space-4);
@@ -41,7 +45,11 @@
 
 @media (hover: hover) {
   .item:hover {
+    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+       documented dark-chrome exception as .leftNav's background above. */
     color: #ffffff;
+    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+       documented dark-chrome exception as .leftNav's background above. */
     background: rgba(255, 255, 255, 0.08);
   }
 
@@ -51,12 +59,16 @@
    * color/background instead of keeping its active look. Re-asserting the active styling here,
    * at equal specificity to `.item:hover` but later in source order, wins back the active look. */
   .itemActive:hover {
+    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+       documented dark-chrome exception as .leftNav's background above. */
     color: #ffffff;
     background: var(--color-primary);
   }
 }
 
 .itemActive {
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+     documented dark-chrome exception as .leftNav's background above. */
   color: #ffffff;
   background: var(--color-primary);
   font-weight: 700;
@@ -87,12 +99,12 @@
 
   /* Same specificity bug as `.itemActive:hover` above, same fix. */
   .inline .itemActive:hover {
-    color: #ffffff;
+    color: var(--color-bg);
     background: var(--color-primary);
   }
 }
 
 .inline .itemActive {
-  color: #ffffff;
+  color: var(--color-bg);
   background: var(--color-primary);
 }
