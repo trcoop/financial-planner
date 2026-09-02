@@ -324,16 +324,21 @@
 @media (min-width: 960px) {
   .profileLayout {
     flex-direction: row;
-    /* Default (stretch, so no explicit declaration needed) rather than flex-start: lets the
-     * nav's `.leftNav`/`.inline` `height: 100%` actually have a row height to fill, matching how
-     * the app-level LeftNav spans .body's full height beside .main. `.profileContent` is a plain
-     * flex column with normal block-flowing children (forms, placeholder text), so stretching
-     * its own box taller just adds trailing whitespace below its content — it doesn't stretch
-     * the children themselves, so a short placeholder tab's text doesn't look distorted. */
+    align-items: flex-start;
   }
 
   .profileNavDesktop {
     display: block;
+    /* .main (App.css above) is the page's single scroll container, and .profileLayout has no
+     * height cap of its own — it's just as tall as .profileContent's tallest tab (e.g. a long
+     * Accounts list), so a `height: 100%`/stretch nav rides along and scrolls with the page. Pin
+     * it to the scrollport instead, the same fixed-while-content-scrolls effect .navPane/.main
+     * get for free from .shell's 100vh frame. `top: 0` lands at .main's padding edge, which is
+     * where the scrollport (not the document) starts, so it doesn't need to duplicate .main's
+     * padding value. */
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
   }
 
   .profileNavMobile {
