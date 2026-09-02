@@ -1,0 +1,17 @@
+/* Shared `.field`/`.label` shell (FIN-124, audit finding #14) — was duplicated verbatim across
+   NumberField, TextField, SelectField, and ToggleGroup. Each of those composes its local
+   `.field`/`.label` class from here via CSS Modules `composes`, so there is one definition to
+   change instead of four kept in sync by hand. Not a component itself (no folder, no .tsx) —
+   lives at the `src/ui/` root alongside `theme.css`, the same place other shared-but-not-a-
+   component styling lives. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
