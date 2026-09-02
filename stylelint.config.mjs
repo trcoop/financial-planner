@@ -1,12 +1,22 @@
+// Deliberately does NOT `extend: 'stylelint-config-standard'` here, even though the spec's
+// "Stylelint rule (the ratchet)" section names it. stylelint-config-standard's full ruleset
+// (selector naming, comment spacing, color-function/notation preferences, deprecated
+// properties, specificity ordering, ...) has nothing to do with hardcoded colors, and this repo
+// has never been linted against it — round-1 review of this ticket proved that extending it
+// makes the *changed-files-only* ratchet flag 75 pre-existing, unrelated violations across 15
+// files, so touching e.g. TopBar.module.css or LeftNav.module.css for any reason (even a typo
+// fix) gets blocked by 27 violations that have nothing to do with this ticket. That's exactly
+// what the project's own scoping decision says the ratchet must not do ("without blocking
+// in-flight/unrelated stories on pre-existing violations"). `stylelint-config-standard` stays a
+// devDependency for FIN-126 (the later repo-wide gate ticket) to pick up if wanted once cleanup
+// has landed everywhere — turning it on today is premature.
 /** @type {import('stylelint').Config} */
 export default {
-  extends: 'stylelint-config-standard',
   plugins: ['stylelint-declaration-strict-value'],
-  rules: {
-    // CSS Modules classes in this repo are deliberately camelCase (matches the JS-side
-    // `styles.topBar` property access) — not the kebab-case config-standard defaults to.
-    'selector-class-pattern': null,
-  },
+  // No top-level rules: this config exists purely to scope the ratchet rule to
+  // src/ui/**/*.module.css below (theme.css and anything outside that glob gets no rules at
+  // all right now). Stylelint requires a `rules` key to exist even so, or it refuses to run.
+  rules: {},
   overrides: [
     {
       files: ['src/ui/**/*.module.css'],
@@ -38,7 +48,23 @@ export default {
             // var()/custom-property usage is tracked separately via `ignoreVariables`
             // (default true) and stays exempt either way.
             ignoreFunctions: false,
-            ignoreValues: ['transparent', 'currentColor', 'inherit', 'none'],
+            ignoreValues: [
+              'transparent',
+              'currentColor',
+              'inherit',
+              'none',
+              // Disabling ignoreFunctions above also catches color-mix() even when it's built
+              // entirely from a token, e.g. PercentileLineChart's
+              // `color-mix(in srgb, var(--color-bg) 85%, transparent)` — a real false positive,
+              // found by re-running the full ratchet after the ignoreFunctions change above.
+              // Only exempt a color-mix() call that references a token somewhere inside it, so
+              // a fully-hardcoded one (e.g. `color-mix(in srgb, #fff 85%, transparent)`) still
+              // gets caught. Doesn't catch a color-mix() that mixes a token with A SECOND
+              // hardcoded color in the same call — no reasonable regex distinguishes that from
+              // the fully-compliant case, so that narrower case stays a manual-review gap, same
+              // as the box-shadow exclusion above.
+              '/^color-mix\\(.*var\\(--/',
+            ],
             message: 'Use a theme.css token (var(--...)) instead of a hardcoded value for ${property}.',
           },
         ],

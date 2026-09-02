@@ -11,6 +11,8 @@
   width: 100%;
   height: 68px;
   padding: 0 var(--space-5);
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: documented
+     dark-chrome exception above, no --color-chrome-bg token yet (pending FIN-124 cleanup). */
   background: #12151c;
   box-sizing: border-box;
   /* `.shell`'s own auto height resolves against its flex children's *shrunk* sizes, not their
@@ -33,6 +35,8 @@
   font-size: var(--font-size-lg);
   font-weight: 800;
   letter-spacing: -0.01em;
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+     documented dark-chrome exception as .topBar's background above. */
   color: #ffffff;
   white-space: nowrap;
 }
