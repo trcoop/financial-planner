@@ -26,6 +26,39 @@ import type { AdditionalIncome, PeriodState, PipelineStage, PlanAssumptions, Run
 const isRetired = (age: number, assumptions: PlanAssumptions): boolean => age >= assumptions.retirementAge;
 
 /**
+ * Whether the HOUSEHOLD has begun drawing down the portfolio.
+ *
+ * Distinct from {@link isRetired}, which stays a per-earner check (used by `computeIncome` to
+ * stop each earner's own income/contribution at their own retirement age). This gate answers a
+ * different question — has *every* earner the household relied on for income stopped working —
+ * and is `>=` the LATEST retirement age in the household: the primary's own
+ * `assumptions.retirementAge`, or any {@link AdditionalIncome.retiresAtPrimaryAge} (FIN-118),
+ * whichever comes last on the primary's age timeline.
+ *
+ * FIN-118 wired each additional earner's own income/contribution to stop at their own
+ * `retiresAtPrimaryAge`, but left `computeWithdrawals` gated solely on the primary's
+ * `retirementAge` — so a spouse retiring a year before the primary correctly stopped earning,
+ * yet the household still didn't draw down the portfolio for that gap year even though it
+ * should have started drawing down for the primary's retirement alone regardless.
+ *
+ * Decided (2026-09-02, FIN-118 follow-up bug report): no partial/shortfall withdrawal during a
+ * gap year where one earner has retired but another hasn't — the household draws zero from the
+ * portfolio until EVERY earner has individually reached their own retirement age, full stop.
+ * This deliberately sidesteps a real complication (a younger spouse may be too young to
+ * withdraw from tax-advantaged accounts without an early-withdrawal penalty before 59½) by not
+ * withdrawing at all until every earner has retired — account-type/penalty-aware withdrawal
+ * timing and any true income-shortfall-driven partial withdrawal remain deferred to a future
+ * ticket, not built here.
+ */
+const isHouseholdRetired = (age: number, assumptions: PlanAssumptions): boolean => {
+  const retirementAges = [
+    assumptions.retirementAge,
+    ...(assumptions.additionalIncomes ?? []).map((person) => person.retiresAtPrimaryAge),
+  ];
+  return age >= Math.max(...retirementAges);
+};
+
+/**
  * Records the balance the period opened with, before any stage has touched it.
  *
  * Its own stage as of FIN-65 change 2. It used to be a side-obligation of {@link applyGrowth},
@@ -235,7 +268,7 @@ export const computeIncome: PipelineStage = (state, input) => {
 export const computeWithdrawals: PipelineStage = (state, input) => {
   const { assumptions, withdrawalStrategy } = input;
 
-  if (!isRetired(state.age, assumptions)) {
+  if (!isHouseholdRetired(state.age, assumptions)) {
     return { ...state, annualWithdrawal: 0 };
   }
 

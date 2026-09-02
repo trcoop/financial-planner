@@ -606,6 +606,104 @@ describe('computeWithdrawals', () => {
     expect(result.annualWithdrawal).toBeCloseTo(12_300, 6);
     expect(result.balance).toBeCloseTo(-7_300, 6);
   });
+
+  describe('FIN-118 follow-up: household withdrawal trigger with mismatched retirement ages', () => {
+    // Decided (2026-09-02, FIN-118 follow-up bug report): withdrawals gate on the LATEST
+    // retirement age in the household, not the earliest and not the primary's alone — no
+    // partial/shortfall withdrawal during a gap year where one earner has retired but another
+    // hasn't. Whichever earner is still working keeps earning/contributing (already wired by
+    // FIN-118's `computeIncome`); the portfolio is untouched until every earner has retired.
+    const withSpouse = (overrides: Partial<import('./types').AdditionalIncome> = {}) => ({
+      id: 'spouse',
+      currentAnnualIncome: 60_000,
+      annualRaiseRate: 0.03,
+      contributionRate: 0,
+      fixedContribution: 0,
+      retiresAtPrimaryAge: 66,
+      ...overrides,
+    });
+
+    it('withdraws nothing in the gap year the spouse has retired but the primary has not yet', () => {
+      // Primary retires at 67; the spouse's own retirement lands one age earlier on the
+      // primary's timeline (66) via `retiresAtPrimaryAge`. This is the live-testing bug
+      // report's exact scenario — resolved as "no withdrawal until the later retirement",
+      // not "withdraw early".
+      const result = computeWithdrawals(
+        periodState({ age: 66, year: 0, balance: 1_000_000 }),
+        runPeriodInput({
+          assumptions: {
+            ...runPeriodInput().assumptions,
+            currentAge: 66,
+            retirementAge: 67,
+            additionalIncomes: [withSpouse({ retiresAtPrimaryAge: 66 })],
+          },
+        }),
+      );
+
+      expect(result.annualWithdrawal).toBe(0);
+    });
+
+    it('withdraws once the primary — the LATER of the two — reaches their own retirement age', () => {
+      const result = computeWithdrawals(
+        periodState({ age: 67, year: 1, beginningBalance: 1_000_000, balance: 1_000_000 }),
+        runPeriodInput({
+          assumptions: {
+            ...runPeriodInput().assumptions,
+            currentAge: 66,
+            retirementAge: 67,
+            additionalIncomes: [withSpouse({ retiresAtPrimaryAge: 66 })],
+          },
+        }),
+      );
+
+      // First retirement year: 4% of the 1,000,000 beginning balance.
+      expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
+    });
+
+    it('withdraws nothing while the primary has retired but a LATER-retiring spouse has not', () => {
+      // Reverse case: primary retires at 65, spouse (younger, still working) doesn't retire
+      // until the primary's age 68 on the primary's timeline. Household still waits for the
+      // spouse — the later of the two — even though the primary alone has already retired.
+      const result = computeWithdrawals(
+        periodState({ age: 65, year: 0, balance: 1_000_000 }),
+        runPeriodInput({
+          assumptions: {
+            ...runPeriodInput().assumptions,
+            currentAge: 65,
+            retirementAge: 65,
+            additionalIncomes: [withSpouse({ retiresAtPrimaryAge: 68 })],
+          },
+        }),
+      );
+
+      expect(result.annualWithdrawal).toBe(0);
+    });
+
+    it('withdraws once the later-retiring spouse reaches their own retirement age', () => {
+      const result = computeWithdrawals(
+        periodState({ age: 68, year: 3, beginningBalance: 1_000_000, balance: 1_000_000 }),
+        runPeriodInput({
+          assumptions: {
+            ...runPeriodInput().assumptions,
+            currentAge: 65,
+            retirementAge: 65,
+            additionalIncomes: [withSpouse({ retiresAtPrimaryAge: 68 })],
+          },
+        }),
+      );
+
+      expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
+    });
+
+    it('regression: a single-earner plan (no additionalIncomes) still gates purely on the primary retirement age', () => {
+      const result = computeWithdrawals(
+        periodState({ age: 66, year: 0, balance: 1_000_000 }),
+        runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, currentAge: 66, retirementAge: 67 } }),
+      );
+
+      expect(result.annualWithdrawal).toBe(0);
+    });
+  });
 });
 
 describe('applyTax', () => {
