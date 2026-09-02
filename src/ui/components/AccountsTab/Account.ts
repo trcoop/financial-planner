@@ -1,5 +1,5 @@
-import type { CoreInputValues } from '../CoreInputsForm/CoreInputsForm'
-import { rangeError } from '../CoreInputsForm/validation'
+import type { CoreInputValues } from '../../coreInputs/types'
+import { rangeError } from '../../coreInputs/validation'
 
 /**
  * FIN-117: Account model per the PRD ("PRD: Profile Settings — People & Accounts") — a Person

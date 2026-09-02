@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { STORAGE_KEY } from './schema'
 import { clearAssumptions, loadAssumptions, saveAssumptions } from './assumptionsStorage'
-import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
+import { DEFAULT_CORE_VALUES } from '../ui/coreInputs/defaults'
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 import { createPrimaryPerson, createSpouse } from '../ui/components/PeopleTab/Person'
 import { createAccount } from '../ui/components/AccountsTab/Account'

@@ -22,7 +22,7 @@ import type { Account, Person } from './components'
 import type { StressTestSectionHandle } from './components'
 import { TabBar, type TabBarTab } from './components/TabBar/TabBar'
 import { LeftNav, type NavItem } from './components/LeftNav/LeftNav'
-import type { ChartRow } from './components/ChartContainer/types'
+import type { ChartRow } from './chartRow/types'
 import type { PlanEvent } from '../engine/types'
 import {
   PercentileLineChart,
