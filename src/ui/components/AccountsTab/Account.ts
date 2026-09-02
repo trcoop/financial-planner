@@ -95,14 +95,57 @@ export function createDefaultPrimaryAccount(primaryPersonId: string, core: CoreI
   }
 }
 
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+/** Per-account schema-drift repair, mirroring `loadAssumptions`'s own documented policy
+ * ("Schema drift ... handled by a per-field merge against current defaults rather than
+ * discarding the whole record") — applied per-account here rather than only at the top level.
+ * Handles two real cases seen from persisted browser state: (1) a genuinely pre-FIN-117-round-2
+ * account that still has the old single `contributionValue` field instead of the split
+ * `contributionPercentage`/`contributionFixed` pair — that legacy value is carried into whichever
+ * of the two matches the account's `contributionMode`, and (2) any field that's missing or
+ * non-finite (e.g. `undefined` propagating to `NaN`), which falls back to a safe default rather
+ * than being passed through and propagating `NaN` into the engine-facing sync path. */
+function normalizeAccount(raw: unknown, primaryPersonId: string): Account {
+  const account = (raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}) as Partial<Account> & {
+    contributionValue?: unknown
+  }
+  const contributionMode: ContributionMode = account.contributionMode === 'fixed' ? 'fixed' : 'percentage'
+  const legacyContributionValue = isFiniteNumber(account.contributionValue) ? account.contributionValue : undefined
+
+  return {
+    id: typeof account.id === 'string' && account.id.length > 0 ? account.id : generateAccountId(),
+    name: typeof account.name === 'string' && account.name.length > 0 ? account.name : 'Account',
+    type: account.type === 'roth' || account.type === 'traditional' ? account.type : 'taxable',
+    balance: isFiniteNumber(account.balance) ? account.balance : 0,
+    contributionMode,
+    contributionPercentage: isFiniteNumber(account.contributionPercentage)
+      ? account.contributionPercentage
+      : contributionMode === 'percentage' && legacyContributionValue !== undefined
+        ? legacyContributionValue
+        : 0,
+    contributionFixed: isFiniteNumber(account.contributionFixed)
+      ? account.contributionFixed
+      : contributionMode === 'fixed' && legacyContributionValue !== undefined
+        ? legacyContributionValue
+        : 0,
+    ownerId: typeof account.ownerId === 'string' && account.ownerId.length > 0 ? account.ownerId : primaryPersonId,
+  }
+}
+
 /** Given a possibly-persisted `accounts` value (untrusted — could be missing/malformed, or from
  * a pre-FIN-117 record with no `accounts` field at all), returns a valid `Account[]` to use.
  * A record that already has an `accounts` array — even an explicitly empty one, e.g. after the
- * user deletes their only account — is left alone (no re-seeding); only a genuinely missing/
- * malformed field gets the migrated default primary account seeded from the old core values. */
+ * user deletes their only account — is left alone at the array level (no re-seeding); but each
+ * individual account in that array is still run through `normalizeAccount` to repair per-field
+ * schema drift (see its doc comment) — an already-persisted array is not the same guarantee as
+ * an already-valid array. Only a genuinely missing/malformed `accounts` field itself gets the
+ * migrated default primary account seeded from the old core values. */
 export function seedAccounts(accounts: unknown, primaryPersonId: string, core: CoreInputValues): Account[] {
   if (Array.isArray(accounts)) {
-    return accounts as Account[]
+    return accounts.map((account) => normalizeAccount(account, primaryPersonId))
   }
   return [createDefaultPrimaryAccount(primaryPersonId, core)]
 }

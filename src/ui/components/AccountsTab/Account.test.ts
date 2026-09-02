@@ -86,6 +86,42 @@ describe('seedAccounts', () => {
     expect(seedAccounts(accounts, 'primary', core)).toEqual(accounts)
     expect(seedAccounts([], 'primary', core)).toEqual([])
   })
+
+  it('repairs a pre-contribution-split persisted account (legacy contributionValue, no contributionPercentage/contributionFixed) into a valid Account with finite fields, not NaN', () => {
+    const legacyAccount = {
+      id: 'acct-1',
+      name: 'Primary account',
+      type: 'taxable',
+      balance: 250_000,
+      contributionMode: 'percentage',
+      contributionValue: 15,
+      ownerId: 'primary',
+    }
+    const [seeded] = seedAccounts([legacyAccount], 'primary', core)
+    expect(Number.isFinite(seeded.balance)).toBe(true)
+    expect(Number.isFinite(seeded.contributionPercentage)).toBe(true)
+    expect(Number.isFinite(seeded.contributionFixed)).toBe(true)
+    expect(seeded.contributionPercentage).toBe(15)
+    expect(seeded.contributionFixed).toBe(0)
+    expect(seeded.balance).toBe(250_000)
+    expect(seeded.ownerId).toBe('primary')
+  })
+
+  it('repairs an account with non-finite balance/contribution fields to safe defaults', () => {
+    const malformedAccount = {
+      id: 'acct-2',
+      balance: undefined,
+      contributionMode: 'fixed',
+      contributionPercentage: NaN,
+      contributionFixed: undefined,
+      ownerId: 'primary',
+    }
+    const [seeded] = seedAccounts([malformedAccount], 'primary', core)
+    expect(seeded.balance).toBe(0)
+    expect(seeded.contributionPercentage).toBe(0)
+    expect(seeded.contributionFixed).toBe(0)
+    expect(Number.isFinite(seeded.balance)).toBe(true)
+  })
 })
 
 describe('syncCoreWithPrimaryAccount', () => {

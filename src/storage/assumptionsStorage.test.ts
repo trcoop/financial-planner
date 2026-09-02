@@ -179,6 +179,37 @@ describe('loadAssumptions edge cases', () => {
     expect(loadAssumptions()?.accounts).toEqual(accounts)
   })
 
+  it('repairs a persisted account still shaped like the pre-contribution-split Account (contributionValue, no contributionPercentage/contributionFixed) instead of propagating NaN', () => {
+    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+    const legacyShapedAccount = {
+      id: 'acct-legacy',
+      name: 'Primary account',
+      type: 'taxable',
+      balance: 250000,
+      contributionMode: 'percentage',
+      contributionValue: 15,
+      ownerId: primary.id,
+    }
+    const persisted = JSON.stringify({
+      core: DEFAULT_CORE_VALUES,
+      advanced: DEFAULT_ADVANCED_VALUES,
+      people: [primary],
+      accounts: [legacyShapedAccount],
+    })
+    vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: persisted }))
+
+    const accounts = loadAssumptions()?.accounts
+    expect(accounts).toHaveLength(1)
+    const account = accounts?.[0]
+    expect(account).toBeDefined()
+    expect(Number.isFinite(account?.balance)).toBe(true)
+    expect(Number.isFinite(account?.contributionPercentage)).toBe(true)
+    expect(Number.isFinite(account?.contributionFixed)).toBe(true)
+    expect(account?.balance).toBe(250000)
+    expect(account?.contributionPercentage).toBe(15)
+    expect(account?.contributionFixed).toBe(0)
+  })
+
   it('seeds a default primary account for a pre-FIN-117 record with no accounts field', () => {
     const preFin117 = JSON.stringify({ core: DEFAULT_CORE_VALUES, advanced: DEFAULT_ADVANCED_VALUES, people: DEFAULT_PEOPLE })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin117 }))
