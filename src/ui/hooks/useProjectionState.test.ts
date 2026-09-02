@@ -659,4 +659,59 @@ describe('useProjectionState additionalIncomes wiring (FIN-118)', () => {
     expect(callArgs).toBeDefined()
     expect(callArgs![0].primaryFixedContribution).toBe(3_000)
   })
+
+  /**
+   * Bug report (live-testing, this pass): Travis added a THIRD account across People — a
+   * second account owned by the primary, set to percentage-mode — and saw no change to the
+   * projection at all.
+   *
+   * Root cause: `PlanSection.tsx` derives `core.annualContributionRatePercent` (which
+   * `toAssumptions` reads into `assumptions.annualContributionRate`) via `primaryAccountFor`,
+   * which is a bare `accounts.find(...)` — only the FIRST account owned by the primary. A
+   * second (or third) primary-owned percentage-mode account's `contributionPercentage` was
+   * never read anywhere, unlike a spouse's accounts (`additionalIncomes` above already sums
+   * every owned account) or the primary's own FIXED-mode accounts (`primaryFixedContribution`
+   * above already sums every owned account). This block pins that the primary's percentage-mode
+   * contribution rate is also summed across every owned account, the same way.
+   */
+  it('sums percentage-mode contribution across ALL of the primary\'s owned accounts, not just the first', () => {
+    const accounts = [percentageAccount(PRIMARY_PERSON.id, 15), percentageAccount(PRIMARY_PERSON.id, 5)]
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], accounts))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    // 15% + 5% = 20%, not just the first account's 15%.
+    expect(result.current.assumptions.annualContributionRate).toBeCloseTo(0.2, 6)
+  })
+
+  it('sums the primary\'s percentage contribution across accounts alongside a separate fixed-mode account', () => {
+    const accounts = [percentageAccount(PRIMARY_PERSON.id, 10), fixedAccount(PRIMARY_PERSON.id, 1_000)]
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], accounts))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.annualContributionRate).toBeCloseTo(0.1, 6)
+    expect(result.current.assumptions.primaryFixedContribution).toBe(1_000)
+  })
+
+  it('regression: a lone primary percentage account still resolves to its own rate exactly', () => {
+    const accounts = [percentageAccount(PRIMARY_PERSON.id, 15)]
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], accounts))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.annualContributionRate).toBeCloseTo(0.15, 6)
+  })
+
+  it('regression: no accounts at all still falls back to core.annualContributionRatePercent unchanged', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], []))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.annualContributionRate).toBeCloseTo(CORE.annualContributionRatePercent / 100, 6)
+  })
 })

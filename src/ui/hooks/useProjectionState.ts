@@ -151,17 +151,38 @@ export function useProjectionState(
       .reduce((sum, account) => sum + account.contributionFixed, 0)
   }, [debouncedPeople, debouncedAccounts])
 
+  // Bug fix (live-testing pass after FIN-118): `core.annualContributionRatePercent` (which
+  // `toAssumptions` reads into `annualContributionRate` below) is derived in `PlanSection.tsx`
+  // via `primaryAccountFor`, which is a bare `.find()` — only the FIRST account owned by the
+  // primary. A second (or third) primary-owned percentage-mode account's `contributionPercentage`
+  // was silently dropped everywhere, unlike a spouse's accounts (`additionalIncomes` above already
+  // sums every owned account) or the primary's own FIXED-mode accounts (`primaryFixedContribution`
+  // just above already sums every owned account). This sums the primary's percentage-mode
+  // contribution across ALL of their owned accounts, the same way. `undefined` (no primary, or no
+  // primary-owned accounts at all) means "defer to `core.annualContributionRatePercent` as-is" —
+  // preserving exact existing behavior for every call site that doesn't pass an `accounts` array.
+  const primaryContributionRate = useMemo((): number | undefined => {
+    const primary = debouncedPeople.find((person) => person.isPrimary)
+    if (!primary) return undefined
+    const ownedAccounts = debouncedAccounts.filter((account) => account.ownerId === primary.id)
+    if (ownedAccounts.length === 0) return undefined
+    return ownedAccounts
+      .filter((account) => account.contributionMode === 'percentage')
+      .reduce((sum, account) => sum + account.contributionPercentage / 100, 0)
+  }, [debouncedPeople, debouncedAccounts])
+
   // Hoisted above the rows computation (and reused by it) so both the deterministic
   // `runProjection` call below and the `events` memo derive from the exact same settled
   // assumptions, rather than each recomputing `toAssumptions` independently.
-  const assumptions = useMemo(
-    (): PlanAssumptions => ({
-      ...toAssumptions(debouncedCoreValues, debouncedAdvancedValues),
+  const assumptions = useMemo((): PlanAssumptions => {
+    const base = toAssumptions(debouncedCoreValues, debouncedAdvancedValues)
+    return {
+      ...base,
+      annualContributionRate: primaryContributionRate ?? base.annualContributionRate,
       additionalIncomes,
       primaryFixedContribution,
-    }),
-    [debouncedCoreValues, debouncedAdvancedValues, additionalIncomes, primaryFixedContribution],
-  )
+    }
+  }, [debouncedCoreValues, debouncedAdvancedValues, additionalIncomes, primaryFixedContribution, primaryContributionRate])
 
   // FIN-114: the non-primary Person in the Profile People list, if any, with a usable (finite)
   // age — guards against malformed/legacy persisted data rather than trusting the caller.
