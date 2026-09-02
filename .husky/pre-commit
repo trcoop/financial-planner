@@ -1,1 +1,11 @@
+author_email=$(git config user.email)
+author_name=$(git config user.name)
+if [ "$author_email" = "noreply@anthropic.com" ] || [ "$author_name" = "Claude" ]; then
+  echo "error: git identity is Claude's default container identity ($author_name <$author_email>)."
+  echo "Set it to the repo owner's identity before committing, e.g.:"
+  echo "  git config user.name \"Travis Cooper\""
+  echo "  git config user.email \"traviscoop@gmail.com\""
+  exit 1
+fi
+
 npx lint-staged
