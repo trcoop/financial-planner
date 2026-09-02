@@ -156,6 +156,25 @@ describe('PlanSection', () => {
     })
   })
 
+  // FIN-121: closes the coverage gap the peer review flagged — the FIN-114 test above only
+  // asserts the spouse reaches `useProjectionState`'s `people` param, not that it actually
+  // produces a visible chart marker. Real (unmocked) projection output, since the marker only
+  // appears once `PlanSection` derives `spouseMedicareStartAge` from `events` and confirms it
+  // lands on a plotted row.
+  it('shows a spouse Medicare-start marker once a spouse is added via the People tab', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    expect(screen.queryByTestId('percentile-chart-spouse-medicare-marker')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    await user.click(screen.getByRole('tab', { name: 'People' }))
+    await user.click(screen.getByRole('button', { name: '+ Spouse' }))
+    await user.click(screen.getByRole('tab', { name: 'Projection' }))
+
+    await waitFor(() => expect(screen.getByTestId('percentile-chart-spouse-medicare-marker')).toBeInTheDocument())
+  })
+
   // FIN-116 follow-up: the primary Person's age/retirementAge fields on the People tab used to
   // be fully decoupled from the engine — editing them there silently did nothing to the
   // projection, since useProjectionState only ever read coreValues.currentAge/retirementAge and
