@@ -1,1 +1,10 @@
+author_email=$(git config user.email)
+if [ "$author_email" = "noreply@anthropic.com" ]; then
+  echo "error: git user.email is noreply@anthropic.com (Claude's default container identity)."
+  echo "Set it to the repo owner's identity before committing, e.g.:"
+  echo "  git config user.name \"Travis Cooper\""
+  echo "  git config user.email \"traviscoop@gmail.com\""
+  exit 1
+fi
+
 npx lint-staged
