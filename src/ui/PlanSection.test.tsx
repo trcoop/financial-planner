@@ -785,3 +785,40 @@ describe('PlanSection return assumption wiring (FIN-57, FIN-64)', () => {
     }
   })
 })
+
+describe('PlanSection cascade account cleanup (FIN-117 PM/Eng addendum round 2)', () => {
+  beforeEach(() => mockMatchMedia(true))
+  afterEach(() => cleanup())
+
+  it('removes a spouse\'s account when the spouse is removed via the cascade-confirm dialog', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+
+    // Add a spouse from the People sub-tab (the default).
+    await user.click(screen.getByRole('button', { name: '+ Spouse' }))
+
+    // Give the spouse an account from the Accounts sub-tab.
+    await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
+    await user.click(screen.getByRole('button', { name: '+ Account' }))
+    const ownerSelects = screen.getAllByLabelText('Owner')
+    const spouseAccountOwnerSelect = ownerSelects[ownerSelects.length - 1]
+    await user.click(spouseAccountOwnerSelect)
+    await user.click(screen.getByRole('option', { name: 'Spouse' }))
+    expect(screen.getAllByLabelText('Balance')).toHaveLength(2)
+
+    // Remove the spouse from the People sub-tab — this fires the cascade-confirm dialog since
+    // the spouse now owns an account (`spouseHasAccounts`).
+    await user.click(within(nav).getByRole('button', { name: 'People' }))
+    await user.click(screen.getByRole('button', { name: 'Remove spouse' }))
+    expect(screen.getByText('Remove spouse?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+
+    // Back on the Accounts sub-tab, only the primary's original seeded account remains — the
+    // spouse's account was cleaned up along with the spouse.
+    await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
+    expect(screen.getAllByLabelText('Balance')).toHaveLength(1)
+  })
+})

@@ -75,8 +75,8 @@ export function AccountsTab({ accounts, people, onChange }: AccountsTabProps) {
       {accounts.map((account) => (
         <div key={account.id} className={styles.accountCard}>
           <div className={styles.accountHeader}>
-            <Button variant="secondary" aria-label="Delete account" onClick={() => setPendingDeleteId(account.id)}>
-              Delete
+            <Button variant="secondary" aria-label="Remove account" onClick={() => setPendingDeleteId(account.id)}>
+              Remove
             </Button>
           </div>
           <div className={styles.fields}>
@@ -139,9 +139,9 @@ export function AccountsTab({ accounts, people, onChange }: AccountsTabProps) {
 
       <ConfirmDialog
         isOpen={pendingDelete !== undefined}
-        title="Delete account?"
+        title="Remove account?"
         message="This account and its balance/contribution data will be permanently removed. This can't be undone."
-        confirmLabel="Delete"
+        confirmLabel="Remove"
         cancelLabel="Cancel"
         onConfirm={() => {
           if (pendingDelete) removeAccount(pendingDelete.id)

@@ -96,11 +96,11 @@ describe('AccountsTab', () => {
     const onChange = vi.fn()
     render(<AccountsTab accounts={[account]} people={PEOPLE} onChange={onChange} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /delete/i }))
+    fireEvent.click(screen.getByRole('button', { name: /remove/i }))
     expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     expect(onChange).not.toHaveBeenCalled()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
     expect(onChange).toHaveBeenCalledWith([])
   })
 
@@ -109,7 +109,7 @@ describe('AccountsTab', () => {
     const onChange = vi.fn()
     render(<AccountsTab accounts={[account]} people={PEOPLE} onChange={onChange} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /delete/i }))
+    fireEvent.click(screen.getByRole('button', { name: /remove/i }))
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(onChange).not.toHaveBeenCalled()

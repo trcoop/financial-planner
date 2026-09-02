@@ -8,6 +8,7 @@ import {
   createAccount,
   hasAccountsForOwner,
   seedAccounts,
+  syncCoreWithPrimaryAccount,
   type Account,
 } from './Account'
 
@@ -83,6 +84,22 @@ describe('seedAccounts', () => {
     const accounts: Account[] = [createAccount('primary')]
     expect(seedAccounts(accounts, 'primary', core)).toEqual(accounts)
     expect(seedAccounts([], 'primary', core)).toEqual([])
+  })
+})
+
+describe('syncCoreWithPrimaryAccount', () => {
+  it('overrides initialBalance/annualContributionRatePercent from a percentage-mode account', () => {
+    const account: Account = { ...createAccount('primary'), balance: 42_000, contributionValue: 12 }
+    const synced = syncCoreWithPrimaryAccount(core, account)
+    expect(synced.initialBalance).toBe(42_000)
+    expect(synced.annualContributionRatePercent).toBe(12)
+  })
+
+  it('zeroes both fields when there is no primary account, rather than leaving stale core values', () => {
+    const staleCore: CoreInputValues = { ...core, initialBalance: 250_000, annualContributionRatePercent: 15 }
+    const synced = syncCoreWithPrimaryAccount(staleCore, undefined)
+    expect(synced.initialBalance).toBe(0)
+    expect(synced.annualContributionRatePercent).toBe(0)
   })
 })
 

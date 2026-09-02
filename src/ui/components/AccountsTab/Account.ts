@@ -111,13 +111,16 @@ export function primaryAccountFor(accounts: Account[], primaryPersonId: string):
  * account values, mirroring `syncCoreWithPrimary`'s pattern for age/retirementAge/salary. This
  * is deliberately UI-layer plumbing (not engine wiring, that's FIN-118) — it exists only so the
  * now-hidden `CoreInputValues` fields don't go stale relative to the real source of truth (the
- * primary's Account). When there's no primary account yet, `core` is returned unchanged. A
+ * primary's Account). When there's no primary account (e.g. the user deleted their only
+ * account), both fields are zeroed rather than left as whatever `core` happened to be carrying
+ * — there is no UI anywhere to edit those hidden fields any more, so leaving them alone would
+ * silently resurrect stale frozen data instead of reflecting the real "no account" state. A
  * `fixed` contribution mode has no clean translation to a percentage rate, so in that case the
  * contribution rate is left as-is (an acknowledged limitation properly owned by FIN-118's real
  * engine-aware contribution-mode handling, not this fix). */
 export function syncCoreWithPrimaryAccount(core: CoreInputValues, account: Account | undefined): CoreInputValues {
   if (!account) {
-    return core
+    return { ...core, initialBalance: 0, annualContributionRatePercent: 0 }
   }
   return {
     ...core,

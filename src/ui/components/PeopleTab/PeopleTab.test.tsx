@@ -91,7 +91,7 @@ describe('PeopleTab', () => {
     render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} accounts={[{ ownerId: spouse.id }]} />)
 
     fireEvent.click(screen.getByRole('button', { name: /remove spouse/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
 
     expect(onChange).toHaveBeenCalledWith([PRIMARY])
   })

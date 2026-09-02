@@ -112,9 +112,9 @@ export function PeopleTab({ people, onChange, accounts = [] }: PeopleTabProps) {
 
       <ConfirmDialog
         isOpen={pendingRemoval !== undefined}
-        title="Delete spouse?"
-        message="Deleting your spouse will also delete their accounts. If you want to keep those accounts, reassign them to a different owner in the Accounts tab first."
-        confirmLabel="Delete"
+        title="Remove spouse?"
+        message="Removing your spouse will also remove their accounts. If you want to keep those accounts, reassign them to a different owner in the Accounts tab first."
+        confirmLabel="Remove"
         cancelLabel="Cancel"
         onConfirm={() => {
           if (pendingRemoval) removePerson(pendingRemoval.id)
