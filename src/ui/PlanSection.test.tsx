@@ -3,6 +3,14 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlanSection } from './PlanSection'
 import { STORAGE_KEY } from '../storage'
+import * as useProjectionStateModule from './hooks/useProjectionState'
+
+// FIN-114 follow-up: useProjectionState gained a `people` param so it can derive a spouse and
+// include `spouseMedicarePartBEvent`, but nothing verified PlanSection actually passed its real
+// `people` state through — it was calling the hook with only 3 args, so the spousal event was
+// silently never included in the live plan regardless of what a user entered on the People tab.
+// Spying (not mocking) the real hook lets this test assert on the actual call args it receives.
+vi.spyOn(useProjectionStateModule, 'useProjectionState')
 
 /** Minimal in-memory fake matching the `Storage` interface, mirroring the one used by
  * `src/storage/assumptionsStorage.test.ts` (FIN-41) — this environment's `window.localStorage`
@@ -126,6 +134,26 @@ describe('PlanSection', () => {
     render(<PlanSection />)
     const tile = screen.getByRole('region', { name: 'Current investment balance' })
     expect(tile).toHaveTextContent('$250,000')
+  })
+
+  // FIN-114 follow-up: adding a spouse via the People tab must actually reach
+  // useProjectionState's `people` param, since that's what lets it derive a spouse and include
+  // spouseMedicarePartBEvent in the real, rendered plan. Asserts on the hook's real call args
+  // (see the `vi.spyOn` above) rather than on projection output, since a spouse's Medicare
+  // event doesn't move any currently-asserted-on number by itself.
+  it('passes the current People list into useProjectionState, so a spouse reaches the projection', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    await user.click(screen.getByRole('tab', { name: 'People' }))
+    await user.click(screen.getByRole('button', { name: '+ Spouse' }))
+
+    await waitFor(() => {
+      const lastCall = vi.mocked(useProjectionStateModule.useProjectionState).mock.calls.at(-1)
+      const peopleArg = lastCall?.[3]
+      expect(peopleArg?.some((person) => !person.isPrimary)).toBe(true)
+    })
   })
 
   // FIN-116 follow-up: the primary Person's age/retirementAge fields on the People tab used to
