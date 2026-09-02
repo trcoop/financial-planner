@@ -607,7 +607,10 @@ describe('PlanSection persistence (FIN-43)', () => {
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
       await user.type(ageInput, '42')
-      await vi.advanceTimersByTimeAsync(350)
+      // 500ms rather than 350ms: this flaked in CI (received the default age, i.e. the
+      // debounced save hadn't fired yet) even though it passed locally every time — same
+      // class of CI-runner-is-slower-than-local margin issue noted on `testTimeout` above.
+      await vi.advanceTimersByTimeAsync(500)
 
       unmount()
       render(<PlanSection />)
