@@ -77,7 +77,10 @@ body {
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background: var(--border);
+  /* `--color-border` (theme.css, #8c929c) not `--border` (this file's leftover vite-scaffold
+   * token, #e5e4e7) — the latter is nearly invisible against the app's white content panels,
+   * which is what made the thumb "hard to see" even after the overlap fix. */
+  background: var(--color-border);
   border-radius: 4px;
 }
 
