@@ -61,6 +61,28 @@ that talks to the network.
   into the engine.
 - `src/storage/` — localStorage persistence, decoupled from engine and UI.
 
+## Component reuse
+
+Before creating a new component in `src/ui/components/`, check
+`src/ui/components/index.ts` and the Ladle catalog (`npm run ladle`) for
+something close. A new component needs a concrete DOM/semantics/interaction
+reason to exist — a native `<select>` vs. a positioned popover listbox is a
+real reason; a different context or a missing prop is not. Prefer adding an
+optional prop to an existing component over building a parallel one:
+matching CSS is not the same as sharing a component, but near-identical
+components that only differ by context should collapse into one.
+
+All color/spacing/typography/radii/shadow values in `src/ui/**/*.module.css`
+come from `theme.css` tokens (`var(--...)`) — Stylelint enforces this
+repo-wide in CI (`npm run stylelint`), not just on changed files, so a
+hardcoded value anywhere in that tree fails the build, not just the file you
+touched.
+
+Before building new UI, check the Ladle catalog (`npm run ladle`) first —
+it's the fastest way to see what already exists and how it's meant to be
+composed, the same first stop as the Design Spec doc for anything not yet
+in Ladle.
+
 ## Linear
 
 - Team: Financial Planning (key `FIN`) — this is the durable home for all
