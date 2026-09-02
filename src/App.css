@@ -282,8 +282,20 @@
  * `tabIndex={-1}` (set in PlanSection.tsx) makes each one focusable only programmatically — the
  * mount-triggers-focus effect there focuses it on every tab switch, so this is purely a visual
  * label, not a second way to tab into the panel. */
+/* Sticky within whichever scroll pane the heading lives in — `.planMain` for Projection/Stress
+ * Test/Profile's own outer heading. Resolves against the nearest scrolling ancestor regardless
+ * of the non-scrolling wrappers (`.tabPanel`) in between, same mechanism as the sticky headers
+ * below (`.profileContent`'s own sub-tab headers) — this is the safe, single-scroll-container
+ * form of `position: sticky` (unlike the removed `.profileNavDesktop` attempt, which broke
+ * because it spanned *two* nested `overflow: auto` ancestors at once). `background` covers
+ * content scrolling underneath once stuck; `z-index` keeps it above that content. */
 .sectionHeading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   margin: 0;
+  padding-bottom: var(--space-2);
+  background: var(--color-bg);
   font-size: var(--font-size-lg, 1.125rem);
   font-weight: 600;
 }
@@ -370,7 +382,15 @@
  * module (AdvancedAssumptionsForm doesn't own a "Rates" identity) — matches PeopleTab/
  * AccountsTab's own `.heading` (margin: 0, font-size-lg), the established title-matches-the-
  * nav-label pattern for Profile's sub-tab content. */
+/* Sticky within `.profileContent` (the Rates sub-tab's own scroll pane) — same mechanism and
+ * reasoning as `.sectionHeading` above. AccountsTab/PeopleTab's own `.header` rows (their
+ * respective `.module.css` files) get the identical treatment for their own heading+action row. */
 .profileSubHeading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   margin: 0;
+  padding-bottom: var(--space-2);
+  background: var(--color-bg);
   font-size: var(--font-size-lg);
 }

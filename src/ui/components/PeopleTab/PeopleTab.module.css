@@ -4,11 +4,21 @@
   gap: var(--space-4);
 }
 
+/* Sticky within `.profileContent` (App.css) — the tab's own scroll pane — so the heading + "+
+ * Spouse" action stays visible while the person cards below scroll. Same single-scroll-container
+ * `position: sticky` pattern as AccountsTab's own `.header` (AccountsTab.module.css) and
+ * `.sectionHeading`/`.profileSubHeading` (App.css). `background` covers person cards scrolling
+ * underneath once stuck. */
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  background: var(--color-bg);
 }
 
 .heading {
