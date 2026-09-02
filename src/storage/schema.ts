@@ -1,6 +1,7 @@
 import type { CoreInputValues } from '../ui/components/CoreInputsForm/CoreInputsForm'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
 import type { Person } from '../ui/components/PeopleTab/Person'
+import type { Account } from '../ui/components/AccountsTab/Account'
 
 /** Bumped only on a genuinely breaking schema change (new/removed/retyped field with no safe
  * default). Same-version missing-field drift is handled by the partial-merge in
@@ -21,4 +22,8 @@ export interface PersistedAssumptions {
   /** FIN-116: replaces the retired `core.hasSpouse`/`core.spouseAge` fields. Absent on any
    * record persisted before this ticket — `loadAssumptions` seeds it via `seedPeople`. */
   people: Person[]
+  /** FIN-117: additive field, same category as `people` above. Absent on any record persisted
+   * before this ticket — `loadAssumptions` seeds it via `seedAccounts` (empty array, since
+   * there's no default account to seed, unlike the pre-loaded primary Person). */
+  accounts: Account[]
 }

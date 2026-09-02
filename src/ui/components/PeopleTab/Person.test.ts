@@ -98,8 +98,16 @@ describe('personFieldError', () => {
   })
 })
 
-describe('spouseHasAccounts (FIN-117 stub)', () => {
-  it('always returns false since no Account model exists yet', () => {
-    expect(spouseHasAccounts('any-id')).toBe(false)
+describe('spouseHasAccounts (FIN-117 retrofit)', () => {
+  it('returns false when no account has that ownerId', () => {
+    expect(spouseHasAccounts('spouse-1', [{ ownerId: 'primary' }])).toBe(false)
+  })
+
+  it('returns false against an empty accounts list', () => {
+    expect(spouseHasAccounts('spouse-1', [])).toBe(false)
+  })
+
+  it('returns true when at least one account is owned by that person id', () => {
+    expect(spouseHasAccounts('spouse-1', [{ ownerId: 'primary' }, { ownerId: 'spouse-1' }])).toBe(true)
   })
 })

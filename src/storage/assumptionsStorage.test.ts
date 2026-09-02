@@ -4,6 +4,7 @@ import { clearAssumptions, loadAssumptions, saveAssumptions } from './assumption
 import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 import { createPrimaryPerson, createSpouse } from '../ui/components/PeopleTab/Person'
+import { createAccount } from '../ui/components/AccountsTab/Account'
 
 const DEFAULT_PEOPLE = [createPrimaryPerson(DEFAULT_CORE_VALUES)]
 
@@ -71,7 +72,7 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const people = [createPrimaryPerson(core), createSpouse()]
     saveAssumptions(core, advanced, people)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people })
+    expect(loadAssumptions()).toEqual({ core, advanced, people, accounts: [] })
   })
 
   it('round-trips the FIN-56 stock/bond allocation field', () => {
@@ -82,7 +83,7 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const advanced = { ...DEFAULT_ADVANCED_VALUES, stocksAllocationPercent: 85 }
     saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE })
+    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE, accounts: [] })
     expect(loadAssumptions()?.advanced.stocksAllocationPercent).toBe(85)
   })
 
@@ -94,7 +95,7 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const advanced = { ...DEFAULT_ADVANCED_VALUES, bondReturnPercent: 5.5 }
     saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE })
+    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE, accounts: [] })
     expect(loadAssumptions()?.advanced.bondReturnPercent).toBe(5.5)
   })
 
@@ -128,10 +129,17 @@ describe('loadAssumptions edge cases', () => {
     const partial = JSON.stringify({ core: { currentAge: 50 }, advanced: {} })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: partial }))
 
-    expect(loadAssumptions()).toEqual({
-      core: { ...DEFAULT_CORE_VALUES, currentAge: 50 },
-      advanced: DEFAULT_ADVANCED_VALUES,
-      people: [createPrimaryPerson({ ...DEFAULT_CORE_VALUES, currentAge: 50 })],
+    const mergedCore = { ...DEFAULT_CORE_VALUES, currentAge: 50 }
+    const primary = createPrimaryPerson(mergedCore)
+    const loaded = loadAssumptions()
+    expect(loaded?.core).toEqual(mergedCore)
+    expect(loaded?.advanced).toEqual(DEFAULT_ADVANCED_VALUES)
+    expect(loaded?.people).toEqual([primary])
+    expect(loaded?.accounts).toHaveLength(1)
+    expect(loaded?.accounts[0]).toMatchObject({
+      ownerId: primary.id,
+      balance: mergedCore.initialBalance,
+      contributionPercentage: mergedCore.annualContributionRatePercent,
     })
   })
 
@@ -160,6 +168,63 @@ describe('loadAssumptions edge cases', () => {
     expect(loaded?.people.some((p) => !p.isPrimary)).toBe(false)
   })
 
+  it('round-trips a saved accounts list (FIN-117)', () => {
+    const fake = createFakeStorage()
+    vi.stubGlobal('localStorage', fake)
+
+    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+    const accounts = [createAccount(primary.id)]
+    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, [primary], accounts)
+
+    expect(loadAssumptions()?.accounts).toEqual(accounts)
+  })
+
+  it('repairs a persisted account still shaped like the pre-contribution-split Account (contributionValue, no contributionPercentage/contributionFixed) instead of propagating NaN', () => {
+    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+    const legacyShapedAccount = {
+      id: 'acct-legacy',
+      name: 'Primary account',
+      type: 'taxable',
+      balance: 250000,
+      contributionMode: 'percentage',
+      contributionValue: 15,
+      ownerId: primary.id,
+    }
+    const persisted = JSON.stringify({
+      core: DEFAULT_CORE_VALUES,
+      advanced: DEFAULT_ADVANCED_VALUES,
+      people: [primary],
+      accounts: [legacyShapedAccount],
+    })
+    vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: persisted }))
+
+    const accounts = loadAssumptions()?.accounts
+    expect(accounts).toHaveLength(1)
+    const account = accounts?.[0]
+    expect(account).toBeDefined()
+    expect(Number.isFinite(account?.balance)).toBe(true)
+    expect(Number.isFinite(account?.contributionPercentage)).toBe(true)
+    expect(Number.isFinite(account?.contributionFixed)).toBe(true)
+    expect(account?.balance).toBe(250000)
+    expect(account?.contributionPercentage).toBe(15)
+    expect(account?.contributionFixed).toBe(0)
+  })
+
+  it('seeds a default primary account for a pre-FIN-117 record with no accounts field', () => {
+    const preFin117 = JSON.stringify({ core: DEFAULT_CORE_VALUES, advanced: DEFAULT_ADVANCED_VALUES, people: DEFAULT_PEOPLE })
+    vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin117 }))
+
+    const accounts = loadAssumptions()?.accounts
+    expect(accounts).toHaveLength(1)
+    expect(accounts?.[0]).toMatchObject({
+      ownerId: DEFAULT_PEOPLE[0].id,
+      balance: DEFAULT_CORE_VALUES.initialBalance,
+      contributionPercentage: DEFAULT_CORE_VALUES.annualContributionRatePercent,
+      contributionMode: 'percentage',
+      type: 'taxable',
+    })
+  })
+
   it('returns an already-persisted people list unchanged (does not re-seed)', () => {
     const people = [createPrimaryPerson(DEFAULT_CORE_VALUES), createSpouse()]
     saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, people)
@@ -177,10 +242,15 @@ describe('loadAssumptions edge cases', () => {
     const wrongType = JSON.stringify({ core: 'not an object', advanced: ['also', 'wrong'] })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: wrongType }))
 
-    expect(loadAssumptions()).toEqual({
-      core: DEFAULT_CORE_VALUES,
-      advanced: DEFAULT_ADVANCED_VALUES,
-      people: DEFAULT_PEOPLE,
+    const loaded = loadAssumptions()
+    expect(loaded?.core).toEqual(DEFAULT_CORE_VALUES)
+    expect(loaded?.advanced).toEqual(DEFAULT_ADVANCED_VALUES)
+    expect(loaded?.people).toEqual(DEFAULT_PEOPLE)
+    expect(loaded?.accounts).toHaveLength(1)
+    expect(loaded?.accounts[0]).toMatchObject({
+      ownerId: DEFAULT_PEOPLE[0].id,
+      balance: DEFAULT_CORE_VALUES.initialBalance,
+      contributionPercentage: DEFAULT_CORE_VALUES.annualContributionRatePercent,
     })
   })
 

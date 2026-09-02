@@ -15,6 +15,10 @@ import styles from './PeopleTab.module.css'
 interface PeopleTabProps {
   people: Person[]
   onChange: (people: Person[]) => void
+  /** FIN-117 retrofit: real accounts list, used to drive `spouseHasAccounts` so the
+   * cascade-delete warning dialog below fires for a spouse who actually owns accounts.
+   * Defaults to `[]` so existing callers/tests that predate Accounts keep working unchanged. */
+  accounts?: Array<{ ownerId: string }>
 }
 
 /**
@@ -22,7 +26,7 @@ interface PeopleTabProps {
  * hides once a non-primary person exists (only one spouse supported for now, per the PRD), and
  * spouse edit/remove. No contribution field (moved to Account, FIN-117).
  */
-export function PeopleTab({ people, onChange }: PeopleTabProps) {
+export function PeopleTab({ people, onChange, accounts = [] }: PeopleTabProps) {
   const hasSpouse = people.some((person) => !person.isPrimary)
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null)
 
@@ -39,12 +43,9 @@ export function PeopleTab({ people, onChange }: PeopleTabProps) {
   }
 
   const handleRequestRemove = (person: Person) => {
-    // FIN-117 (Accounts) hasn't landed yet, so `spouseHasAccounts` always returns false and the
-    // cascade-delete warning dialog never actually shows today — see its doc comment. This call
-    // site is already wired for the real check: once FIN-117 lands and `spouseHasAccounts`
-    // starts returning true for an owning spouse, the dialog below starts appearing with no
-    // further change needed here.
-    if (spouseHasAccounts(person.id)) {
+    // FIN-117 retrofit: real check against the accounts list — the cascade-delete warning
+    // dialog below now fires whenever the spouse being removed actually owns an account.
+    if (spouseHasAccounts(person.id, accounts)) {
       setPendingRemovalId(person.id)
     } else {
       removePerson(person.id)
@@ -111,9 +112,9 @@ export function PeopleTab({ people, onChange }: PeopleTabProps) {
 
       <ConfirmDialog
         isOpen={pendingRemoval !== undefined}
-        title="Delete spouse?"
-        message="Deleting your spouse will also delete their accounts. If you want to keep those accounts, reassign them to a different owner in the Accounts tab first."
-        confirmLabel="Delete"
+        title="Remove spouse?"
+        message="Removing your spouse will also remove their accounts. If you want to keep those accounts, reassign them to a different owner in the Accounts tab first."
+        confirmLabel="Remove"
         cancelLabel="Cancel"
         onConfirm={() => {
           if (pendingRemoval) removePerson(pendingRemoval.id)

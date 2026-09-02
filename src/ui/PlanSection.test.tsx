@@ -399,7 +399,10 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     render(<PlanSection />)
 
     await user.click(screen.getByRole('tab', { name: 'Profile' }))
-    const balanceInput = screen.getByRole('textbox', { name: 'Current investment balance' })
+    // FIN-117 bug-fix round: initialBalance now lives on the primary's seeded default Account,
+    // edited via the Accounts sub-tab rather than the (now-removed) CoreInputsForm.
+    await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Accounts' }))
+    const balanceInput = screen.getByRole('textbox', { name: 'Balance' })
     await user.clear(balanceInput)
     await user.type(balanceInput, '500000')
 
@@ -474,7 +477,7 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
     expect(within(strip).getByRole('tab', { name: 'Rates' })).toHaveAttribute('aria-selected', 'false')
   })
 
-  it('switches to the Accounts placeholder when Accounts is selected from the desktop nav', async () => {
+  it('switches to the real Accounts tab when Accounts is selected from the desktop nav', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
 
@@ -482,7 +485,7 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
     const nav = screen.getByRole('navigation', { name: 'Profile sections' })
     await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
 
-    expect(screen.getByText('Accounts coming soon.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Account' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Current age')).not.toBeInTheDocument()
   })
 
@@ -514,7 +517,7 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
       'aria-current',
       'page',
     )
-    expect(screen.getByText('Accounts coming soon.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Account' })).toBeInTheDocument()
   })
 
   it('keeps the desktop nav and mobile strip in sync — selecting from one updates the other', async () => {
@@ -780,5 +783,42 @@ describe('PlanSection return assumption wiring (FIN-57, FIN-64)', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('PlanSection cascade account cleanup (FIN-117 PM/Eng addendum round 2)', () => {
+  beforeEach(() => mockMatchMedia(true))
+  afterEach(() => cleanup())
+
+  it('removes a spouse\'s account when the spouse is removed via the cascade-confirm dialog', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+
+    // Add a spouse from the People sub-tab (the default).
+    await user.click(screen.getByRole('button', { name: '+ Spouse' }))
+
+    // Give the spouse an account from the Accounts sub-tab.
+    await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
+    await user.click(screen.getByRole('button', { name: '+ Account' }))
+    const ownerSelects = screen.getAllByLabelText('Owner')
+    const spouseAccountOwnerSelect = ownerSelects[ownerSelects.length - 1]
+    await user.click(spouseAccountOwnerSelect)
+    await user.click(screen.getByRole('option', { name: 'Spouse' }))
+    expect(screen.getAllByLabelText('Balance')).toHaveLength(2)
+
+    // Remove the spouse from the People sub-tab — this fires the cascade-confirm dialog since
+    // the spouse now owns an account (`spouseHasAccounts`).
+    await user.click(within(nav).getByRole('button', { name: 'People' }))
+    await user.click(screen.getByRole('button', { name: 'Remove spouse' }))
+    expect(screen.getByText('Remove spouse?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+
+    // Back on the Accounts sub-tab, only the primary's original seeded account remains — the
+    // spouse's account was cleaned up along with the spouse.
+    await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
+    expect(screen.getAllByLabelText('Balance')).toHaveLength(1)
   })
 })

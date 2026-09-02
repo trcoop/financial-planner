@@ -74,6 +74,39 @@ describe('PeopleTab', () => {
     expect(onChange).toHaveBeenCalledWith([PRIMARY])
   })
 
+  it('removing the spouse who owns an account shows the cascade-delete warning dialog instead of deleting immediately', () => {
+    const spouse = createSpouse()
+    const onChange = vi.fn()
+    render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} accounts={[{ ownerId: spouse.id }]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /remove spouse/i }))
+
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('confirming the cascade-delete dialog removes the spouse', () => {
+    const spouse = createSpouse()
+    const onChange = vi.fn()
+    render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} accounts={[{ ownerId: spouse.id }]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /remove spouse/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+
+    expect(onChange).toHaveBeenCalledWith([PRIMARY])
+  })
+
+  it('does not show the cascade-delete dialog for a spouse whose accounts belong to someone else', () => {
+    const spouse = createSpouse()
+    const onChange = vi.fn()
+    render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} accounts={[{ ownerId: PRIMARY.id }]} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /remove spouse/i }))
+
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(onChange).toHaveBeenCalledWith([PRIMARY])
+  })
+
   it('editing a field for the correct person preserves the other person untouched', () => {
     const spouse = createSpouse()
     const onChange = vi.fn()

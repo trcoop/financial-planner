@@ -3,7 +3,9 @@ import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 import type { Person } from '../ui/components/PeopleTab/Person'
-import { seedPeople } from '../ui/components/PeopleTab/Person'
+import { PERSON_ID_PRIMARY, primaryPerson, seedPeople } from '../ui/components/PeopleTab/Person'
+import type { Account } from '../ui/components/AccountsTab/Account'
+import { seedAccounts } from '../ui/components/AccountsTab/Account'
 import { STORAGE_KEY, type PersistedAssumptions } from './schema'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -53,8 +55,15 @@ export function loadAssumptions(): PersistedAssumptions | undefined {
   // record's leftover `core.hasSpouse`/`core.spouseAge` (if present in the raw JSON) are never
   // read here — those fields are retired from `CoreInputValues` entirely.
   const people: Person[] = seedPeople(parsed.people, core)
+  const primaryPersonId = primaryPerson(people)?.id ?? PERSON_ID_PRIMARY
 
-  return { core, advanced, people }
+  // FIN-117: `accounts` is a new field, same "absent on pre-this-ticket records" category as
+  // `people` above — `seedAccounts` falls back to a single default account seeded from the old
+  // core values (`initialBalance`/`annualContributionRatePercent`), owned by the primary person,
+  // mirroring how `seedPeople` seeds the primary Person from `core`.
+  const accounts: Account[] = seedAccounts(parsed.accounts, primaryPersonId, core)
+
+  return { core, advanced, people, accounts }
 }
 
 /**
@@ -63,9 +72,14 @@ export function loadAssumptions(): PersistedAssumptions | undefined {
  * swallowed and logged via `console.warn`; callers cannot distinguish "saved" from "silently
  * failed" by design.
  */
-export function saveAssumptions(core: CoreInputValues, advanced: AdvancedAssumptionValues, people: Person[]): void {
+export function saveAssumptions(
+  core: CoreInputValues,
+  advanced: AdvancedAssumptionValues,
+  people: Person[],
+  accounts: Account[] = [],
+): void {
   try {
-    const json = JSON.stringify({ core, advanced, people } satisfies PersistedAssumptions)
+    const json = JSON.stringify({ core, advanced, people, accounts } satisfies PersistedAssumptions)
     localStorage.setItem(STORAGE_KEY, json)
   } catch (error) {
     console.warn('Failed to save assumptions to localStorage', error)

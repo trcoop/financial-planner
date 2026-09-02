@@ -120,12 +120,13 @@ export function syncCoreWithPrimary(core: CoreInputValues, people: Person[]): Co
 }
 
 /**
- * FIN-117 (Accounts) hasn't landed yet, so no Account can exist to own anything — this always
- * returns `false`. Once Accounts ships, this should query the Accounts store for any account
- * whose `ownerId` matches `personId`, and the delete-spouse flow (PeopleTab.tsx) that calls
- * this will then start showing its cascade-delete warning dialog for real, with no change
- * needed at the call site.
+ * FIN-117 retrofit (PM/Eng addendum, round 2): the real check backing the delete-spouse
+ * cascade-delete warning dialog (`PeopleTab.tsx`) — true when any account in `accounts` is
+ * owned by `personId`. Takes a plain `{ ownerId: string }[]` rather than importing
+ * `AccountsTab/Account`'s `Account` type, so this module (and the People tab, which has no
+ * other reason to know about Accounts) doesn't need a dependency on the Accounts feature
+ * beyond this narrow structural shape.
  */
-export function spouseHasAccounts(_personId: string): boolean {
-  return false
+export function spouseHasAccounts(personId: string, accounts: Array<{ ownerId: string }>): boolean {
+  return accounts.some((account) => account.ownerId === personId)
 }
