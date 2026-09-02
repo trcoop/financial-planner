@@ -162,6 +162,12 @@ describe('PlanSection', () => {
   // appears once `PlanSection` derives `spouseMedicareStartAge` from `events` and confirms it
   // lands on a plotted row.
   it('shows a spouse Medicare-start marker once a spouse is added via the People tab', async () => {
+    // Unlike the rest of this describe block, this test's `waitFor` runs long enough for FIN-43's
+    // persistence effect to actually fire and write the added spouse to `localStorage` — which
+    // would otherwise leak into every later test in this file, since this top-level describe
+    // (unlike "PlanSection persistence (FIN-43)" below) never stubs it. Stub it for just this one
+    // test rather than the whole block, to keep this a one-test fix.
+    vi.stubGlobal('localStorage', createFakeStorage())
     const user = userEvent.setup()
     render(<PlanSection />)
 
@@ -173,6 +179,7 @@ describe('PlanSection', () => {
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
 
     await waitFor(() => expect(screen.getByTestId('percentile-chart-spouse-medicare-marker')).toBeInTheDocument())
+    vi.unstubAllGlobals()
   })
 
   // FIN-116 follow-up: the primary Person's age/retirementAge fields on the People tab used to
