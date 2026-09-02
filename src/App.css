@@ -322,27 +322,39 @@
 }
 
 @media (min-width: 960px) {
+  /* Structural fix (follow-up to the sticky-nav attempt above): `position: sticky` on
+   * `.profileNavDesktop` didn't work because `.profileLayout` sits *inside* `.planMain`, which
+   * is itself the scroll container for every Plan tabpanel (Projection/Stress Test share it
+   * too) — the nav was several levels below the nearest `overflow: auto` ancestor, and having
+   * both `.main` (App.css) and `.planMain` as `overflow-y: auto` simultaneously in that chain
+   * made some browsers compute the *outer* page's scrollable extent from the sticky element's
+   * unstuck flow position, so the whole page (not just this pane) grew past `.shell`'s 100vh
+   * frame and exposed raw body background below it once scrolled far enough. Mirror the pattern
+   * that already works for the app's outer shell instead (`.navPane`/`.main` under `.body`):
+   * give `.profileLayout` a bounded height from `.tabPanel`'s own `flex: 1; min-height: 0`
+   * (set above, `@media (min-width: 960px) { .tabPanel { ... } }`) and make `.profileContent`
+   * — not `.planMain` — the single scroll container for Profile's content. `.profileNavDesktop`
+   * is then simply never inside anything that scrolls, so it never needs `position: sticky` at
+   * all, the same way `.navPane` never scrolls today. */
   .profileLayout {
     flex-direction: row;
-    align-items: flex-start;
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
   }
 
   .profileNavDesktop {
     display: block;
-    /* .main (App.css above) is the page's single scroll container, and .profileLayout has no
-     * height cap of its own — it's just as tall as .profileContent's tallest tab (e.g. a long
-     * Accounts list), so a `height: 100%`/stretch nav rides along and scrolls with the page. Pin
-     * it to the scrollport instead, the same fixed-while-content-scrolls effect .navPane/.main
-     * get for free from .shell's 100vh frame. `top: 0` lands at .main's padding edge, which is
-     * where the scrollport (not the document) starts, so it doesn't need to duplicate .main's
-     * padding value. */
-    position: sticky;
-    top: 0;
-    align-self: flex-start;
+    flex-shrink: 0;
   }
 
   .profileNavMobile {
     display: none;
+  }
+
+  .profileContent {
+    min-height: 0;
+    overflow-y: auto;
   }
 }
 
