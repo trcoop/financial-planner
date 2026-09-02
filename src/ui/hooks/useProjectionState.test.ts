@@ -629,4 +629,34 @@ describe('useProjectionState additionalIncomes wiring (FIN-118)', () => {
     expect(passedAssumptions.additionalIncomes).toHaveLength(1)
     expect(passedAssumptions.additionalIncomes![0].contributionRate).toBeCloseTo(0.1, 6)
   })
+
+  it('FIN-118 review fix: sums the primary\'s own fixed-mode account contribution into assumptions.primaryFixedContribution', () => {
+    const accounts = [fixedAccount(PRIMARY_PERSON.id, 2_000)]
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], accounts))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.primaryFixedContribution).toBe(2_000)
+  })
+
+  it('leaves primaryFixedContribution at 0 for a percentage-mode primary account (regression)', () => {
+    const accounts = [percentageAccount(PRIMARY_PERSON.id, 15)]
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], accounts))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.primaryFixedContribution).toBe(0)
+  })
+
+  it('feeds primaryFixedContribution to runProjection via the same assumptions object', () => {
+    vi.mocked(runProjection).mockClear()
+    const accounts = [fixedAccount(PRIMARY_PERSON.id, 3_000)]
+    renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], accounts))
+
+    const callArgs = vi.mocked(runProjection).mock.calls.at(-1)
+    expect(callArgs).toBeDefined()
+    expect(callArgs![0].primaryFixedContribution).toBe(3_000)
+  })
 })

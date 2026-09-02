@@ -138,6 +138,19 @@ export function useProjectionState(
       })
   }, [debouncedPeople, debouncedAccounts, debouncedAdvancedValues.annualRaisePercent, debouncedCoreValues.currentAge])
 
+  // FIN-118 review fix: the primary's own account can be in `fixed` contribution mode too —
+  // `syncCoreWithPrimaryAccount` (Account.ts) only ever populates `core.annualContributionRatePercent`
+  // from a `percentage`-mode account, so a fixed-dollar primary contribution otherwise never
+  // reaches the engine. Mirrors the `fixedContribution` sum `additionalIncomes` above computes
+  // for other earners' owned accounts, restricted to the primary's own account(s).
+  const primaryFixedContribution = useMemo(() => {
+    const primary = debouncedPeople.find((person) => person.isPrimary)
+    if (!primary) return 0
+    return debouncedAccounts
+      .filter((account) => account.ownerId === primary.id && account.contributionMode === 'fixed')
+      .reduce((sum, account) => sum + account.contributionFixed, 0)
+  }, [debouncedPeople, debouncedAccounts])
+
   // Hoisted above the rows computation (and reused by it) so both the deterministic
   // `runProjection` call below and the `events` memo derive from the exact same settled
   // assumptions, rather than each recomputing `toAssumptions` independently.
@@ -145,8 +158,9 @@ export function useProjectionState(
     (): PlanAssumptions => ({
       ...toAssumptions(debouncedCoreValues, debouncedAdvancedValues),
       additionalIncomes,
+      primaryFixedContribution,
     }),
-    [debouncedCoreValues, debouncedAdvancedValues, additionalIncomes],
+    [debouncedCoreValues, debouncedAdvancedValues, additionalIncomes, primaryFixedContribution],
   )
 
   // FIN-114: the non-primary Person in the Profile People list, if any, with a usable (finite)

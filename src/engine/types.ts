@@ -85,6 +85,17 @@ export interface PlanAssumptions {
    * scalar fields rather than replacing them.
    */
   additionalIncomes?: readonly AdditionalIncome[];
+  /**
+   * The primary's own flat-dollar contribution (FIN-118 review fix), additive on top of
+   * `annualContributionRate * income` the same way {@link AdditionalIncome.fixedContribution}
+   * is additive for other earners. Exists because the primary's account can be in `fixed`
+   * contribution mode (see `src/ui/components/AccountsTab/Account.ts`), which has no clean
+   * translation into `annualContributionRatePercent` — without this field that dollar amount
+   * had no path into the engine at all. `undefined`/`0` reproduces pre-existing
+   * percentage-only behaviour exactly (the regression case), matching how `additionalIncomes`
+   * defaults to a no-op.
+   */
+  primaryFixedContribution?: number;
 }
 
 /**

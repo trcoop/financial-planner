@@ -1182,6 +1182,26 @@ describe('FIN-118: additionalIncomes — spouse income & account contributions i
     expect(firstRetiredYear.annualContribution).toBeCloseTo(primaryOnlyAtFirstRetiredYear.annualContribution, 6);
   });
 
+  it('FIN-118 review fix: a primary fixed-dollar contribution reaches the projection', () => {
+    const plain = runProjection(assumptions());
+    const withFixed = runProjection(assumptions({ primaryFixedContribution: 5_000 }));
+
+    const plainRow = plain.find((row) => row.age === 35)!;
+    const fixedRow = withFixed.find((row) => row.age === 35)!;
+    expect(fixedRow.annualContribution).toBeCloseTo(plainRow.annualContribution + 5_000, 6);
+  });
+
+  it('regression: primaryFixedContribution absent matches pre-fix output exactly', () => {
+    const plain = runProjection(assumptions());
+    const withUndefinedField = runProjection(assumptions({ primaryFixedContribution: undefined }));
+
+    expect(withUndefinedField).toEqual(plain);
+  });
+
+  it('rejects a non-finite primaryFixedContribution at the input boundary', () => {
+    expectRejection(assumptions({ primaryFixedContribution: Number.NaN }), 'NON_FINITE_INPUT');
+  });
+
   it('rejects a non-finite field on an additionalIncomes entry at the input boundary', () => {
     expectRejection(
       assumptions({

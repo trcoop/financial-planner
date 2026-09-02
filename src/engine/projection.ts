@@ -81,6 +81,16 @@ export const validatePlanAssumptions = (assumptions: PlanAssumptions): void => {
     }
   }
 
+  if (
+    assumptions.primaryFixedContribution !== undefined &&
+    (typeof assumptions.primaryFixedContribution !== 'number' || !Number.isFinite(assumptions.primaryFixedContribution))
+  ) {
+    throw new InvalidProjectionInputError(
+      'NON_FINITE_INPUT',
+      `primaryFixedContribution must be a finite number, received ${String(assumptions.primaryFixedContribution)}.`,
+    );
+  }
+
   const {
     currentAge,
     retirementAge,

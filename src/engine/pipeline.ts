@@ -180,7 +180,14 @@ export const computeIncome: PipelineStage = (state, input) => {
       state.year === 0
       ? assumptions.currentAnnualIncome
       : state.priorIncome * (1 + assumptions.annualRaiseRate);
-  const primaryContribution = primaryRetired ? 0 : primaryIncome * assumptions.annualContributionRate;
+  // FIN-118 review fix: `primaryFixedContribution` is additive on top of the percentage-rate
+  // contribution, the same way each `AdditionalIncome.fixedContribution` is additive on top of
+  // its own `contributionRate` below — it exists so a primary account in fixed-dollar
+  // contribution mode (see `syncCoreWithPrimaryAccount`) has a path into the engine at all.
+  // `?? 0` keeps every pre-existing percentage-only plan (the field absent) byte-identical.
+  const primaryContribution = primaryRetired
+    ? 0
+    : primaryIncome * assumptions.annualContributionRate + (assumptions.primaryFixedContribution ?? 0);
 
   const additionalPriorIncomes = new Map<string, number>();
   let totalContribution = primaryContribution;

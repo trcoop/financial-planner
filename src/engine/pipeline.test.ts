@@ -317,6 +317,28 @@ describe('computeIncome — FIN-118 additionalIncomes (spouse income & account c
     expect(result.annualContribution).toBeCloseTo(12_000 + 6_500, 6);
   });
 
+  it('adds the primary\'s own fixed-dollar contribution on top of the percentage rate (FIN-118 review fix)', () => {
+    const result = computeIncome(
+      periodState({ age: 35, year: 0 }),
+      runPeriodInput({
+        assumptions: {
+          ...runPeriodInput().assumptions,
+          primaryFixedContribution: 2_000,
+        },
+      }),
+    );
+
+    // Primary: 80_000 * 0.15 + 2_000 = 14_000.
+    expect(result.annualContribution).toBeCloseTo(14_000, 6);
+  });
+
+  it('leaves the primary contribution unchanged when primaryFixedContribution is absent (regression)', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0 }), runPeriodInput());
+
+    // Primary: 80_000 * 0.15 = 12_000, no additional earners.
+    expect(result.annualContribution).toBeCloseTo(12_000, 6);
+  });
+
   it('excludes an additional earner income and contribution once they reach their own retirement age', () => {
     // additionalPriorIncomes is seeded with a nonzero prior spouse income (not left at the
     // Map default of empty) so this assertion actually depends on the retired-check branch in
