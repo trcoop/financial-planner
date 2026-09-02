@@ -318,8 +318,16 @@ describe('computeIncome — FIN-118 additionalIncomes (spouse income & account c
   });
 
   it('excludes an additional earner income and contribution once they reach their own retirement age', () => {
+    // additionalPriorIncomes is seeded with a nonzero prior spouse income (not left at the
+    // Map default of empty) so this assertion actually depends on the retired-check branch in
+    // computeAdditionalIncome firing: with an empty map, `priorIncome ?? 0` would make income 0
+    // regardless of whether the retirement boundary (`>=` vs `>`) is evaluated correctly,
+    // letting an off-by-one mutation there pass unnoticed.
     const result = computeIncome(
-      periodState({ age: 70, year: 35 }),
+      {
+        ...periodState({ age: 70, year: 35 }),
+        additionalPriorIncomes: new Map([['spouse', 60_000]]),
+      },
       withSpouse({ retiresAtPrimaryAge: 70 }),
     );
 

@@ -1148,6 +1148,40 @@ describe('FIN-118: additionalIncomes — spouse income & account contributions i
     expect(atSpouseRetirement.annualContribution).toBeCloseTo(primaryOnlyAtSpouseRetirement.annualContribution, 6);
   });
 
+  it('pins the retiresAtPrimaryAge boundary: the spouse still contributes at age retiresAtPrimaryAge - 1 and stops exactly at age retiresAtPrimaryAge', () => {
+    // Targets pipeline.ts's `state.age >= person.retiresAtPrimaryAge` check directly, at the
+    // exact boundary row rather than "some row after retirement" — an off-by-one mutation to
+    // `>` would leave the spouse contributing one extra year, and only asserting the row at
+    // age === retiresAtPrimaryAge (not a later age) catches that.
+    const plan = assumptions({
+      currentAge: 50,
+      retirementAge: 67,
+      currentAnnualIncome: 100_000,
+      annualContributionRate: 0.1,
+      planningHorizonEndAge: 60,
+      additionalIncomes: [
+        {
+          id: 'spouse',
+          currentAnnualIncome: 50_000,
+          annualRaiseRate: 0.03,
+          contributionRate: 0.05,
+          fixedContribution: 1_000,
+          retiresAtPrimaryAge: 55,
+        },
+      ],
+    });
+    const withSpouse = runProjection(plan);
+    const primaryOnly = runProjection(assumptions({ ...plan, additionalIncomes: [] }));
+
+    const lastWorkingYear = withSpouse.find((row) => row.age === 54)!;
+    const primaryOnlyAtLastWorkingYear = primaryOnly.find((row) => row.age === 54)!;
+    expect(lastWorkingYear.annualContribution).toBeGreaterThan(primaryOnlyAtLastWorkingYear.annualContribution);
+
+    const firstRetiredYear = withSpouse.find((row) => row.age === 55)!;
+    const primaryOnlyAtFirstRetiredYear = primaryOnly.find((row) => row.age === 55)!;
+    expect(firstRetiredYear.annualContribution).toBeCloseTo(primaryOnlyAtFirstRetiredYear.annualContribution, 6);
+  });
+
   it('rejects a non-finite field on an additionalIncomes entry at the input boundary', () => {
     expectRejection(
       assumptions({
