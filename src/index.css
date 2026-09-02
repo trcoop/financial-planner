@@ -61,6 +61,26 @@ body {
   margin: 0;
 }
 
+/* Global, non-overlay scrollbar convention (not scoped to any one section) — macOS's default
+ * overlay scrollbar draws on top of page content; this reserves its own gutter space and keeps
+ * it thin/subtle instead. `overflow: auto`/`scroll` elsewhere are unaffected — a scrollbar still
+ * only appears when content actually overflows. */
+* {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin; /* Firefox */
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
 h1,
 h2 {
   font-family: var(--heading);

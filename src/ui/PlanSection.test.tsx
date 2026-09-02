@@ -128,6 +128,86 @@ describe('PlanSection', () => {
     expect(tile).toHaveTextContent('$250,000')
   })
 
+  // FIN-116 follow-up: the primary Person's age/retirementAge fields on the People tab used to
+  // be fully decoupled from the engine — editing them there silently did nothing to the
+  // projection, since useProjectionState only ever read coreValues.currentAge/retirementAge and
+  // CoreInputsForm's own (separate) age/retirement fields were what actually drove the plan.
+  // `syncCoreWithPrimary` fixed this by feeding the primary Person's values into the
+  // `effectiveCoreValues` used everywhere downstream. This asserts the fix end-to-end: editing
+  // age via the People tab's "Current age" field changes the "Projected balance at N" tile's
+  // retirement age, proving the edit actually reached useProjectionState's assumptions.
+  it('reflects an age edit made via the People tab in the projection (age is no longer decoupled from the engine)', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    try {
+      render(<PlanSection />)
+      expect(screen.getByText('Projected balance at 65')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
+      const retirementAgeInput = screen.getByLabelText('Retirement age')
+      await user.clear(retirementAgeInput)
+      await user.type(retirementAgeInput, '70')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350)
+      })
+
+      await user.click(screen.getByRole('tab', { name: 'Projection' }))
+      expect(screen.getByText('Projected balance at 70')).toBeInTheDocument()
+      expect(screen.queryByText('Projected balance at 65')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // FIN-116 follow-up: CoreInputsForm used to render its own "Current age"/"Retirement age"
+  // fields directly below PeopleTab's identically-labeled fields in the same tab panel — a
+  // real duplicate-field bug (not just an accessible-name collision), since both were editable
+  // and could drift independently. CoreInputsForm no longer renders those two fields at all;
+  // this guards against either field being reintroduced there.
+  it('renders "Current age" and "Retirement age" exactly once each on the Profile tab (no duplicate fields)', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+    expect(screen.getAllByLabelText('Current age')).toHaveLength(1)
+    expect(screen.getAllByLabelText('Retirement age')).toHaveLength(1)
+  })
+
+  // FIN-116 follow-up (2nd pass): the same decoupling bug also applied to salary —
+  // `Person.salary` and `CoreInputValues.currentAnnualIncome` are the same concept
+  // (`createPrimaryPerson` already seeds `salary: core.currentAnnualIncome`), but
+  // CoreInputsForm kept rendering its own independently-editable "Current annual income"
+  // field below PeopleTab's "Salary" field. `syncCoreWithPrimary` now overrides
+  // `currentAnnualIncome` from the primary Person's `salary` too, and CoreInputsForm no
+  // longer renders that field at all.
+  it('reflects a salary edit made via the People tab in the projection, with no duplicate income field', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    try {
+      render(<PlanSection />)
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+      // No independently-editable "Current annual income" field left on CoreInputsForm.
+      expect(screen.queryByLabelText('Current annual income')).not.toBeInTheDocument()
+      expect(screen.getAllByLabelText('Salary')).toHaveLength(1)
+
+      const balanceBefore = screen.getByText(/Projected balance at/).parentElement?.textContent
+
+      const salaryInput = screen.getByLabelText('Salary')
+      await user.clear(salaryInput)
+      await user.type(salaryInput, '250000')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(350)
+      })
+
+      await user.click(screen.getByRole('tab', { name: 'Projection' }))
+      const balanceAfter = screen.getByText(/Projected balance at/).parentElement?.textContent
+      expect(balanceAfter).not.toEqual(balanceBefore)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('switches to the Stress Test tab and shows the Run stress test control', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)

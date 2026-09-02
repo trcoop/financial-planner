@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AdvancedAssumptionsForm,
   Button,
@@ -7,9 +7,14 @@ import {
   CoreInputsForm,
   DEFAULT_ADVANCED_VALUES,
   DEFAULT_CORE_VALUES,
+  PeopleTab,
   StatTile,
   StressTestSection,
+  createPrimaryPerson,
+  seedPeople,
+  syncCoreWithPrimary,
 } from './components'
+import type { Person } from './components'
 import type { StressTestSectionHandle } from './components'
 import { TabBar, type TabBarTab } from './components/TabBar/TabBar'
 import { LeftNav, type NavItem } from './components/LeftNav/LeftNav'
@@ -22,6 +27,7 @@ import {
 import { YearDetailPanel } from './components/YearDetailPanel/YearDetailPanel'
 import { PeopleIcon, WalletIcon, PercentIcon } from './components/icons'
 import { useProjectionState, PLANNING_HORIZON_END_AGE } from './hooks/useProjectionState'
+import { useDebouncedValue } from './hooks/useDebouncedValue'
 import { MEDICARE_PART_B_EVENT } from './medicareEvent'
 import { formatCurrency, formatPercent } from './utils/format'
 import { clearAssumptions, loadAssumptions, saveAssumptions } from '../storage'
@@ -70,6 +76,10 @@ export function PlanSection(_props: PlanSectionProps) {
   const [advancedValues, setAdvancedValues] = useState(
     () => loadAssumptions()?.advanced ?? DEFAULT_ADVANCED_VALUES,
   )
+  // FIN-116: replaces the FIN-113 hasSpouse/spouseAge checkbox pair. Seeded once, lazily, from
+  // whatever was persisted (or freshly from `coreValues` if nothing/nothing valid was) — see
+  // `seedPeople`'s doc comment: it never seeds a spouse, only ever the primary Person.
+  const [people, setPeople] = useState<Person[]>(() => seedPeople(loadAssumptions()?.people, coreValues))
   const [activeTab, setActiveTab] = useState<string>(TABS[0].id)
   // FIN-115: which Profile sub-section (People/Accounts/Rates) is showing. Plain React state,
   // scoped to this mount — same pattern as `activeTab` above; no persistence requirement per
@@ -103,19 +113,44 @@ export function PlanSection(_props: PlanSectionProps) {
     headingRefs.current[activeTab]?.focus()
   }, [activeTab])
 
+  // FIN-116 follow-up: the primary Person's age/retirementAge (People tab) are the source of
+  // truth; CoreInputsForm no longer renders those two fields at all. `effectiveCoreValues`
+  // overrides them onto `coreValues` so every consumer below (the engine via
+  // useProjectionState, the stat tiles, the chart's retirement-age marker, the persisted
+  // record) sees the current value regardless of which form last changed it, and the two
+  // copies can never drift independently. See `syncCoreWithPrimary`'s doc comment.
+  // Memoized (rather than recomputed as a fresh object every render) so identity is stable
+  // across renders that don't actually change age/retirementAge/coreValues — `useDebouncedValue`
+  // below restarts its timer whenever the value it's given changes *reference*, so an
+  // unmemoized new object on every render (e.g. from an unrelated tab switch) would never let
+  // the debounce settle and would fire an extra save. See PlanSection.test.tsx "never saves on
+  // chart selection or tab switches".
+  const primary = people.find((person) => person.isPrimary)
+  const effectiveCoreValues = useMemo(
+    () => syncCoreWithPrimary(coreValues, people),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [coreValues, primary?.age, primary?.retirementAge, primary?.salary],
+  )
+
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
   // result — while a field is out of range. See useProjectionState for the full behavior.
   const { rows, error, projectedBalanceAtRetirement, assumptions, debouncedCore, debouncedAdvanced } =
-    useProjectionState(coreValues, advancedValues, RECALCULATION_DEBOUNCE_MS)
+    useProjectionState(effectiveCoreValues, advancedValues, RECALCULATION_DEBOUNCE_MS)
 
   // Persists once per settled (debounced) change, riding useProjectionState's existing ~300ms
   // debounce rather than introducing a second one (ERD §6.1). Fires once on mount too (the
   // debounced values equal the just-loaded initial state) — a harmless redundant first write,
   // not worth guarding against.
+  // Debounced the same way `useProjectionState` debounces core/advanced (RECALCULATION_DEBOUNCE_MS),
+  // so a reset's synchronous `setPeople` doesn't re-persist before `clearAssumptions()`'s effect
+  // has had a chance to take hold, the same reasoning that already applies to debouncedCore/
+  // debouncedAdvanced below.
+  const debouncedPeople = useDebouncedValue(people, RECALCULATION_DEBOUNCE_MS)
+
   useEffect(() => {
-    saveAssumptions(debouncedCore, debouncedAdvanced)
-  }, [debouncedCore, debouncedAdvanced])
+    saveAssumptions(debouncedCore, debouncedAdvanced, debouncedPeople)
+  }, [debouncedCore, debouncedAdvanced, debouncedPeople])
 
   const handleReset = () => {
     setIsResetConfirmOpen(true)
@@ -126,6 +161,7 @@ export function PlanSection(_props: PlanSectionProps) {
     clearAssumptions()
     setCoreValues(DEFAULT_CORE_VALUES)
     setAdvancedValues(DEFAULT_ADVANCED_VALUES)
+    setPeople([createPrimaryPerson(DEFAULT_CORE_VALUES)])
   }
 
   const handleCancelReset = () => {
@@ -138,7 +174,7 @@ export function PlanSection(_props: PlanSectionProps) {
   // Default the chart/detail panel to the retirement year rather than the last year of the
   // full horizon — that's the year people care about most on load. Falls back to the last row
   // if, for some reason, no row's age matches (e.g. retirement age outside the horizon).
-  const retirementRow = rows.find((row) => row.age === coreValues.retirementAge) ?? rows.at(-1)
+  const retirementRow = rows.find((row) => row.age === effectiveCoreValues.retirementAge) ?? rows.at(-1)
 
   // FIN-60: Plan's chart is now a single-line `PercentileLineChart` (shared with Stress Test)
   // rather than `ChartContainer`'s bars. It only knows about the `LineChartRow` shape (year,
@@ -160,7 +196,9 @@ export function PlanSection(_props: PlanSectionProps) {
   // point to the right of the first row to mark). Computed at the call site (not inside
   // PercentileLineChart), per ERD §9 — the chart only sees `rows`.
   const medicareStartAge =
-    coreValues.currentAge < 65 && 65 <= PLANNING_HORIZON_END_AGE ? MEDICARE_PART_B_EVENT.startAge : undefined
+    effectiveCoreValues.currentAge < 65 && 65 <= PLANNING_HORIZON_END_AGE
+      ? MEDICARE_PART_B_EVENT.startAge
+      : undefined
 
   return (
     <>
@@ -203,7 +241,7 @@ export function PlanSection(_props: PlanSectionProps) {
                 <div className="statTiles">
                   <StatTile label="Current investment balance" value={formatCurrency(coreValues.initialBalance)} />
                   <StatTile
-                    label={`Projected balance at ${coreValues.retirementAge}`}
+                    label={`Projected balance at ${effectiveCoreValues.retirementAge}`}
                     value={projectedBalanceAtRetirement !== undefined ? formatCurrency(projectedBalanceAtRetirement) : '—'}
                   />
                   <StatTile
@@ -227,7 +265,7 @@ export function PlanSection(_props: PlanSectionProps) {
                     title="Investment balance by year"
                     onSelectRow={handleSelectPlanRow}
                     defaultSelectedYear={retirementRow?.year}
-                    retirementAge={coreValues.retirementAge}
+                    retirementAge={effectiveCoreValues.retirementAge}
                     medicareStartAge={medicareStartAge}
                     showLegend={false}
                   />
@@ -327,15 +365,15 @@ export function PlanSection(_props: PlanSectionProps) {
                   <div className="profileContent">
                     {profileTab === 'people' ? (
                       <>
-                        {/* FIN-116 will replace this with the real People tab (pre-loaded self,
-                          * "+ Spouse" button, Person model). Until then, the actual input forms
-                          * (CoreInputsForm/AdvancedAssumptionsForm) stay mounted here rather than
-                          * being dropped from the Profile view entirely — this is the app's only
-                          * way to edit plan inputs today, and this ticket is nav-shell-only, so
-                          * removing them with nowhere else to land would break input editing
-                          * with no ticket yet covering where they go. FIN-116 should read this
-                          * comment before restructuring the People tab. */}
-                        <CoreInputsForm values={coreValues} onChange={setCoreValues} />
+                        {/* FIN-116: real People tab — pre-loaded primary Person, "+ Spouse"
+                          * button, per-person name/age/retirement age/salary fields. The
+                          * CoreInputsForm/AdvancedAssumptionsForm inputs that used to live here
+                          * (FIN-115's placeholder) stay mounted below People for now — this
+                          * ticket only replaces the spouse checkbox with the Person model, it
+                          * doesn't relocate the other plan-assumption fields (no ticket yet
+                          * covers where those go). */}
+                        <PeopleTab people={people} onChange={setPeople} />
+                        <CoreInputsForm values={effectiveCoreValues} onChange={setCoreValues} />
                         <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
                         <Button variant="secondary" onClick={handleReset}>
                           Reset to defaults

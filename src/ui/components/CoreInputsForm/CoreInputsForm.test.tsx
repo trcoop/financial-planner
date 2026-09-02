@@ -11,8 +11,6 @@ const DEFAULT_VALUES: CoreInputValues = {
   initialBalance: 250000,
   currentAnnualIncome: 85000,
   annualContributionRatePercent: 15,
-  hasSpouse: false,
-  spouseAge: undefined,
 }
 
 function ControlledForm({ initial = DEFAULT_VALUES }: { initial?: CoreInputValues }) {
@@ -23,43 +21,36 @@ function ControlledForm({ initial = DEFAULT_VALUES }: { initial?: CoreInputValue
 describe('CoreInputsForm', () => {
   afterEach(() => cleanup())
 
-  it('renders the 5 core inputs in order with clear labels', () => {
+  // FIN-116: currentAge/retirementAge/currentAnnualIncome moved to the People tab's primary
+  // Person fields ("Current age"/"Retirement age"/"Salary" there, synced into `CoreInputValues`
+  // by PlanSection — see `syncCoreWithPrimary`) so they're no longer rendered here;
+  // CoreInputsForm keeps the 2 remaining plan-assumption fields that Person has no equivalent
+  // for.
+  it('renders the 2 remaining core inputs in order with clear labels', () => {
     render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    expect(screen.getByLabelText('Current age')).toBeInTheDocument()
-    expect(screen.getByLabelText('Retirement age')).toBeInTheDocument()
     expect(screen.getByLabelText('Current investment balance')).toBeInTheDocument()
-    expect(screen.getByLabelText('Current annual income')).toBeInTheDocument()
     expect(screen.getByLabelText('Annual savings percentage')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Current age')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Retirement age')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Current annual income')).not.toBeInTheDocument()
 
     const inputs = screen.getAllByRole('textbox')
     expect(inputs.map((i) => i.getAttribute('id'))).toEqual([
-      screen.getByLabelText('Current age').id,
-      screen.getByLabelText('Retirement age').id,
       screen.getByLabelText('Current investment balance').id,
-      screen.getByLabelText('Current annual income').id,
       screen.getByLabelText('Annual savings percentage').id,
     ])
   })
 
   it('pre-fills the sensible defaults on first load', () => {
     render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    expect(screen.getByLabelText('Current age')).toHaveValue('35')
-    expect(screen.getByLabelText('Retirement age')).toHaveValue('67')
     expect(screen.getByLabelText('Current investment balance')).toHaveValue('$250,000')
-    expect(screen.getByLabelText('Current annual income')).toHaveValue('$85,000')
     expect(screen.getByLabelText('Annual savings percentage')).toHaveValue('15%')
   })
 
   it('enforces input ranges via min/max', () => {
     render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-    expect(screen.getByLabelText('Current age')).toHaveAttribute('min', '18')
-    expect(screen.getByLabelText('Current age')).toHaveAttribute('max', '100')
-    expect(screen.getByLabelText('Retirement age')).toHaveAttribute('min', '18')
-    expect(screen.getByLabelText('Retirement age')).toHaveAttribute('max', '100')
     expect(screen.getByLabelText('Current investment balance')).toHaveAttribute('min', '0')
     expect(screen.getByLabelText('Current investment balance')).toHaveAttribute('max', '10000000')
-    expect(screen.getByLabelText('Current annual income')).toHaveAttribute('min', '0')
-    expect(screen.getByLabelText('Current annual income')).toHaveAttribute('max', '5000000')
     expect(screen.getByLabelText('Annual savings percentage')).toHaveAttribute('min', '0')
     expect(screen.getByLabelText('Annual savings percentage')).toHaveAttribute('max', '100')
   })
@@ -67,28 +58,27 @@ describe('CoreInputsForm', () => {
   it('shows a validation error when a value is entered out of range, and calls onChange anyway', () => {
     render(<ControlledForm />)
 
-    const income = screen.getByLabelText('Current annual income')
-    fireEvent.change(income, { target: { value: '9000000' } })
+    const balance = screen.getByLabelText('Current investment balance')
+    fireEvent.change(balance, { target: { value: '90000000' } })
 
-    expect(income).toHaveValue('$9,000,000')
-    expect(screen.getByRole('alert')).toHaveTextContent(/between 0 and 5,000,000/i)
+    expect(balance).toHaveValue('$90,000,000')
+    expect(screen.getByRole('alert')).toHaveTextContent(/between 0 and 10,000,000/i)
   })
 
   it('clears the validation error once the value is back in range', () => {
     render(<ControlledForm />)
 
-    const income = screen.getByLabelText('Current annual income')
-    fireEvent.change(income, { target: { value: '9000000' } })
+    const balance = screen.getByLabelText('Current investment balance')
+    fireEvent.change(balance, { target: { value: '90000000' } })
     expect(screen.getByRole('alert')).toBeInTheDocument()
 
-    fireEvent.change(income, { target: { value: '90000' } })
+    fireEvent.change(balance, { target: { value: '900000' } })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
-  it('formats balance and income fields with a $ prefix', () => {
+  it('formats the balance field with a $ prefix', () => {
     render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
     expect(screen.getByLabelText('Current investment balance')).toHaveValue('$250,000')
-    expect(screen.getByLabelText('Current annual income')).toHaveValue('$85,000')
   })
 
   it('formats the savings percentage field with a % suffix', () => {
@@ -100,10 +90,10 @@ describe('CoreInputsForm', () => {
     const onChange = vi.fn()
     render(<CoreInputsForm values={DEFAULT_VALUES} onChange={onChange} />)
 
-    const age = screen.getByLabelText('Current age')
-    fireEvent.change(age, { target: { value: '40' } })
+    const balance = screen.getByLabelText('Current investment balance')
+    fireEvent.change(balance, { target: { value: '300000' } })
 
-    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_VALUES, currentAge: 40 })
+    expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_VALUES, initialBalance: 300000 })
   })
 
   // jsdom (this project's Vitest environment) doesn't load real stylesheets or evaluate
@@ -126,67 +116,6 @@ describe('CoreInputsForm', () => {
 
     it('pairs fields two-to-a-row on desktop', () => {
       expect(desktopBlock).toMatch(/\.form\s*\{[^}]*grid-template-columns:\s*1fr 1fr;/)
-    })
-  })
-
-  describe('spouse capture (FIN-113)', () => {
-    it('renders a "Has a spouse" checkbox', () => {
-      render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-      expect(screen.getByLabelText('Has a spouse')).toBeInTheDocument()
-    })
-
-    it('does not render the spouse age field when hasSpouse is false', () => {
-      render(<CoreInputsForm values={DEFAULT_VALUES} onChange={vi.fn()} />)
-      expect(screen.queryByLabelText("Spouse's age")).not.toBeInTheDocument()
-    })
-
-    it('renders the spouse age field when hasSpouse is true', () => {
-      render(<CoreInputsForm values={{ ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 32 }} onChange={vi.fn()} />)
-      expect(screen.getByLabelText("Spouse's age")).toHaveValue('32')
-    })
-
-    it('seeds spouseAge to a reasonable default when checked and spouseAge is undefined', () => {
-      const onChange = vi.fn()
-      render(<CoreInputsForm values={DEFAULT_VALUES} onChange={onChange} />)
-
-      fireEvent.click(screen.getByLabelText('Has a spouse'))
-
-      expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 35 })
-    })
-
-    it('does not overwrite an existing spouseAge when re-checked', () => {
-      const onChange = vi.fn()
-      const values = { ...DEFAULT_VALUES, hasSpouse: false, spouseAge: 40 }
-      render(<CoreInputsForm values={values} onChange={onChange} />)
-
-      fireEvent.click(screen.getByLabelText('Has a spouse'))
-
-      expect(onChange).toHaveBeenLastCalledWith({ ...values, hasSpouse: true })
-    })
-
-    it('unchecking hides the age field but preserves spouseAge in state', () => {
-      const onChange = vi.fn()
-      const values = { ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 40 }
-      render(<CoreInputsForm values={values} onChange={onChange} />)
-
-      fireEvent.click(screen.getByLabelText('Has a spouse'))
-
-      expect(onChange).toHaveBeenLastCalledWith({ ...values, hasSpouse: false, spouseAge: 40 })
-    })
-
-    it('shows a range validation error for spouse age out of range, same pattern as currentAge', () => {
-      render(<CoreInputsForm values={{ ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 150 }} onChange={vi.fn()} />)
-      expect(screen.getByRole('alert')).toHaveTextContent(/between 18 and 100/i)
-    })
-
-    it('round-trips spouseAge changes through onChange', () => {
-      const onChange = vi.fn()
-      const values = { ...DEFAULT_VALUES, hasSpouse: true, spouseAge: 32 }
-      render(<CoreInputsForm values={values} onChange={onChange} />)
-
-      fireEvent.change(screen.getByLabelText("Spouse's age"), { target: { value: '33' } })
-
-      expect(onChange).toHaveBeenLastCalledWith({ ...values, spouseAge: 33 })
     })
   })
 })

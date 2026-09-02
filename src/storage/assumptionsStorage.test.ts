@@ -3,6 +3,9 @@ import { STORAGE_KEY } from './schema'
 import { clearAssumptions, loadAssumptions, saveAssumptions } from './assumptionsStorage'
 import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
+import { createPrimaryPerson, createSpouse } from '../ui/components/PeopleTab/Person'
+
+const DEFAULT_PEOPLE = [createPrimaryPerson(DEFAULT_CORE_VALUES)]
 
 /** Minimal in-memory fake matching the `Storage` interface, swapped in for `window.localStorage`
  * per-test so tests don't depend on jsdom's real localStorage implementation (and so we can
@@ -65,9 +68,10 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
 
     const core = { ...DEFAULT_CORE_VALUES, currentAge: 40 }
     const advanced = { ...DEFAULT_ADVANCED_VALUES, annualReturnPercent: 6 }
-    saveAssumptions(core, advanced)
+    const people = [createPrimaryPerson(core), createSpouse()]
+    saveAssumptions(core, advanced, people)
 
-    expect(loadAssumptions()).toEqual({ core, advanced })
+    expect(loadAssumptions()).toEqual({ core, advanced, people })
   })
 
   it('round-trips the FIN-56 stock/bond allocation field', () => {
@@ -76,9 +80,9 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
 
     const core = DEFAULT_CORE_VALUES
     const advanced = { ...DEFAULT_ADVANCED_VALUES, stocksAllocationPercent: 85 }
-    saveAssumptions(core, advanced)
+    saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({ core, advanced })
+    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE })
     expect(loadAssumptions()?.advanced.stocksAllocationPercent).toBe(85)
   })
 
@@ -88,9 +92,9 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
 
     const core = DEFAULT_CORE_VALUES
     const advanced = { ...DEFAULT_ADVANCED_VALUES, bondReturnPercent: 5.5 }
-    saveAssumptions(core, advanced)
+    saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({ core, advanced })
+    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE })
     expect(loadAssumptions()?.advanced.bondReturnPercent).toBe(5.5)
   })
 
@@ -98,7 +102,7 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const fake = createFakeStorage()
     vi.stubGlobal('localStorage', fake)
 
-    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES)
+    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, DEFAULT_PEOPLE)
 
     expect(fake.getItem(STORAGE_KEY)).not.toBeNull()
   })
@@ -127,26 +131,46 @@ describe('loadAssumptions edge cases', () => {
     expect(loadAssumptions()).toEqual({
       core: { ...DEFAULT_CORE_VALUES, currentAge: 50 },
       advanced: DEFAULT_ADVANCED_VALUES,
+      people: [createPrimaryPerson({ ...DEFAULT_CORE_VALUES, currentAge: 50 })],
     })
   })
 
-  it('fills in hasSpouse/spouseAge defaults for a record persisted before FIN-113', () => {
-    // Simulates a pre-FIN-113 persisted record that predates the spouse fields entirely.
-    const preSpouseCore = JSON.stringify({
+  it('seeds only a primary Person (never a spouse) for a record persisted before FIN-116, carrying over the pre-existing age', () => {
+    // Simulates a pre-FIN-116 persisted record that predates `people` entirely, and still
+    // carries the old FIN-113 hasSpouse/spouseAge fields on `core` (raw JSON, not the current
+    // CoreInputValues type, which no longer declares them). Those old fields must be ignored —
+    // not read to seed a spouse — per the FIN-116 addendum.
+    const preFin116 = JSON.stringify({
       core: {
         currentAge: 40,
         retirementAge: 65,
         initialBalance: 100000,
         currentAnnualIncome: 90000,
         annualContributionRatePercent: 10,
+        hasSpouse: true,
+        spouseAge: 38,
       },
       advanced: {},
     })
-    vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preSpouseCore }))
+    vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin116 }))
 
     const loaded = loadAssumptions()
-    expect(loaded?.core.hasSpouse).toBe(DEFAULT_CORE_VALUES.hasSpouse)
-    expect(loaded?.core.spouseAge).toBe(DEFAULT_CORE_VALUES.spouseAge)
+    expect(loaded?.people).toHaveLength(1)
+    expect(loaded?.people[0]).toMatchObject({ isPrimary: true, age: 40, retirementAge: 65, salary: 90000 })
+    expect(loaded?.people.some((p) => !p.isPrimary)).toBe(false)
+  })
+
+  it('returns an already-persisted people list unchanged (does not re-seed)', () => {
+    const people = [createPrimaryPerson(DEFAULT_CORE_VALUES), createSpouse()]
+    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, people)
+    vi.stubGlobal(
+      'localStorage',
+      createFakeStorage({
+        [STORAGE_KEY]: JSON.stringify({ core: DEFAULT_CORE_VALUES, advanced: DEFAULT_ADVANCED_VALUES, people }),
+      }),
+    )
+
+    expect(loadAssumptions()?.people).toEqual(people)
   })
 
   it('falls back to defaults per-field when core/advanced are object-shaped but wrong type', () => {
@@ -156,6 +180,7 @@ describe('loadAssumptions edge cases', () => {
     expect(loadAssumptions()).toEqual({
       core: DEFAULT_CORE_VALUES,
       advanced: DEFAULT_ADVANCED_VALUES,
+      people: DEFAULT_PEOPLE,
     })
   })
 
@@ -170,7 +195,7 @@ describe('saveAssumptions error handling', () => {
   it('swallows and warns when setItem throws (quota exceeded)', () => {
     vi.stubGlobal('localStorage', createThrowingStorage({ setItem: true }))
 
-    expect(() => saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES)).not.toThrow()
+    expect(() => saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, DEFAULT_PEOPLE)).not.toThrow()
     expect(warnSpy).toHaveBeenCalledTimes(1)
   })
 })
@@ -179,7 +204,7 @@ describe('clearAssumptions', () => {
   it('removes the stored key', () => {
     const fake = createFakeStorage()
     vi.stubGlobal('localStorage', fake)
-    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES)
+    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, DEFAULT_PEOPLE)
 
     clearAssumptions()
 
