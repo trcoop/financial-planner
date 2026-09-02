@@ -1,6 +1,5 @@
 import { realReturn } from '../../../engine'
 import { formatPercent } from '../../utils/format'
-import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
 import { NumberField } from '../NumberField/NumberField'
 import { Tooltip } from '../Tooltip/Tooltip'
 import tooltipStyles from '../Tooltip/Tooltip.module.css'
@@ -69,8 +68,13 @@ interface AdvancedAssumptionsFormProps {
 
 export function AdvancedAssumptionsForm({ values, onChange }: AdvancedAssumptionsFormProps) {
   return (
-    <CollapsibleSection summary="Advanced assumptions">
-      <form aria-label="Advanced assumptions" className={styles.form}>
+    // FIN-119: this form now lives on its own Rates sub-tab (rather than being one of several
+    // things collapsed under the People tab), so the wrapping `CollapsibleSection` that used to
+    // provide its only visible title/toggle ("Advanced assumptions", collapsed by default) is
+    // gone — the fields are always visible, directly. The Rates sub-tab's own heading (matching
+    // its nav label, same pattern as PeopleTab/AccountsTab) lives in PlanSection.tsx, not here —
+    // this component has never owned "Rates" as an identity, only the fields themselves.
+    <form aria-label="Advanced assumptions" className={styles.form}>
         {FIELDS.map((field) => (
           <div key={field.key} className={styles.fieldRow}>
             <NumberField
@@ -142,6 +146,5 @@ export function AdvancedAssumptionsForm({ values, onChange }: AdvancedAssumption
           </div>
         ))}
       </form>
-    </CollapsibleSection>
   )
 }
