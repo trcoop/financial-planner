@@ -348,8 +348,3 @@
   min-width: 0;
   flex: 1;
 }
-
-.profilePlaceholder {
-  margin: 0;
-  color: var(--color-text-muted);
-}
