@@ -5,10 +5,11 @@ import {
   blendedPortfolioReturn,
   InvalidProjectionInputError,
   type PlanAssumptions,
+  type PlanEvent,
 } from '../../engine'
 import { isAdvancedInputValid, isCoreInputValid } from '../components'
-import type { AdvancedAssumptionValues, CoreInputValues } from '../components'
-import { medicarePartBEvent } from '../medicareEvent'
+import type { AdvancedAssumptionValues, CoreInputValues, Person } from '../components'
+import { medicarePartBEvent, spouseMedicarePartBEvent } from '../medicareEvent'
 import { useDebouncedValue } from './useDebouncedValue'
 
 /** Planning horizon is a call-site default per FIN-19 — not user input for the MVP. Exported so
@@ -73,6 +74,11 @@ export type ProjectionState = ProjectionResult & {
    * the projection itself uses, rather than introducing a second debounce mechanism. */
   debouncedCore: CoreInputValues
   debouncedAdvanced: AdvancedAssumptionValues
+  /** The events passed to `runProjection` for this computation — the unconditional primary
+   * Medicare Part B event, plus (FIN-114) the spousal one when a non-primary `Person` with a
+   * finite age is present in the Profile People list. Built once, here, so a future Monte Carlo
+   * call site reads this exact array instead of rebuilding its own copy with separate logic. */
+  events: PlanEvent[]
 }
 
 /**
@@ -86,18 +92,51 @@ export function useProjectionState(
   coreValues: CoreInputValues,
   advancedValues: AdvancedAssumptionValues,
   debounceMs: number,
+  people: Person[] = [],
 ): ProjectionState {
   const debouncedCoreValues = useDebouncedValue(coreValues, debounceMs)
   const debouncedAdvancedValues = useDebouncedValue(advancedValues, debounceMs)
+  // FIN-114: debounced like core/advanced, so a spouse add/remove settles on the same ~300ms
+  // cadence as every other input this hook recomputes from, rather than firing immediately.
+  const debouncedPeople = useDebouncedValue(people, debounceMs)
 
   const lastValidResult = useRef<ProjectionResult>({ rows: [], error: undefined })
+
+  // Hoisted above the rows computation (and reused by it) so both the deterministic
+  // `runProjection` call below and the `events` memo derive from the exact same settled
+  // assumptions, rather than each recomputing `toAssumptions` independently.
+  const assumptions = useMemo(
+    () => toAssumptions(debouncedCoreValues, debouncedAdvancedValues),
+    [debouncedCoreValues, debouncedAdvancedValues],
+  )
+
+  // FIN-114: the non-primary Person in the Profile People list, if any, with a usable (finite)
+  // age — guards against malformed/legacy persisted data rather than trusting the caller.
+  const spouse = useMemo(
+    () => debouncedPeople.find((person) => !person.isPrimary && Number.isFinite(person.age)),
+    [debouncedPeople],
+  )
+
+  // FIN-114: constructed once, here — the single source both the deterministic `runProjection`
+  // call below and any future Monte Carlo call site should read from, rather than each building
+  // its own copy with separate conditional logic that could drift out of sync (e.g. one call
+  // site fixing a bug and the other quietly staying stale).
+  const events = useMemo((): PlanEvent[] => {
+    // FIN-73: Medicare Part B is applied unconditionally, no UI opt-in/opt-out (ERD §9).
+    // FIN-77: growthRate is this plan's own inflation assumption plus the historical
+    // medical-vs-general-inflation spread, not a flat hardcoded rate.
+    const base: PlanEvent[] = [medicarePartBEvent(assumptions.inflationRate)]
+    if (!spouse) return base
+    // FIN-114: spouse's Medicare Part B, expressed on the primary's age axis (see
+    // `spouseMedicarePartBEvent`'s doc comment for the offset math).
+    return [...base, spouseMedicarePartBEvent(debouncedCoreValues.currentAge, spouse.age, assumptions.inflationRate)]
+  }, [assumptions.inflationRate, debouncedCoreValues.currentAge, spouse])
 
   const { rows, error } = useMemo((): ProjectionResult => {
     if (!isCoreInputValid(debouncedCoreValues) || !isAdvancedInputValid(debouncedAdvancedValues)) {
       return lastValidResult.current
     }
     try {
-      const planAssumptions = toAssumptions(debouncedCoreValues, debouncedAdvancedValues)
       const result: ProjectionResult = {
         // FIN-65 change 3. Deflated once, here, rather than at each display site: the Plan
         // tab's chart, its "projected balance at retirement" tile and the year-detail panel
@@ -105,13 +144,7 @@ export function useProjectionState(
         // showing future dollars while the other half shows today's. The Stress Test tab
         // renders its own fan in today's dollars for the same reason, so the two tabs report
         // comparable numbers for the same plan.
-        rows: toTodaysDollarRows(
-          // FIN-73: Medicare Part B is applied unconditionally, no UI opt-in/opt-out (ERD §9).
-          // FIN-77: growthRate is this plan's own inflation assumption plus the historical
-          // medical-vs-general-inflation spread, not a flat hardcoded rate.
-          runProjection(planAssumptions, [medicarePartBEvent(planAssumptions.inflationRate)]),
-          planAssumptions.inflationRate,
-        ),
+        rows: toTodaysDollarRows(runProjection(assumptions, events), assumptions.inflationRate),
         error: undefined,
       }
       lastValidResult.current = result
@@ -124,7 +157,7 @@ export function useProjectionState(
       }
       throw err
     }
-  }, [debouncedCoreValues, debouncedAdvancedValues])
+  }, [debouncedCoreValues, debouncedAdvancedValues, assumptions, events])
 
   // Reports the retirement year's ENDING balance. **Known confusing; decision deferred to
   // FIN-69, do not silently "fix" it either way here.**
@@ -154,15 +187,6 @@ export function useProjectionState(
   const retirementRow = rows.find((row) => row.age >= debouncedCoreValues.retirementAge)
   const projectedBalanceAtRetirement = retirementRow?.endingBalance ?? rows.at(-1)?.endingBalance
 
-  // Memoized so the reference only changes when the settled values it's derived from do — a
-  // fresh object on every render would trip StressTestSection's cancel-on-input-change effect
-  // (keyed on this reference) even when nothing the user entered actually changed, e.g. on an
-  // unrelated App re-render like selecting a different chart bar.
-  const assumptions = useMemo(
-    () => toAssumptions(debouncedCoreValues, debouncedAdvancedValues),
-    [debouncedCoreValues, debouncedAdvancedValues],
-  )
-
   return {
     rows,
     error,
@@ -170,5 +194,6 @@ export function useProjectionState(
     assumptions,
     debouncedCore: debouncedCoreValues,
     debouncedAdvanced: debouncedAdvancedValues,
+    events,
   }
 }

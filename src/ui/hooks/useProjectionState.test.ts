@@ -2,8 +2,8 @@ import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProjection } from '../../engine'
 import { toAssumptions, useProjectionState } from './useProjectionState'
-import { medicarePartBEvent } from '../medicareEvent'
-import type { AdvancedAssumptionValues, CoreInputValues } from '../components'
+import { medicarePartBEvent, spouseMedicarePartBEvent } from '../medicareEvent'
+import type { AdvancedAssumptionValues, CoreInputValues, Person } from '../components'
 
 vi.mock('../../engine', async () => {
   const actual = await vi.importActual<typeof import('../../engine')>('../../engine')
@@ -28,6 +28,24 @@ const ADVANCED: AdvancedAssumptionValues = {
 }
 
 const DEBOUNCE_MS = 300
+
+const PRIMARY_PERSON: Person = {
+  id: 'primary',
+  name: 'You',
+  age: CORE.currentAge,
+  retirementAge: CORE.retirementAge,
+  salary: CORE.currentAnnualIncome,
+  isPrimary: true,
+}
+
+const SPOUSE_PERSON: Person = {
+  id: 'spouse-1',
+  name: 'Spouse',
+  age: 30,
+  retirementAge: 65,
+  salary: 0,
+  isPrimary: false,
+}
 
 describe('useProjectionState', () => {
   beforeEach(() => {
@@ -406,6 +424,94 @@ describe('useProjectionState Medicare wiring (FIN-73)', () => {
   it('passes [medicarePartBEvent(inflationRate)] to runProjection unconditionally, with no opt-in/opt-out', () => {
     vi.mocked(runProjection).mockClear()
     renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+    const plan = toAssumptions(CORE, ADVANCED)
+
+    expect(runProjection).toHaveBeenCalledWith(expect.anything(), [medicarePartBEvent(plan.inflationRate)])
+  })
+})
+
+/**
+ * FIN-114: supersedes FIN-113's `hasSpouse`/`spouseAge` plan (never wired up) — spouse presence
+ * and age now come from the Profile People list's non-primary `Person`, not any field on
+ * `CoreInputValues`.
+ */
+describe('useProjectionState spousal Medicare wiring (FIN-114)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.mocked(runProjection).mockClear()
+  })
+
+  it('includes only the primary Medicare event when no spouse is in the People list', () => {
+    vi.mocked(runProjection).mockClear()
+    renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON]))
+    const plan = toAssumptions(CORE, ADVANCED)
+
+    expect(runProjection).toHaveBeenCalledWith(expect.anything(), [medicarePartBEvent(plan.inflationRate)])
+  })
+
+  it('includes only the primary Medicare event when the People list is empty', () => {
+    vi.mocked(runProjection).mockClear()
+    renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, []))
+    const plan = toAssumptions(CORE, ADVANCED)
+
+    expect(runProjection).toHaveBeenCalledWith(expect.anything(), [medicarePartBEvent(plan.inflationRate)])
+  })
+
+  it('includes both the primary and spousal Medicare events when a spouse is present, with the correct startAge', () => {
+    vi.mocked(runProjection).mockClear()
+    renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON, SPOUSE_PERSON]))
+    const plan = toAssumptions(CORE, ADVANCED)
+    const expectedSpouseEvent = spouseMedicarePartBEvent(CORE.currentAge, SPOUSE_PERSON.age, plan.inflationRate)
+
+    expect(runProjection).toHaveBeenCalledWith(expect.anything(), [
+      medicarePartBEvent(plan.inflationRate),
+      expectedSpouseEvent,
+    ])
+    // Pin the exact startAge math this ticket cares about, not just "some event landed".
+    expect(expectedSpouseEvent.startAge).toBe(CORE.currentAge + (65 - SPOUSE_PERSON.age))
+  })
+
+  it('constructs the events array once and passes the identical array to runProjection (no per-branch rebuild)', () => {
+    vi.mocked(runProjection).mockClear()
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON, SPOUSE_PERSON]))
+
+    const callArgs = vi.mocked(runProjection).mock.calls.at(-1)
+    expect(callArgs).toBeDefined()
+    const eventsPassedToEngine = callArgs![1]
+
+    // `result.current.events` is the same array reference used for the deterministic
+    // `runProjection` call — the single source a Monte Carlo call site would also read from,
+    // rather than each caller rebuilding its own copy with separate logic.
+    expect(result.current.events).toBe(eventsPassedToEngine)
+  })
+
+  it('stops including the spousal event on the next recompute after the spouse is removed from People', () => {
+    const { result, rerender } = renderHook(
+      ({ people }: { people: Person[] }) => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, people),
+      { initialProps: { people: [PRIMARY_PERSON, SPOUSE_PERSON] } },
+    )
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+    expect(result.current.events).toHaveLength(2)
+
+    rerender({ people: [PRIMARY_PERSON] })
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.events).toHaveLength(1)
+    expect(result.current.events.some((event) => 'id' in event && event.id === 'medicareSpousePartB')).toBe(false)
+  })
+
+  it('ignores a non-primary Person with a non-finite age (malformed data) rather than crashing', () => {
+    vi.mocked(runProjection).mockClear()
+    const malformedSpouse: Person = { ...SPOUSE_PERSON, age: Number.NaN }
+    renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON, malformedSpouse]))
     const plan = toAssumptions(CORE, ADVANCED)
 
     expect(runProjection).toHaveBeenCalledWith(expect.anything(), [medicarePartBEvent(plan.inflationRate)])
