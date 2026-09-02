@@ -4,9 +4,18 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 
+// Ladle's dev/build CLI (`npm run ladle`) auto-loads this file and merges its plugins into
+// Ladle's own bundled Vite 6 pipeline (see get-user-vite-config.js), regardless of whether
+// Ladle's config points at it explicitly. @vitejs/plugin-react here targets this project's
+// Vite 8/rolldown build and produces a rolldown-shaped plugin object that Vite 6's plugin
+// container can't run ("Missing field `moduleType`" from the react-refresh wrapper) - so when
+// running under Ladle (it sets VITE_LADLE_APP_ID before loading this config), skip this plugin
+// entirely and let Ladle supply its own Vite-6-compatible one instead.
+const isLadle = Boolean(process.env.VITE_LADLE_APP_ID)
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: isLadle ? [] : [react()],
   base: '/financial-planner/',
   test: {
     environment: 'jsdom',
