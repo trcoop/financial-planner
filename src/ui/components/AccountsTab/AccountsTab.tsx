@@ -112,25 +112,29 @@ export function AccountsTab({ accounts, people, onChange }: AccountsTabProps) {
               onChange={(value) => updateAccount(account.id, { contributionMode: value as ContributionMode })}
               options={CONTRIBUTION_MODE_OPTIONS}
             />
+            {/* FIN-117 bug-fix round: percentage and fixed each remember their own value
+              * independently (`contributionPercentage`/`contributionFixed`) — switching modes
+              * shows that mode's own last-set value rather than reinterpreting the other mode's
+              * number (15% becoming $15, or vice versa). */}
             {account.contributionMode === 'percentage' ? (
               <NumberField
                 label="Contribution %"
-                value={account.contributionValue}
+                value={account.contributionPercentage}
                 min={ACCOUNT_FIELD_RANGES.contributionPercentage.min}
                 max={ACCOUNT_FIELD_RANGES.contributionPercentage.max}
                 suffix="%"
-                error={accountContributionError('percentage', account.contributionValue)}
-                onChange={(value) => updateAccount(account.id, { contributionValue: value })}
+                error={accountContributionError('percentage', account.contributionPercentage)}
+                onChange={(value) => updateAccount(account.id, { contributionPercentage: value })}
               />
             ) : (
               <NumberField
                 label="Contribution $"
-                value={account.contributionValue}
+                value={account.contributionFixed}
                 min={ACCOUNT_FIELD_RANGES.contributionFixed.min}
                 max={ACCOUNT_FIELD_RANGES.contributionFixed.max}
                 prefix="$"
-                error={accountContributionError('fixed', account.contributionValue)}
-                onChange={(value) => updateAccount(account.id, { contributionValue: value })}
+                error={accountContributionError('fixed', account.contributionFixed)}
+                onChange={(value) => updateAccount(account.id, { contributionFixed: value })}
               />
             )}
           </div>

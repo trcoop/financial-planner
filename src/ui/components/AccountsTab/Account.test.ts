@@ -20,7 +20,8 @@ describe('createAccount', () => {
     expect(account.ownerId).toBe('primary')
     expect(account.balance).toBe(0)
     expect(account.contributionMode).toBe('percentage')
-    expect(account.contributionValue).toBe(0)
+    expect(account.contributionPercentage).toBe(0)
+    expect(account.contributionFixed).toBe(0)
     expect(account.type).toBe('taxable')
     expect(account.name.length).toBeGreaterThan(0)
   })
@@ -72,7 +73,7 @@ describe('seedAccounts', () => {
     expect(seeded[0].ownerId).toBe('primary')
     expect(seeded[0].balance).toBe(core.initialBalance)
     expect(seeded[0].contributionMode).toBe('percentage')
-    expect(seeded[0].contributionValue).toBe(core.annualContributionRatePercent)
+    expect(seeded[0].contributionPercentage).toBe(core.annualContributionRatePercent)
     expect(seeded[0].type).toBe('taxable')
   })
 
@@ -89,7 +90,7 @@ describe('seedAccounts', () => {
 
 describe('syncCoreWithPrimaryAccount', () => {
   it('overrides initialBalance/annualContributionRatePercent from a percentage-mode account', () => {
-    const account: Account = { ...createAccount('primary'), balance: 42_000, contributionValue: 12 }
+    const account: Account = { ...createAccount('primary'), balance: 42_000, contributionPercentage: 12 }
     const synced = syncCoreWithPrimaryAccount(core, account)
     expect(synced.initialBalance).toBe(42_000)
     expect(synced.annualContributionRatePercent).toBe(12)

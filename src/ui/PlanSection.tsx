@@ -156,7 +156,7 @@ export function PlanSection(_props: PlanSectionProps) {
       primary?.salary,
       primaryAccount?.balance,
       primaryAccount?.contributionMode,
-      primaryAccount?.contributionValue,
+      primaryAccount?.contributionPercentage,
     ],
   )
 

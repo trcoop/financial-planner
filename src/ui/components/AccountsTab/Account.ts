@@ -17,9 +17,14 @@ export interface Account {
   /** Current balance, always "as of today" — no historical/date tracking in v1 per the PRD. */
   balance: number
   contributionMode: ContributionMode
-  /** Only the value for the active `contributionMode` is meaningful/stored — switching modes in
-   * the UI does not attempt to convert the old value into the new mode's units. */
-  contributionValue: number
+  /** The percentage-mode contribution rate, remembered independently of `contributionFixed` —
+   * switching `contributionMode` back and forth must never reinterpret one unit as the other
+   * (15% becoming $15, or $15,000 becoming 15,000%). Only the field matching the active
+   * `contributionMode` drives the account's actual contribution; the other just holds its own
+   * last-set value in case the user switches back. */
+  contributionPercentage: number
+  /** The fixed-dollar-mode contribution amount — see `contributionPercentage`'s doc comment. */
+  contributionFixed: number
   /** id of the owning `Person` (`Person.id`). */
   ownerId: string
 }
@@ -67,7 +72,8 @@ export function createAccount(ownerId: string): Account {
     type: 'taxable',
     balance: 0,
     contributionMode: 'percentage',
-    contributionValue: 0,
+    contributionPercentage: 0,
+    contributionFixed: 0,
     ownerId,
   }
 }
@@ -83,7 +89,8 @@ export function createDefaultPrimaryAccount(primaryPersonId: string, core: CoreI
     type: 'taxable',
     balance: core.initialBalance,
     contributionMode: 'percentage',
-    contributionValue: core.annualContributionRatePercent,
+    contributionPercentage: core.annualContributionRatePercent,
+    contributionFixed: 0,
     ownerId: primaryPersonId,
   }
 }
@@ -126,7 +133,7 @@ export function syncCoreWithPrimaryAccount(core: CoreInputValues, account: Accou
     ...core,
     initialBalance: account.balance,
     annualContributionRatePercent:
-      account.contributionMode === 'percentage' ? account.contributionValue : core.annualContributionRatePercent,
+      account.contributionMode === 'percentage' ? account.contributionPercentage : core.annualContributionRatePercent,
   }
 }
 

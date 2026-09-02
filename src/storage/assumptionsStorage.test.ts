@@ -139,7 +139,7 @@ describe('loadAssumptions edge cases', () => {
     expect(loaded?.accounts[0]).toMatchObject({
       ownerId: primary.id,
       balance: mergedCore.initialBalance,
-      contributionValue: mergedCore.annualContributionRatePercent,
+      contributionPercentage: mergedCore.annualContributionRatePercent,
     })
   })
 
@@ -188,7 +188,7 @@ describe('loadAssumptions edge cases', () => {
     expect(accounts?.[0]).toMatchObject({
       ownerId: DEFAULT_PEOPLE[0].id,
       balance: DEFAULT_CORE_VALUES.initialBalance,
-      contributionValue: DEFAULT_CORE_VALUES.annualContributionRatePercent,
+      contributionPercentage: DEFAULT_CORE_VALUES.annualContributionRatePercent,
       contributionMode: 'percentage',
       type: 'taxable',
     })
@@ -219,7 +219,7 @@ describe('loadAssumptions edge cases', () => {
     expect(loaded?.accounts[0]).toMatchObject({
       ownerId: DEFAULT_PEOPLE[0].id,
       balance: DEFAULT_CORE_VALUES.initialBalance,
-      contributionValue: DEFAULT_CORE_VALUES.annualContributionRatePercent,
+      contributionPercentage: DEFAULT_CORE_VALUES.annualContributionRatePercent,
     })
   })
 

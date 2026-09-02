@@ -48,7 +48,7 @@ describe('AccountsTab', () => {
   })
 
   it('swaps the contribution field when the Fixed Amount toggle is selected, keeping only the active value', () => {
-    const account = { ...createAccount(PRIMARY.id), contributionValue: 10 }
+    const account = { ...createAccount(PRIMARY.id), contributionPercentage: 10 }
     const onChange = vi.fn()
     render(<AccountsTab accounts={[account]} people={PEOPLE} onChange={onChange} />)
 
@@ -57,8 +57,25 @@ describe('AccountsTab', () => {
     expect(onChange).toHaveBeenCalledWith([{ ...account, contributionMode: 'fixed' }])
   })
 
+  it('remembers each contribution mode\'s own value independently when switching back and forth (no unit reinterpretation)', () => {
+    const account = { ...createAccount(PRIMARY.id), contributionPercentage: 15, contributionFixed: 500 }
+    const onChange = vi.fn()
+    render(<AccountsTab accounts={[account]} people={PEOPLE} onChange={onChange} />)
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Fixed Amount' }))
+    expect(onChange).toHaveBeenLastCalledWith([{ ...account, contributionMode: 'fixed' }])
+    // Switching modes never rewrites contributionPercentage/contributionFixed themselves — only
+    // contributionMode changes, so 15% is still 15% and $500 is still $500 whichever mode is
+    // active. Re-render with the resulting fixed-mode account to confirm the visible field shows
+    // the fixed value (500), not the percentage value (15) reinterpreted as dollars.
+    cleanup()
+    const fixedModeAccount = { ...account, contributionMode: 'fixed' as const }
+    render(<AccountsTab accounts={[fixedModeAccount]} people={PEOPLE} onChange={vi.fn()} />)
+    expect(screen.getByLabelText('Contribution $')).toHaveValue('$500')
+  })
+
   it('shows the Contribution $ field once in fixed mode', () => {
-    const account = { ...createAccount(PRIMARY.id), contributionMode: 'fixed' as const, contributionValue: 500 }
+    const account = { ...createAccount(PRIMARY.id), contributionMode: 'fixed' as const, contributionFixed: 500 }
     render(<AccountsTab accounts={[account]} people={PEOPLE} onChange={vi.fn()} />)
     expect(screen.getByLabelText('Contribution $')).toHaveValue('$500')
     expect(screen.queryByLabelText('Contribution %')).not.toBeInTheDocument()
@@ -85,7 +102,7 @@ describe('AccountsTab', () => {
   })
 
   it('validates contribution percentage is within 0-100', () => {
-    const account = { ...createAccount(PRIMARY.id), contributionValue: 150 }
+    const account = { ...createAccount(PRIMARY.id), contributionPercentage: 150 }
     render(<AccountsTab accounts={[account]} people={PEOPLE} onChange={vi.fn()} />)
 
     expect(screen.getByRole('alert')).toHaveTextContent(/between 0 and 100/i)
