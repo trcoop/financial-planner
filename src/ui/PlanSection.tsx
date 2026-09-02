@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  AccountsTab,
   AdvancedAssumptionsForm,
   Button,
   Card,
@@ -11,10 +12,11 @@ import {
   StatTile,
   StressTestSection,
   createPrimaryPerson,
+  seedAccounts,
   seedPeople,
   syncCoreWithPrimary,
 } from './components'
-import type { Person } from './components'
+import type { Account, Person } from './components'
 import type { StressTestSectionHandle } from './components'
 import { TabBar, type TabBarTab } from './components/TabBar/TabBar'
 import { LeftNav, type NavItem } from './components/LeftNav/LeftNav'
@@ -80,6 +82,9 @@ export function PlanSection(_props: PlanSectionProps) {
   // whatever was persisted (or freshly from `coreValues` if nothing/nothing valid was) — see
   // `seedPeople`'s doc comment: it never seeds a spouse, only ever the primary Person.
   const [people, setPeople] = useState<Person[]>(() => seedPeople(loadAssumptions()?.people, coreValues))
+  // FIN-117: Accounts, same lazy-seed-from-persisted pattern as `people` above — `seedAccounts`
+  // falls back to `[]` (there's no default account to pre-load, unlike the primary Person).
+  const [accounts, setAccounts] = useState<Account[]>(() => seedAccounts(loadAssumptions()?.accounts))
   const [activeTab, setActiveTab] = useState<string>(TABS[0].id)
   // FIN-115: which Profile sub-section (People/Accounts/Rates) is showing. Plain React state,
   // scoped to this mount — same pattern as `activeTab` above; no persistence requirement per
@@ -147,10 +152,24 @@ export function PlanSection(_props: PlanSectionProps) {
   // has had a chance to take hold, the same reasoning that already applies to debouncedCore/
   // debouncedAdvanced below.
   const debouncedPeople = useDebouncedValue(people, RECALCULATION_DEBOUNCE_MS)
+  const debouncedAccounts = useDebouncedValue(accounts, RECALCULATION_DEBOUNCE_MS)
 
   useEffect(() => {
-    saveAssumptions(debouncedCore, debouncedAdvanced, debouncedPeople)
-  }, [debouncedCore, debouncedAdvanced, debouncedPeople])
+    saveAssumptions(debouncedCore, debouncedAdvanced, debouncedPeople, debouncedAccounts)
+  }, [debouncedCore, debouncedAdvanced, debouncedPeople, debouncedAccounts])
+
+  // FIN-117 PM/Eng addendum round 2: confirming PeopleTab's cascade-delete dialog removes the
+  // spouse from `people` — this wrapper also removes any account(s) that spouse owned, so no
+  // orphaned account (owner deleted, account left behind) can result. Detects a removal by diff
+  // against the previous `people`, rather than requiring PeopleTab to know about Accounts at all.
+  const handlePeopleChange = (updatedPeople: Person[]) => {
+    const remainingIds = new Set(updatedPeople.map((person) => person.id))
+    const removedIds = people.filter((person) => !remainingIds.has(person.id)).map((person) => person.id)
+    if (removedIds.length > 0) {
+      setAccounts((prev) => prev.filter((account) => !removedIds.includes(account.ownerId)))
+    }
+    setPeople(updatedPeople)
+  }
 
   const handleReset = () => {
     setIsResetConfirmOpen(true)
@@ -162,6 +181,7 @@ export function PlanSection(_props: PlanSectionProps) {
     setCoreValues(DEFAULT_CORE_VALUES)
     setAdvancedValues(DEFAULT_ADVANCED_VALUES)
     setPeople([createPrimaryPerson(DEFAULT_CORE_VALUES)])
+    setAccounts([])
   }
 
   const handleCancelReset = () => {
@@ -372,7 +392,7 @@ export function PlanSection(_props: PlanSectionProps) {
                           * ticket only replaces the spouse checkbox with the Person model, it
                           * doesn't relocate the other plan-assumption fields (no ticket yet
                           * covers where those go). */}
-                        <PeopleTab people={people} onChange={setPeople} />
+                        <PeopleTab people={people} onChange={handlePeopleChange} accounts={accounts} />
                         <CoreInputsForm values={effectiveCoreValues} onChange={setCoreValues} />
                         <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
                         <Button variant="secondary" onClick={handleReset}>
@@ -382,9 +402,7 @@ export function PlanSection(_props: PlanSectionProps) {
                     ) : null}
 
                     {profileTab === 'accounts' ? (
-                      // FIN-117 builds out the real Accounts tab (Account model, CRUD, owner
-                      // linking, contribution toggle). Placeholder only for this ticket.
-                      <p className="profilePlaceholder">Accounts coming soon.</p>
+                      <AccountsTab accounts={accounts} people={people} onChange={setAccounts} />
                     ) : null}
 
                     {profileTab === 'rates' ? (

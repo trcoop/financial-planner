@@ -474,7 +474,7 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
     expect(within(strip).getByRole('tab', { name: 'Rates' })).toHaveAttribute('aria-selected', 'false')
   })
 
-  it('switches to the Accounts placeholder when Accounts is selected from the desktop nav', async () => {
+  it('switches to the real Accounts tab when Accounts is selected from the desktop nav', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
 
@@ -482,7 +482,7 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
     const nav = screen.getByRole('navigation', { name: 'Profile sections' })
     await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
 
-    expect(screen.getByText('Accounts coming soon.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Account' })).toBeInTheDocument()
     expect(screen.queryByLabelText('Current age')).not.toBeInTheDocument()
   })
 
@@ -514,7 +514,7 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
       'aria-current',
       'page',
     )
-    expect(screen.getByText('Accounts coming soon.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Account' })).toBeInTheDocument()
   })
 
   it('keeps the desktop nav and mobile strip in sync — selecting from one updates the other', async () => {

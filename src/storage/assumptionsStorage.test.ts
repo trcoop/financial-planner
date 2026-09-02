@@ -4,6 +4,7 @@ import { clearAssumptions, loadAssumptions, saveAssumptions } from './assumption
 import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 import { createPrimaryPerson, createSpouse } from '../ui/components/PeopleTab/Person'
+import { createAccount } from '../ui/components/AccountsTab/Account'
 
 const DEFAULT_PEOPLE = [createPrimaryPerson(DEFAULT_CORE_VALUES)]
 
@@ -71,7 +72,7 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const people = [createPrimaryPerson(core), createSpouse()]
     saveAssumptions(core, advanced, people)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people })
+    expect(loadAssumptions()).toEqual({ core, advanced, people, accounts: [] })
   })
 
   it('round-trips the FIN-56 stock/bond allocation field', () => {
@@ -82,7 +83,7 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const advanced = { ...DEFAULT_ADVANCED_VALUES, stocksAllocationPercent: 85 }
     saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE })
+    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE, accounts: [] })
     expect(loadAssumptions()?.advanced.stocksAllocationPercent).toBe(85)
   })
 
@@ -94,7 +95,7 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const advanced = { ...DEFAULT_ADVANCED_VALUES, bondReturnPercent: 5.5 }
     saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE })
+    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE, accounts: [] })
     expect(loadAssumptions()?.advanced.bondReturnPercent).toBe(5.5)
   })
 
@@ -132,6 +133,7 @@ describe('loadAssumptions edge cases', () => {
       core: { ...DEFAULT_CORE_VALUES, currentAge: 50 },
       advanced: DEFAULT_ADVANCED_VALUES,
       people: [createPrimaryPerson({ ...DEFAULT_CORE_VALUES, currentAge: 50 })],
+      accounts: [],
     })
   })
 
@@ -160,6 +162,24 @@ describe('loadAssumptions edge cases', () => {
     expect(loaded?.people.some((p) => !p.isPrimary)).toBe(false)
   })
 
+  it('round-trips a saved accounts list (FIN-117)', () => {
+    const fake = createFakeStorage()
+    vi.stubGlobal('localStorage', fake)
+
+    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+    const accounts = [createAccount(primary.id)]
+    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, [primary], accounts)
+
+    expect(loadAssumptions()?.accounts).toEqual(accounts)
+  })
+
+  it('seeds an empty accounts list for a pre-FIN-117 record with no accounts field', () => {
+    const preFin117 = JSON.stringify({ core: DEFAULT_CORE_VALUES, advanced: DEFAULT_ADVANCED_VALUES, people: DEFAULT_PEOPLE })
+    vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin117 }))
+
+    expect(loadAssumptions()?.accounts).toEqual([])
+  })
+
   it('returns an already-persisted people list unchanged (does not re-seed)', () => {
     const people = [createPrimaryPerson(DEFAULT_CORE_VALUES), createSpouse()]
     saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, people)
@@ -181,6 +201,7 @@ describe('loadAssumptions edge cases', () => {
       core: DEFAULT_CORE_VALUES,
       advanced: DEFAULT_ADVANCED_VALUES,
       people: DEFAULT_PEOPLE,
+      accounts: [],
     })
   })
 

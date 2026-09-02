@@ -47,3 +47,6 @@ export {
   primaryPerson,
   syncCoreWithPrimary,
 } from './PeopleTab/Person'
+export { AccountsTab } from './AccountsTab/AccountsTab'
+export type { Account, AccountType, ContributionMode } from './AccountsTab/Account'
+export { createAccount, seedAccounts, hasAccountsForOwner, ACCOUNT_TYPE_OPTIONS } from './AccountsTab/Account'

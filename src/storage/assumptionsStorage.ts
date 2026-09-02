@@ -4,6 +4,8 @@ import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumpti
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 import type { Person } from '../ui/components/PeopleTab/Person'
 import { seedPeople } from '../ui/components/PeopleTab/Person'
+import type { Account } from '../ui/components/AccountsTab/Account'
+import { seedAccounts } from '../ui/components/AccountsTab/Account'
 import { STORAGE_KEY, type PersistedAssumptions } from './schema'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -54,7 +56,12 @@ export function loadAssumptions(): PersistedAssumptions | undefined {
   // read here — those fields are retired from `CoreInputValues` entirely.
   const people: Person[] = seedPeople(parsed.people, core)
 
-  return { core, advanced, people }
+  // FIN-117: `accounts` is a new field, same "absent on pre-this-ticket records" category as
+  // `people` above — `seedAccounts` falls back to `[]` rather than trying to seed a default
+  // account (there's no equivalent of "pre-load the primary Person" for Accounts).
+  const accounts: Account[] = seedAccounts(parsed.accounts)
+
+  return { core, advanced, people, accounts }
 }
 
 /**
@@ -63,9 +70,14 @@ export function loadAssumptions(): PersistedAssumptions | undefined {
  * swallowed and logged via `console.warn`; callers cannot distinguish "saved" from "silently
  * failed" by design.
  */
-export function saveAssumptions(core: CoreInputValues, advanced: AdvancedAssumptionValues, people: Person[]): void {
+export function saveAssumptions(
+  core: CoreInputValues,
+  advanced: AdvancedAssumptionValues,
+  people: Person[],
+  accounts: Account[] = [],
+): void {
   try {
-    const json = JSON.stringify({ core, advanced, people } satisfies PersistedAssumptions)
+    const json = JSON.stringify({ core, advanced, people, accounts } satisfies PersistedAssumptions)
     localStorage.setItem(STORAGE_KEY, json)
   } catch (error) {
     console.warn('Failed to save assumptions to localStorage', error)
