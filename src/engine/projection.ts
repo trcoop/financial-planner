@@ -62,6 +62,35 @@ export const validatePlanAssumptions = (assumptions: PlanAssumptions): void => {
     }
   }
 
+  for (const person of assumptions.additionalIncomes ?? []) {
+    const numericFields: Array<keyof typeof person> = [
+      'currentAnnualIncome',
+      'annualRaiseRate',
+      'contributionRate',
+      'fixedContribution',
+      'retiresAtPrimaryAge',
+    ];
+    for (const field of numericFields) {
+      const value = person[field];
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new InvalidProjectionInputError(
+          'NON_FINITE_INPUT',
+          `additionalIncomes[${person.id}].${field} must be a finite number, received ${String(value)}.`,
+        );
+      }
+    }
+  }
+
+  if (
+    assumptions.primaryFixedContribution !== undefined &&
+    (typeof assumptions.primaryFixedContribution !== 'number' || !Number.isFinite(assumptions.primaryFixedContribution))
+  ) {
+    throw new InvalidProjectionInputError(
+      'NON_FINITE_INPUT',
+      `primaryFixedContribution must be a finite number, received ${String(assumptions.primaryFixedContribution)}.`,
+    );
+  }
+
   const {
     currentAge,
     retirementAge,
@@ -240,6 +269,7 @@ export const createInitialPeriodState = (assumptions: PlanAssumptions): PeriodSt
   eventCosts: [],
   retirementEventCostTotal: 0,
   eventCostBasis: new Map(),
+  additionalPriorIncomes: new Map(),
 });
 
 /** Moves a completed period on to the next year. */

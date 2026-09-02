@@ -390,6 +390,7 @@ export const createInitialPeriodState = (plan: PlanAssumptions): PeriodState => 
   eventCosts: [],
   retirementEventCostTotal: 0,
   eventCostBasis: new Map(),
+  additionalPriorIncomes: new Map(),
 });
 
 /**

@@ -4,11 +4,24 @@
   gap: var(--space-4);
 }
 
+/* Sticky within `.profileContent` (App.css) — the tab's own scroll pane — so the heading + "+
+ * Account" action stays visible while the account cards below scroll. Resolves against
+ * `.profileContent` as the nearest scrolling ancestor, the same single-scroll-container form of
+ * `position: sticky` `.sectionHeading`/`.profileSubHeading` (App.css) use. `background` covers
+ * account cards scrolling underneath once stuck — `--color-page-bg` (theme.css), not
+ * `--color-bg` (the white card color): every ancestor between `.header` and `body` is
+ * transparent, so `body`'s own page background is what's actually visible behind it; using
+ * `--color-bg` painted a visible white box around the heading (round-1 mistake). */
 .header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  background: var(--color-page-bg);
 }
 
 .heading {

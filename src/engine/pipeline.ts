@@ -14,7 +14,7 @@
  * Monte Carlo reuse the same step function with a per-period return.
  */
 
-import type { PeriodState, PipelineStage, PlanAssumptions, RunPeriodInput } from './types';
+import type { AdditionalIncome, PeriodState, PipelineStage, PlanAssumptions, RunPeriodInput } from './types';
 
 /**
  * Whether a period falls in the drawdown phase.
@@ -24,6 +24,39 @@ import type { PeriodState, PipelineStage, PlanAssumptions, RunPeriodInput } from
  * scenario rather than an input error (Story 1 PRD, Edge Cases).
  */
 const isRetired = (age: number, assumptions: PlanAssumptions): boolean => age >= assumptions.retirementAge;
+
+/**
+ * Whether the HOUSEHOLD has begun drawing down the portfolio.
+ *
+ * Distinct from {@link isRetired}, which stays a per-earner check (used by `computeIncome` to
+ * stop each earner's own income/contribution at their own retirement age). This gate answers a
+ * different question — has *every* earner the household relied on for income stopped working —
+ * and is `>=` the LATEST retirement age in the household: the primary's own
+ * `assumptions.retirementAge`, or any {@link AdditionalIncome.retiresAtPrimaryAge} (FIN-118),
+ * whichever comes last on the primary's age timeline.
+ *
+ * FIN-118 wired each additional earner's own income/contribution to stop at their own
+ * `retiresAtPrimaryAge`, but left `computeWithdrawals` gated solely on the primary's
+ * `retirementAge` — so a spouse retiring a year before the primary correctly stopped earning,
+ * yet the household still didn't draw down the portfolio for that gap year even though it
+ * should have started drawing down for the primary's retirement alone regardless.
+ *
+ * Decided (2026-09-02, FIN-118 follow-up bug report): no partial/shortfall withdrawal during a
+ * gap year where one earner has retired but another hasn't — the household draws zero from the
+ * portfolio until EVERY earner has individually reached their own retirement age, full stop.
+ * This deliberately sidesteps a real complication (a younger spouse may be too young to
+ * withdraw from tax-advantaged accounts without an early-withdrawal penalty before 59½) by not
+ * withdrawing at all until every earner has retired — account-type/penalty-aware withdrawal
+ * timing and any true income-shortfall-driven partial withdrawal remain deferred to a future
+ * ticket, not built here.
+ */
+const isHouseholdRetired = (age: number, assumptions: PlanAssumptions): boolean => {
+  const retirementAges = [
+    assumptions.retirementAge,
+    ...(assumptions.additionalIncomes ?? []).map((person) => person.retiresAtPrimaryAge),
+  ];
+  return age >= Math.max(...retirementAges);
+};
 
 /**
  * Records the balance the period opened with, before any stage has touched it.
@@ -127,33 +160,85 @@ export const applyLifeEvents: PipelineStage = (state, input) => {
 };
 
 /**
+ * One {@link AdditionalIncome} entry's income and contribution for this period, plus its
+ * updated raise-chain value to carry into `additionalPriorIncomes` (FIN-118).
+ *
+ * Mirrors the primary's own pre-retirement/retirement branch in {@link computeIncome} exactly,
+ * but keyed off `retiresAtPrimaryAge` (expressed on the primary's age timeline, same offset
+ * technique as `spouseMedicarePartBEvent`) instead of `assumptions.retirementAge` — each
+ * additional earner retires on their own schedule, not the primary's.
+ */
+const computeAdditionalIncome = (
+  person: AdditionalIncome,
+  state: PeriodState,
+): { income: number; contribution: number } => {
+  const retired = state.age >= person.retiresAtPrimaryAge;
+  if (retired) {
+    return { income: 0, contribution: 0 };
+  }
+
+  const priorIncome = state.additionalPriorIncomes.get(person.id) ?? 0;
+  const income =
+    state.year === 0 ? person.currentAnnualIncome : priorIncome * (1 + person.annualRaiseRate);
+  const contribution = income * person.contributionRate + person.fixedContribution;
+
+  return { income, contribution };
+};
+
+/**
  * Computes this period's income and contribution.
  *
  * Pre-retirement only: year 0 uses `currentAnnualIncome` as-is, later years apply
  * `annualRaiseRate` to the prior year's income. Contributions are 0 in retirement.
+ *
+ * FIN-118: `assumptions.additionalIncomes` (a spouse's salary and their owned accounts'
+ * contributions, or any other household earner) is summed on top of the primary's own
+ * income/contribution here. Each entry retires on its own schedule (`retiresAtPrimaryAge`),
+ * tracked via its own slot in `additionalPriorIncomes` rather than folded into the primary's
+ * `priorIncome` — a household total would double-count once an additional earner's raise
+ * chained off it. Absent/empty `additionalIncomes` reproduces the pre-FIN-118 single-earner
+ * output exactly (the regression case).
  */
 export const computeIncome: PipelineStage = (state, input) => {
   const { assumptions } = input;
+  const additionalIncomes = assumptions.additionalIncomes ?? [];
 
   // Retirement has no earned income in Story 1's model, so the raise chain is a
   // pre-retirement concern only. Income is zeroed rather than frozen at its last working
   // value so that `priorIncome` always reads as "income earned this period".
-  if (isRetired(state.age, assumptions)) {
-    return { ...state, priorIncome: 0, annualContribution: 0 };
-  }
+  const primaryRetired = isRetired(state.age, assumptions);
+  const primaryIncome = primaryRetired
+    ? 0
+    : // Raises start in year 1: year 0 is the user's income as entered today.
+      state.year === 0
+      ? assumptions.currentAnnualIncome
+      : state.priorIncome * (1 + assumptions.annualRaiseRate);
+  // FIN-118 review fix: `primaryFixedContribution` is additive on top of the percentage-rate
+  // contribution, the same way each `AdditionalIncome.fixedContribution` is additive on top of
+  // its own `contributionRate` below — it exists so a primary account in fixed-dollar
+  // contribution mode (see `syncCoreWithPrimaryAccount`) has a path into the engine at all.
+  // `?? 0` keeps every pre-existing percentage-only plan (the field absent) byte-identical.
+  const primaryContribution = primaryRetired
+    ? 0
+    : primaryIncome * assumptions.annualContributionRate + (assumptions.primaryFixedContribution ?? 0);
 
-  // Raises start in year 1: year 0 is the user's income as entered today.
-  const income =
-    state.year === 0 ? assumptions.currentAnnualIncome : state.priorIncome * (1 + assumptions.annualRaiseRate);
-  const annualContribution = income * assumptions.annualContributionRate;
+  const additionalPriorIncomes = new Map<string, number>();
+  let totalContribution = primaryContribution;
+
+  for (const person of additionalIncomes) {
+    const { income, contribution } = computeAdditionalIncome(person, state);
+    additionalPriorIncomes.set(person.id, income);
+    totalContribution += contribution;
+  }
 
   return {
     ...state,
-    priorIncome: income,
-    annualContribution,
+    priorIncome: primaryIncome,
+    additionalPriorIncomes,
+    annualContribution: totalContribution,
     // Contributions land at year end and so earn no return in the year they are made
     // (Story 1 PRD, Edge Cases) — hence added after `applyGrowth`, not before it.
-    balance: state.balance + annualContribution,
+    balance: state.balance + totalContribution,
   };
 };
 
@@ -183,7 +268,7 @@ export const computeIncome: PipelineStage = (state, input) => {
 export const computeWithdrawals: PipelineStage = (state, input) => {
   const { assumptions, withdrawalStrategy } = input;
 
-  if (!isRetired(state.age, assumptions)) {
+  if (!isHouseholdRetired(state.age, assumptions)) {
     return { ...state, annualWithdrawal: 0 };
   }
 

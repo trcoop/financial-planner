@@ -17,6 +17,7 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   eventCosts: [],
   retirementEventCostTotal: 0,
   eventCostBasis: new Map(),
+  additionalPriorIncomes: new Map(),
   ...overrides,
 });
 

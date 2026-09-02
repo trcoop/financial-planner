@@ -166,8 +166,10 @@ export function primaryAccountFor(accounts: Account[], primaryPersonId: string):
  * — there is no UI anywhere to edit those hidden fields any more, so leaving them alone would
  * silently resurrect stale frozen data instead of reflecting the real "no account" state. A
  * `fixed` contribution mode has no clean translation to a percentage rate, so in that case the
- * contribution rate is left as-is (an acknowledged limitation properly owned by FIN-118's real
- * engine-aware contribution-mode handling, not this fix). */
+ * contribution rate is left as-is. FIN-118's real engine-aware contribution-mode handling lives
+ * in `useProjectionState.ts` (bypassing `core.annualContributionRatePercent` entirely for the
+ * primary's actual projection inputs) — this function's own hidden-field display gap is
+ * superseded, not resolved, by that fix. */
 export function syncCoreWithPrimaryAccount(core: CoreInputValues, account: Account | undefined): CoreInputValues {
   if (!account) {
     return { ...core, initialBalance: 0, annualContributionRatePercent: 0 }

@@ -23,6 +23,43 @@
  */
 export type PortfolioValue = number;
 
+/**
+ * One additional household earner's income and contribution inputs (FIN-118), expressed on the
+ * PRIMARY's age timeline — the same offset technique `spouseMedicarePartBEvent` (`src/ui/
+ * medicareEvent.ts`) already uses for the spousal Medicare event, so the engine never needs to
+ * know a second person's actual age, only the primary's age at which this person's own income
+ * and contributions stop.
+ *
+ * Deliberately additive alongside `PlanAssumptions.currentAnnualIncome`/`annualContributionRate`
+ * (the primary earner's own figures) rather than folding the primary into a uniform `people[]`:
+ * every existing single-earner plan — `additionalIncomes` absent or empty — must keep computing
+ * byte-for-byte identical output to before this type existed, which falls out for free when the
+ * primary's own fields are untouched and this array defaults to empty.
+ */
+export interface AdditionalIncome {
+  /** Stable key (mirrors the owning `Person.id`) so the pipeline can track this earner's own
+   * raise chain period over period, the same way the primary's `priorIncome` chains. */
+  id: string;
+  /** This person's income as of plan year 0, before any raise. */
+  currentAnnualIncome: number;
+  /** Decimal — this person's own annual raise rate. */
+  annualRaiseRate: number;
+  /** Decimal share of this period's income contributed — the sum of every percentage-mode
+   * `Account` this person owns. */
+  contributionRate: number;
+  /** Flat dollars contributed regardless of income — the sum of every fixed-mode `Account`
+   * this person owns. */
+  fixedContribution: number;
+  /**
+   * The PRIMARY's age at which this person is considered retired: income and contributions are
+   * 0 from this age onward (inclusive — the same `>=` convention `isRetired` uses for the
+   * primary). Computed by the caller as `primaryCurrentAge + (personRetirementAge -
+   * personCurrentAge)`, the identical offset arithmetic `spouseMedicarePartBEvent` uses for its
+   * `startAge`.
+   */
+  retiresAtPrimaryAge: number;
+}
+
 /** The ten scalar inputs a projection runs from (Story 1 PRD, Inputs). */
 export interface PlanAssumptions {
   currentAge: number;
@@ -41,6 +78,24 @@ export interface PlanAssumptions {
   withdrawalRateInRetirement: number;
   /** Fixed at 100 for Stories 1-3 per Story 3's call-site default. */
   planningHorizonEndAge: number;
+  /**
+   * Every household earner besides the primary (FIN-118) — a spouse's salary and the
+   * contributions their owned `Account`s make, or `undefined`/`[]` for a single-earner plan.
+   * See {@link AdditionalIncome}'s doc comment for why this sits alongside the primary's own
+   * scalar fields rather than replacing them.
+   */
+  additionalIncomes?: readonly AdditionalIncome[];
+  /**
+   * The primary's own flat-dollar contribution (FIN-118 review fix), additive on top of
+   * `annualContributionRate * income` the same way {@link AdditionalIncome.fixedContribution}
+   * is additive for other earners. Exists because the primary's account can be in `fixed`
+   * contribution mode (see `src/ui/components/AccountsTab/Account.ts`), which has no clean
+   * translation into `annualContributionRatePercent` — without this field that dollar amount
+   * had no path into the engine at all. `undefined`/`0` reproduces pre-existing
+   * percentage-only behaviour exactly (the regression case), matching how `additionalIncomes`
+   * defaults to a no-op.
+   */
+  primaryFixedContribution?: number;
 }
 
 /**
@@ -245,6 +300,15 @@ export interface PeriodState {
    * on-interval events — this field is the growth clock underneath them, not itself reported.
    */
   eventCostBasis: ReadonlyMap<string, number>;
+  /**
+   * Last computed annual income for each {@link AdditionalIncome} entry, keyed by its `id`
+   * (FIN-118) — the per-earner mirror of {@link PeriodState.priorIncome}, which remains the
+   * PRIMARY's own income only. Kept as a separate map, not folded into `priorIncome`, so an
+   * additional earner's raise chains off their own prior income rather than a household total
+   * that would double-count once summed into `annualContribution`. Empty for every plan with no
+   * `additionalIncomes` — i.e. every plan that predates FIN-118.
+   */
+  additionalPriorIncomes: ReadonlyMap<string, number>;
 }
 
 /** What a {@link WithdrawalStrategy} decided to actually withdraw. */

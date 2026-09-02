@@ -41,6 +41,7 @@ export {
 } from './projection';
 
 export type {
+  AdditionalIncome,
   EventCostEntry,
   PeriodState,
   PipelineStage,

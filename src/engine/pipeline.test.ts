@@ -40,6 +40,7 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   eventCosts: [],
   retirementEventCostTotal: 0,
   eventCostBasis: new Map(),
+  additionalPriorIncomes: new Map(),
   ...overrides,
 });
 
@@ -259,6 +260,153 @@ describe('computeIncome', () => {
   });
 });
 
+describe('computeIncome — FIN-118 additionalIncomes (spouse income & account contributions)', () => {
+  const withSpouse = (spouse: Partial<import('./types').AdditionalIncome> = {}) =>
+    runPeriodInput({
+      assumptions: {
+        ...runPeriodInput().assumptions,
+        additionalIncomes: [
+          {
+            id: 'spouse',
+            currentAnnualIncome: 60_000,
+            annualRaiseRate: 0.03,
+            contributionRate: 0.1,
+            fixedContribution: 0,
+            retiresAtPrimaryAge: 70,
+            ...spouse,
+          },
+        ],
+      },
+    });
+
+  it('has no effect on the primary-only regression case when additionalIncomes is absent', () => {
+    const withField = computeIncome(periodState({ age: 35, year: 0 }), runPeriodInput());
+    const withoutField = computeIncome(
+      periodState({ age: 35, year: 0 }),
+      runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, additionalIncomes: undefined } }),
+    );
+
+    expect(withField).toEqual(withoutField);
+    expect(withField.annualContribution).toBeCloseTo(12_000, 6);
+  });
+
+  it('adds the additional earner contribution to the household total before the spouse retires', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0 }), withSpouse());
+
+    // Primary: 80_000 * 0.15 = 12_000. Spouse: 60_000 * 0.1 = 6_000. Total 18_000.
+    expect(result.annualContribution).toBeCloseTo(18_000, 6);
+  });
+
+  it('tracks the additional earner own raise chain, independent of the primary', () => {
+    const state = {
+      ...periodState({ age: 36, year: 1, priorIncome: 80_000 }),
+      additionalPriorIncomes: new Map([['spouse', 60_000]]),
+    };
+    const result = computeIncome(state, withSpouse());
+
+    expect(result.additionalPriorIncomes.get('spouse')).toBeCloseTo(61_800, 6);
+    // Primary at year 1: 80_000 * 1.03 = 82_400, contribution 82_400 * 0.15 = 12_360.
+    // Spouse contribution off the RAISED income: 61_800 * 0.1 = 6_180.
+    expect(result.annualContribution).toBeCloseTo(12_360 + 6_180, 6);
+  });
+
+  it('sums fixed-dollar contributions on top of percentage ones for the same additional earner', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0 }), withSpouse({ fixedContribution: 500 }));
+
+    // Spouse: 60_000 * 0.1 + 500 = 6_500.
+    expect(result.annualContribution).toBeCloseTo(12_000 + 6_500, 6);
+  });
+
+  it('adds the primary\'s own fixed-dollar contribution on top of the percentage rate (FIN-118 review fix)', () => {
+    const result = computeIncome(
+      periodState({ age: 35, year: 0 }),
+      runPeriodInput({
+        assumptions: {
+          ...runPeriodInput().assumptions,
+          primaryFixedContribution: 2_000,
+        },
+      }),
+    );
+
+    // Primary: 80_000 * 0.15 + 2_000 = 14_000.
+    expect(result.annualContribution).toBeCloseTo(14_000, 6);
+  });
+
+  it('leaves the primary contribution unchanged when primaryFixedContribution is absent (regression)', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0 }), runPeriodInput());
+
+    // Primary: 80_000 * 0.15 = 12_000, no additional earners.
+    expect(result.annualContribution).toBeCloseTo(12_000, 6);
+  });
+
+  it('excludes an additional earner income and contribution once they reach their own retirement age', () => {
+    // additionalPriorIncomes is seeded with a nonzero prior spouse income (not left at the
+    // Map default of empty) so this assertion actually depends on the retired-check branch in
+    // computeAdditionalIncome firing: with an empty map, `priorIncome ?? 0` would make income 0
+    // regardless of whether the retirement boundary (`>=` vs `>`) is evaluated correctly,
+    // letting an off-by-one mutation there pass unnoticed.
+    const result = computeIncome(
+      {
+        ...periodState({ age: 70, year: 35 }),
+        additionalPriorIncomes: new Map([['spouse', 60_000]]),
+      },
+      withSpouse({ retiresAtPrimaryAge: 70 }),
+    );
+
+    // Only the primary is retired-checked by isRetired's own retirementAge (67 by default), so
+    // the primary also contributes 0 here — the point under test is the spouse's OWN cutoff.
+    expect(result.annualContribution).toBe(0);
+    expect(result.additionalPriorIncomes.get('spouse')).toBe(0);
+  });
+
+  it('excludes an additional earner before their own retirement but keeps the primary active', () => {
+    // Primary retirementAge is 67 (runPeriodInput default); age 66 is pre-retirement for the
+    // primary, and spouse retiresAtPrimaryAge 70 means the spouse is still active too.
+    const result = computeIncome(
+      {
+        ...periodState({ age: 66, year: 31, priorIncome: 190_000 }),
+        additionalPriorIncomes: new Map([['spouse', 60_000]]),
+      },
+      withSpouse({ retiresAtPrimaryAge: 70 }),
+    );
+
+    expect(result.annualContribution).toBeGreaterThan(0);
+    expect(result.additionalPriorIncomes.get('spouse')).toBeGreaterThan(0);
+  });
+
+  it('sums multiple additional earners by id', () => {
+    const input = runPeriodInput({
+      assumptions: {
+        ...runPeriodInput().assumptions,
+        additionalIncomes: [
+          {
+            id: 'spouse',
+            currentAnnualIncome: 60_000,
+            annualRaiseRate: 0.03,
+            contributionRate: 0.1,
+            fixedContribution: 0,
+            retiresAtPrimaryAge: 70,
+          },
+          {
+            id: 'dependent',
+            currentAnnualIncome: 20_000,
+            annualRaiseRate: 0.01,
+            contributionRate: 0,
+            fixedContribution: 200,
+            retiresAtPrimaryAge: 70,
+          },
+        ],
+      },
+    });
+    const result = computeIncome(periodState({ age: 35, year: 0 }), input);
+
+    // Primary 12_000 + spouse 6_000 + dependent 200 = 18_200.
+    expect(result.annualContribution).toBeCloseTo(18_200, 6);
+    expect(result.additionalPriorIncomes.get('spouse')).toBe(60_000);
+    expect(result.additionalPriorIncomes.get('dependent')).toBe(20_000);
+  });
+});
+
 describe('computeWithdrawals', () => {
   /**
    * A retirement period state as `computeWithdrawals` now sees it: post-
@@ -457,6 +605,104 @@ describe('computeWithdrawals', () => {
 
     expect(result.annualWithdrawal).toBeCloseTo(12_300, 6);
     expect(result.balance).toBeCloseTo(-7_300, 6);
+  });
+
+  describe('FIN-118 follow-up: household withdrawal trigger with mismatched retirement ages', () => {
+    // Decided (2026-09-02, FIN-118 follow-up bug report): withdrawals gate on the LATEST
+    // retirement age in the household, not the earliest and not the primary's alone — no
+    // partial/shortfall withdrawal during a gap year where one earner has retired but another
+    // hasn't. Whichever earner is still working keeps earning/contributing (already wired by
+    // FIN-118's `computeIncome`); the portfolio is untouched until every earner has retired.
+    const withSpouse = (overrides: Partial<import('./types').AdditionalIncome> = {}) => ({
+      id: 'spouse',
+      currentAnnualIncome: 60_000,
+      annualRaiseRate: 0.03,
+      contributionRate: 0,
+      fixedContribution: 0,
+      retiresAtPrimaryAge: 66,
+      ...overrides,
+    });
+
+    it('withdraws nothing in the gap year the spouse has retired but the primary has not yet', () => {
+      // Primary retires at 67; the spouse's own retirement lands one age earlier on the
+      // primary's timeline (66) via `retiresAtPrimaryAge`. This is the live-testing bug
+      // report's exact scenario — resolved as "no withdrawal until the later retirement",
+      // not "withdraw early".
+      const result = computeWithdrawals(
+        periodState({ age: 66, year: 0, balance: 1_000_000 }),
+        runPeriodInput({
+          assumptions: {
+            ...runPeriodInput().assumptions,
+            currentAge: 66,
+            retirementAge: 67,
+            additionalIncomes: [withSpouse({ retiresAtPrimaryAge: 66 })],
+          },
+        }),
+      );
+
+      expect(result.annualWithdrawal).toBe(0);
+    });
+
+    it('withdraws once the primary — the LATER of the two — reaches their own retirement age', () => {
+      const result = computeWithdrawals(
+        periodState({ age: 67, year: 1, beginningBalance: 1_000_000, balance: 1_000_000 }),
+        runPeriodInput({
+          assumptions: {
+            ...runPeriodInput().assumptions,
+            currentAge: 66,
+            retirementAge: 67,
+            additionalIncomes: [withSpouse({ retiresAtPrimaryAge: 66 })],
+          },
+        }),
+      );
+
+      // First retirement year: 4% of the 1,000,000 beginning balance.
+      expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
+    });
+
+    it('withdraws nothing while the primary has retired but a LATER-retiring spouse has not', () => {
+      // Reverse case: primary retires at 65, spouse (younger, still working) doesn't retire
+      // until the primary's age 68 on the primary's timeline. Household still waits for the
+      // spouse — the later of the two — even though the primary alone has already retired.
+      const result = computeWithdrawals(
+        periodState({ age: 65, year: 0, balance: 1_000_000 }),
+        runPeriodInput({
+          assumptions: {
+            ...runPeriodInput().assumptions,
+            currentAge: 65,
+            retirementAge: 65,
+            additionalIncomes: [withSpouse({ retiresAtPrimaryAge: 68 })],
+          },
+        }),
+      );
+
+      expect(result.annualWithdrawal).toBe(0);
+    });
+
+    it('withdraws once the later-retiring spouse reaches their own retirement age', () => {
+      const result = computeWithdrawals(
+        periodState({ age: 68, year: 3, beginningBalance: 1_000_000, balance: 1_000_000 }),
+        runPeriodInput({
+          assumptions: {
+            ...runPeriodInput().assumptions,
+            currentAge: 65,
+            retirementAge: 65,
+            additionalIncomes: [withSpouse({ retiresAtPrimaryAge: 68 })],
+          },
+        }),
+      );
+
+      expect(result.annualWithdrawal).toBeCloseTo(40_000, 6);
+    });
+
+    it('regression: a single-earner plan (no additionalIncomes) still gates purely on the primary retirement age', () => {
+      const result = computeWithdrawals(
+        periodState({ age: 66, year: 0, balance: 1_000_000 }),
+        runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, currentAge: 66, retirementAge: 67 } }),
+      );
+
+      expect(result.annualWithdrawal).toBe(0);
+    });
   });
 });
 

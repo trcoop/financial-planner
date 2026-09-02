@@ -1103,3 +1103,120 @@ describe('FIN-71: recurringCost events integrated end to end', () => {
     ).toThrow(InvalidProjectionInputError);
   });
 });
+
+describe('FIN-118: additionalIncomes — spouse income & account contributions in runProjection', () => {
+  it('regression: no additionalIncomes matches pre-FIN-118 single-earner output exactly', () => {
+    const plain = runProjection(assumptions());
+    const withEmptyField = runProjection(assumptions({ additionalIncomes: [] }));
+    const withUndefinedField = runProjection(assumptions({ additionalIncomes: undefined }));
+
+    expect(withEmptyField).toEqual(plain);
+    expect(withUndefinedField).toEqual(plain);
+  });
+
+  it('sums spouse salary and account contributions into household income/contribution before the spouse retires, and excludes both after', () => {
+    const plan = assumptions({
+      currentAge: 50,
+      retirementAge: 67,
+      currentAnnualIncome: 100_000,
+      annualContributionRate: 0.1,
+      planningHorizonEndAge: 60,
+      additionalIncomes: [
+        {
+          id: 'spouse',
+          currentAnnualIncome: 50_000,
+          annualRaiseRate: 0.03,
+          contributionRate: 0.05,
+          fixedContribution: 1_000,
+          // Spouse retires when the primary turns 55.
+          retiresAtPrimaryAge: 55,
+        },
+      ],
+    });
+    const withSpouse = runProjection(plan);
+    const primaryOnly = runProjection(assumptions({ ...plan, additionalIncomes: [] }));
+
+    const beforeRetirement = withSpouse.find((row) => row.age === 50)!;
+    const primaryOnlyAtSameAge = primaryOnly.find((row) => row.age === 50)!;
+    // Primary: 100_000 * 0.1 = 10_000. Spouse: 50_000 * 0.05 + 1_000 = 3_500. Total 13_500.
+    expect(beforeRetirement.annualContribution).toBeCloseTo(13_500, 6);
+    expect(beforeRetirement.annualContribution).toBeGreaterThan(primaryOnlyAtSameAge.annualContribution);
+
+    const atSpouseRetirement = withSpouse.find((row) => row.age === 55)!;
+    const primaryOnlyAtSpouseRetirement = primaryOnly.find((row) => row.age === 55)!;
+    // Once the spouse retires, contribution reverts to exactly the primary-only figure.
+    expect(atSpouseRetirement.annualContribution).toBeCloseTo(primaryOnlyAtSpouseRetirement.annualContribution, 6);
+  });
+
+  it('pins the retiresAtPrimaryAge boundary: the spouse still contributes at age retiresAtPrimaryAge - 1 and stops exactly at age retiresAtPrimaryAge', () => {
+    // Targets pipeline.ts's `state.age >= person.retiresAtPrimaryAge` check directly, at the
+    // exact boundary row rather than "some row after retirement" — an off-by-one mutation to
+    // `>` would leave the spouse contributing one extra year, and only asserting the row at
+    // age === retiresAtPrimaryAge (not a later age) catches that.
+    const plan = assumptions({
+      currentAge: 50,
+      retirementAge: 67,
+      currentAnnualIncome: 100_000,
+      annualContributionRate: 0.1,
+      planningHorizonEndAge: 60,
+      additionalIncomes: [
+        {
+          id: 'spouse',
+          currentAnnualIncome: 50_000,
+          annualRaiseRate: 0.03,
+          contributionRate: 0.05,
+          fixedContribution: 1_000,
+          retiresAtPrimaryAge: 55,
+        },
+      ],
+    });
+    const withSpouse = runProjection(plan);
+    const primaryOnly = runProjection(assumptions({ ...plan, additionalIncomes: [] }));
+
+    const lastWorkingYear = withSpouse.find((row) => row.age === 54)!;
+    const primaryOnlyAtLastWorkingYear = primaryOnly.find((row) => row.age === 54)!;
+    expect(lastWorkingYear.annualContribution).toBeGreaterThan(primaryOnlyAtLastWorkingYear.annualContribution);
+
+    const firstRetiredYear = withSpouse.find((row) => row.age === 55)!;
+    const primaryOnlyAtFirstRetiredYear = primaryOnly.find((row) => row.age === 55)!;
+    expect(firstRetiredYear.annualContribution).toBeCloseTo(primaryOnlyAtFirstRetiredYear.annualContribution, 6);
+  });
+
+  it('FIN-118 review fix: a primary fixed-dollar contribution reaches the projection', () => {
+    const plain = runProjection(assumptions());
+    const withFixed = runProjection(assumptions({ primaryFixedContribution: 5_000 }));
+
+    const plainRow = plain.find((row) => row.age === 35)!;
+    const fixedRow = withFixed.find((row) => row.age === 35)!;
+    expect(fixedRow.annualContribution).toBeCloseTo(plainRow.annualContribution + 5_000, 6);
+  });
+
+  it('regression: primaryFixedContribution absent matches pre-fix output exactly', () => {
+    const plain = runProjection(assumptions());
+    const withUndefinedField = runProjection(assumptions({ primaryFixedContribution: undefined }));
+
+    expect(withUndefinedField).toEqual(plain);
+  });
+
+  it('rejects a non-finite primaryFixedContribution at the input boundary', () => {
+    expectRejection(assumptions({ primaryFixedContribution: Number.NaN }), 'NON_FINITE_INPUT');
+  });
+
+  it('rejects a non-finite field on an additionalIncomes entry at the input boundary', () => {
+    expectRejection(
+      assumptions({
+        additionalIncomes: [
+          {
+            id: 'spouse',
+            currentAnnualIncome: Number.NaN,
+            annualRaiseRate: 0.03,
+            contributionRate: 0.1,
+            fixedContribution: 0,
+            retiresAtPrimaryAge: 65,
+          },
+        ],
+      }),
+      'NON_FINITE_INPUT',
+    );
+  });
+});

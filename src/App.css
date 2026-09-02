@@ -6,6 +6,11 @@
    * (FIN-88) but LeftNav's dark fill butts directly against .main's edge, so keep the x-clip —
    * it also guards against any transient overflow during a section switch. */
   overflow-x: hidden;
+  /* Belt-and-suspenders against scroll-chaining/rubber-band overscroll (see the matching
+   * `html`/`body` comment in theme.css): stops any leftover wheel/trackpad delta from an inner
+   * pane (`.main`, `.planMain`, `.profileContent`) from bubbling past `.shell` itself, even
+   * though `.shell` is a fixed `100vh` frame and isn't meant to scroll at all. */
+  overscroll-behavior: contain;
 }
 
 /* FIN-100: .body is now the shell-level row below TopBar — LeftNav (desktop) or nothing
@@ -116,6 +121,10 @@
   min-height: 0;
   overflow-y: auto;
   padding: var(--space-6);
+  /* Stops this pane's own scroll from chaining past `.shell` once it hits its limit — see the
+   * `.shell` and theme.css `html`/`body` comments for the full rubber-band/scroll-chaining
+   * rationale. */
+  overscroll-behavior: contain;
 }
 
 /* FIN-100: renamed from the pre-shell-redesign "body"/"main" (see PlanSection.tsx) — these
@@ -143,6 +152,9 @@
    * thumb sits flush against card borders — reading as "on top of" content. This gap gives the
    * reserved gutter visual breathing room from the content it's next to. */
   padding-right: var(--space-3);
+  /* See `.shell`'s comment above — stops this pane's own scroll from chaining up past `.main`/
+   * `.shell` once it hits its limit. */
+  overscroll-behavior: contain;
 }
 
 @media (max-width: 959px) {
@@ -282,8 +294,25 @@
  * `tabIndex={-1}` (set in PlanSection.tsx) makes each one focusable only programmatically — the
  * mount-triggers-focus effect there focuses it on every tab switch, so this is purely a visual
  * label, not a second way to tab into the panel. */
+/* Sticky within whichever scroll pane the heading lives in — `.planMain` for Projection/Stress
+ * Test/Profile's own outer heading. Resolves against the nearest scrolling ancestor regardless
+ * of the non-scrolling wrappers (`.tabPanel`) in between, same mechanism as the sticky headers
+ * below (`.profileContent`'s own sub-tab headers) — this is the safe, single-scroll-container
+ * form of `position: sticky` (unlike the removed `.profileNavDesktop` attempt, which broke
+ * because it spanned *two* nested `overflow: auto` ancestors at once). `background` covers
+ * content scrolling underneath once stuck; `z-index` keeps it above that content.
+ * `--color-page-bg` (not `--color-bg`, the white card color) — every ancestor between this
+ * element and `body` is transparent, so `body`'s own `background: var(--color-page-bg)`
+ * (theme.css) is what's actually visible behind it. Using `--color-bg` here first (a round-1
+ * mistake) painted a visible white box around the heading that didn't match the page's light
+ * gray, since nothing else in this chain is `--color-bg`-colored. */
 .sectionHeading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   margin: 0;
+  padding-bottom: var(--space-2);
+  background: var(--color-page-bg);
   font-size: var(--font-size-lg, 1.125rem);
   font-weight: 600;
 }
@@ -322,22 +351,42 @@
 }
 
 @media (min-width: 960px) {
+  /* Structural fix (follow-up to the sticky-nav attempt above): `position: sticky` on
+   * `.profileNavDesktop` didn't work because `.profileLayout` sits *inside* `.planMain`, which
+   * is itself the scroll container for every Plan tabpanel (Projection/Stress Test share it
+   * too) — the nav was several levels below the nearest `overflow: auto` ancestor, and having
+   * both `.main` (App.css) and `.planMain` as `overflow-y: auto` simultaneously in that chain
+   * made some browsers compute the *outer* page's scrollable extent from the sticky element's
+   * unstuck flow position, so the whole page (not just this pane) grew past `.shell`'s 100vh
+   * frame and exposed raw body background below it once scrolled far enough. Mirror the pattern
+   * that already works for the app's outer shell instead (`.navPane`/`.main` under `.body`):
+   * give `.profileLayout` a bounded height from `.tabPanel`'s own `flex: 1; min-height: 0`
+   * (set above, `@media (min-width: 960px) { .tabPanel { ... } }`) and make `.profileContent`
+   * — not `.planMain` — the single scroll container for Profile's content. `.profileNavDesktop`
+   * is then simply never inside anything that scrolls, so it never needs `position: sticky` at
+   * all, the same way `.navPane` never scrolls today. */
   .profileLayout {
     flex-direction: row;
-    /* Default (stretch, so no explicit declaration needed) rather than flex-start: lets the
-     * nav's `.leftNav`/`.inline` `height: 100%` actually have a row height to fill, matching how
-     * the app-level LeftNav spans .body's full height beside .main. `.profileContent` is a plain
-     * flex column with normal block-flowing children (forms, placeholder text), so stretching
-     * its own box taller just adds trailing whitespace below its content — it doesn't stretch
-     * the children themselves, so a short placeholder tab's text doesn't look distorted. */
+    align-items: stretch;
+    flex: 1;
+    min-height: 0;
   }
 
   .profileNavDesktop {
     display: block;
+    flex-shrink: 0;
   }
 
   .profileNavMobile {
     display: none;
+  }
+
+  .profileContent {
+    min-height: 0;
+    overflow-y: auto;
+    /* See `.shell`'s comment above — stops this pane's own scroll from chaining up past
+     * `.planMain`/`.main`/`.shell` once it hits its limit. */
+    overscroll-behavior: contain;
   }
 }
 
@@ -353,7 +402,16 @@
  * module (AdvancedAssumptionsForm doesn't own a "Rates" identity) — matches PeopleTab/
  * AccountsTab's own `.heading` (margin: 0, font-size-lg), the established title-matches-the-
  * nav-label pattern for Profile's sub-tab content. */
+/* Sticky within `.profileContent` (the Rates sub-tab's own scroll pane) — same mechanism and
+ * reasoning as `.sectionHeading` above. AccountsTab/PeopleTab's own `.header` rows (their
+ * respective `.module.css` files) get the identical treatment for their own heading+action row.
+ * `--color-page-bg`, not `--color-bg` — see `.sectionHeading`'s comment above for why. */
 .profileSubHeading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   margin: 0;
+  padding-bottom: var(--space-2);
+  background: var(--color-page-bg);
   font-size: var(--font-size-lg);
 }
