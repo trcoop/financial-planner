@@ -1,3 +1,4 @@
+import type { CoreInputValues } from '../CoreInputsForm/CoreInputsForm'
 import { rangeError } from '../CoreInputsForm/validation'
 
 /**
@@ -71,15 +72,59 @@ export function createAccount(ownerId: string): Account {
   }
 }
 
+/** Builds the default primary-person account seeded from the legacy `CoreInputValues` fields
+ * (`initialBalance`/`annualContributionRatePercent`) — used only when migrating a pre-FIN-117
+ * record that predates the Account model, so the old single-balance/single-rate mental model
+ * carries over as one taxable account rather than silently vanishing. */
+export function createDefaultPrimaryAccount(primaryPersonId: string, core: CoreInputValues): Account {
+  return {
+    id: generateAccountId(),
+    name: 'Primary account',
+    type: 'taxable',
+    balance: core.initialBalance,
+    contributionMode: 'percentage',
+    contributionValue: core.annualContributionRatePercent,
+    ownerId: primaryPersonId,
+  }
+}
+
 /** Given a possibly-persisted `accounts` value (untrusted — could be missing/malformed, or from
  * a pre-FIN-117 record with no `accounts` field at all), returns a valid `Account[]` to use.
- * Unlike `Person`'s `seedPeople`, there's no default account to seed — an empty list is always
- * the correct fallback (the Accounts tab's own empty state handles prompting the user). */
-export function seedAccounts(accounts: unknown): Account[] {
+ * A record that already has an `accounts` array — even an explicitly empty one, e.g. after the
+ * user deletes their only account — is left alone (no re-seeding); only a genuinely missing/
+ * malformed field gets the migrated default primary account seeded from the old core values. */
+export function seedAccounts(accounts: unknown, primaryPersonId: string, core: CoreInputValues): Account[] {
   if (Array.isArray(accounts)) {
     return accounts as Account[]
   }
-  return []
+  return [createDefaultPrimaryAccount(primaryPersonId, core)]
+}
+
+/** The primary person's first owned account, if any — used to derive "effective" core values
+ * (see `syncCoreWithPrimaryAccount`) the same way `Person.ts`'s `syncCoreWithPrimary` derives
+ * age/retirementAge/salary from the primary Person. */
+export function primaryAccountFor(accounts: Account[], primaryPersonId: string): Account | undefined {
+  return accounts.find((account) => account.ownerId === primaryPersonId)
+}
+
+/** Overrides `core.initialBalance`/`annualContributionRatePercent` with the primary's own
+ * account values, mirroring `syncCoreWithPrimary`'s pattern for age/retirementAge/salary. This
+ * is deliberately UI-layer plumbing (not engine wiring, that's FIN-118) — it exists only so the
+ * now-hidden `CoreInputValues` fields don't go stale relative to the real source of truth (the
+ * primary's Account). When there's no primary account yet, `core` is returned unchanged. A
+ * `fixed` contribution mode has no clean translation to a percentage rate, so in that case the
+ * contribution rate is left as-is (an acknowledged limitation properly owned by FIN-118's real
+ * engine-aware contribution-mode handling, not this fix). */
+export function syncCoreWithPrimaryAccount(core: CoreInputValues, account: Account | undefined): CoreInputValues {
+  if (!account) {
+    return core
+  }
+  return {
+    ...core,
+    initialBalance: account.balance,
+    annualContributionRatePercent:
+      account.contributionMode === 'percentage' ? account.contributionValue : core.annualContributionRatePercent,
+  }
 }
 
 /** Whether any account is currently owned by `ownerId` — the real check backing

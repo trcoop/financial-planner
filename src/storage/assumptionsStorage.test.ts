@@ -129,11 +129,17 @@ describe('loadAssumptions edge cases', () => {
     const partial = JSON.stringify({ core: { currentAge: 50 }, advanced: {} })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: partial }))
 
-    expect(loadAssumptions()).toEqual({
-      core: { ...DEFAULT_CORE_VALUES, currentAge: 50 },
-      advanced: DEFAULT_ADVANCED_VALUES,
-      people: [createPrimaryPerson({ ...DEFAULT_CORE_VALUES, currentAge: 50 })],
-      accounts: [],
+    const mergedCore = { ...DEFAULT_CORE_VALUES, currentAge: 50 }
+    const primary = createPrimaryPerson(mergedCore)
+    const loaded = loadAssumptions()
+    expect(loaded?.core).toEqual(mergedCore)
+    expect(loaded?.advanced).toEqual(DEFAULT_ADVANCED_VALUES)
+    expect(loaded?.people).toEqual([primary])
+    expect(loaded?.accounts).toHaveLength(1)
+    expect(loaded?.accounts[0]).toMatchObject({
+      ownerId: primary.id,
+      balance: mergedCore.initialBalance,
+      contributionValue: mergedCore.annualContributionRatePercent,
     })
   })
 
@@ -173,11 +179,19 @@ describe('loadAssumptions edge cases', () => {
     expect(loadAssumptions()?.accounts).toEqual(accounts)
   })
 
-  it('seeds an empty accounts list for a pre-FIN-117 record with no accounts field', () => {
+  it('seeds a default primary account for a pre-FIN-117 record with no accounts field', () => {
     const preFin117 = JSON.stringify({ core: DEFAULT_CORE_VALUES, advanced: DEFAULT_ADVANCED_VALUES, people: DEFAULT_PEOPLE })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin117 }))
 
-    expect(loadAssumptions()?.accounts).toEqual([])
+    const accounts = loadAssumptions()?.accounts
+    expect(accounts).toHaveLength(1)
+    expect(accounts?.[0]).toMatchObject({
+      ownerId: DEFAULT_PEOPLE[0].id,
+      balance: DEFAULT_CORE_VALUES.initialBalance,
+      contributionValue: DEFAULT_CORE_VALUES.annualContributionRatePercent,
+      contributionMode: 'percentage',
+      type: 'taxable',
+    })
   })
 
   it('returns an already-persisted people list unchanged (does not re-seed)', () => {
@@ -197,11 +211,15 @@ describe('loadAssumptions edge cases', () => {
     const wrongType = JSON.stringify({ core: 'not an object', advanced: ['also', 'wrong'] })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: wrongType }))
 
-    expect(loadAssumptions()).toEqual({
-      core: DEFAULT_CORE_VALUES,
-      advanced: DEFAULT_ADVANCED_VALUES,
-      people: DEFAULT_PEOPLE,
-      accounts: [],
+    const loaded = loadAssumptions()
+    expect(loaded?.core).toEqual(DEFAULT_CORE_VALUES)
+    expect(loaded?.advanced).toEqual(DEFAULT_ADVANCED_VALUES)
+    expect(loaded?.people).toEqual(DEFAULT_PEOPLE)
+    expect(loaded?.accounts).toHaveLength(1)
+    expect(loaded?.accounts[0]).toMatchObject({
+      ownerId: DEFAULT_PEOPLE[0].id,
+      balance: DEFAULT_CORE_VALUES.initialBalance,
+      contributionValue: DEFAULT_CORE_VALUES.annualContributionRatePercent,
     })
   })
 

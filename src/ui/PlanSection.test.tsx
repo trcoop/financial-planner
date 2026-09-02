@@ -399,7 +399,10 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     render(<PlanSection />)
 
     await user.click(screen.getByRole('tab', { name: 'Profile' }))
-    const balanceInput = screen.getByRole('textbox', { name: 'Current investment balance' })
+    // FIN-117 bug-fix round: initialBalance now lives on the primary's seeded default Account,
+    // edited via the Accounts sub-tab rather than the (now-removed) CoreInputsForm.
+    await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Accounts' }))
+    const balanceInput = screen.getByRole('textbox', { name: 'Balance' })
     await user.clear(balanceInput)
     await user.type(balanceInput, '500000')
 

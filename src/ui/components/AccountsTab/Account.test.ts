@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import type { CoreInputValues } from '../CoreInputsForm/CoreInputsForm'
+import { DEFAULT_CORE_VALUES } from '../CoreInputsForm/defaults'
 import {
   ACCOUNT_TYPE_OPTIONS,
   accountBalanceError,
@@ -8,6 +10,8 @@ import {
   seedAccounts,
   type Account,
 } from './Account'
+
+const core: CoreInputValues = DEFAULT_CORE_VALUES
 
 describe('createAccount', () => {
   it('creates an account owned by the given ownerId with sensible defaults', () => {
@@ -61,17 +65,24 @@ describe('accountContributionError', () => {
 })
 
 describe('seedAccounts', () => {
-  it('returns an empty array for a pre-FIN-117 record with no accounts field', () => {
-    expect(seedAccounts(undefined)).toEqual([])
+  it('seeds exactly one default account for a pre-FIN-117 record with no accounts field, matching the old core values', () => {
+    const seeded = seedAccounts(undefined, 'primary', core)
+    expect(seeded).toHaveLength(1)
+    expect(seeded[0].ownerId).toBe('primary')
+    expect(seeded[0].balance).toBe(core.initialBalance)
+    expect(seeded[0].contributionMode).toBe('percentage')
+    expect(seeded[0].contributionValue).toBe(core.annualContributionRatePercent)
+    expect(seeded[0].type).toBe('taxable')
   })
 
-  it('returns an empty array for a malformed value', () => {
-    expect(seedAccounts('not an array')).toEqual([])
+  it('seeds a default account for a malformed value', () => {
+    expect(seedAccounts('not an array', 'primary', core)).toHaveLength(1)
   })
 
-  it('returns an already-persisted accounts array unchanged', () => {
+  it('leaves an already-persisted accounts array unchanged, including an explicitly empty one (no double-seeding)', () => {
     const accounts: Account[] = [createAccount('primary')]
-    expect(seedAccounts(accounts)).toEqual(accounts)
+    expect(seedAccounts(accounts, 'primary', core)).toEqual(accounts)
+    expect(seedAccounts([], 'primary', core)).toEqual([])
   })
 })
 

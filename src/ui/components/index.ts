@@ -1,5 +1,4 @@
 export { Button } from './Button/Button'
-export { CoreInputsForm } from './CoreInputsForm/CoreInputsForm'
 export type { CoreInputValues } from './CoreInputsForm/CoreInputsForm'
 export { DEFAULT_CORE_VALUES } from './CoreInputsForm/defaults'
 export { isCoreInputValid } from './CoreInputsForm/validation'
@@ -49,4 +48,11 @@ export {
 } from './PeopleTab/Person'
 export { AccountsTab } from './AccountsTab/AccountsTab'
 export type { Account, AccountType, ContributionMode } from './AccountsTab/Account'
-export { createAccount, seedAccounts, hasAccountsForOwner, ACCOUNT_TYPE_OPTIONS } from './AccountsTab/Account'
+export {
+  createAccount,
+  seedAccounts,
+  hasAccountsForOwner,
+  primaryAccountFor,
+  syncCoreWithPrimaryAccount,
+  ACCOUNT_TYPE_OPTIONS,
+} from './AccountsTab/Account'
