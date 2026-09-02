@@ -2,6 +2,8 @@ import type { CoreInputValues } from '../ui/components/CoreInputsForm/CoreInputs
 import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
+import type { Person } from '../ui/components/PeopleTab/Person'
+import { seedPeople } from '../ui/components/PeopleTab/Person'
 import { STORAGE_KEY, type PersistedAssumptions } from './schema'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -45,7 +47,14 @@ export function loadAssumptions(): PersistedAssumptions | undefined {
     ...(isPlainObject(parsed.advanced) ? (parsed.advanced as Partial<AdvancedAssumptionValues>) : {}),
   }
 
-  return { core, advanced }
+  // FIN-116: `people` is a new field — absent on any record persisted before this ticket (and
+  // on any record where it's malformed/empty), in which case `seedPeople` seeds just the
+  // primary Person from `core` (never a spouse — see its own doc comment). A pre-FIN-116
+  // record's leftover `core.hasSpouse`/`core.spouseAge` (if present in the raw JSON) are never
+  // read here — those fields are retired from `CoreInputValues` entirely.
+  const people: Person[] = seedPeople(parsed.people, core)
+
+  return { core, advanced, people }
 }
 
 /**
@@ -54,9 +63,9 @@ export function loadAssumptions(): PersistedAssumptions | undefined {
  * swallowed and logged via `console.warn`; callers cannot distinguish "saved" from "silently
  * failed" by design.
  */
-export function saveAssumptions(core: CoreInputValues, advanced: AdvancedAssumptionValues): void {
+export function saveAssumptions(core: CoreInputValues, advanced: AdvancedAssumptionValues, people: Person[]): void {
   try {
-    const json = JSON.stringify({ core, advanced } satisfies PersistedAssumptions)
+    const json = JSON.stringify({ core, advanced, people } satisfies PersistedAssumptions)
     localStorage.setItem(STORAGE_KEY, json)
   } catch (error) {
     console.warn('Failed to save assumptions to localStorage', error)

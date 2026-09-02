@@ -36,3 +36,14 @@ export type { DropdownProps, DropdownOption } from './Dropdown/Dropdown'
 export { InvestmentCalculator } from './InvestmentCalculator/InvestmentCalculator'
 export { SelectField } from './SelectField/SelectField'
 export type { SelectFieldOption } from './SelectField/SelectField'
+export { TextField } from './TextField/TextField'
+export { PeopleTab } from './PeopleTab/PeopleTab'
+export type { Person } from './PeopleTab/Person'
+export {
+  createPrimaryPerson,
+  createSpouse,
+  seedPeople,
+  spouseHasAccounts,
+  primaryPerson,
+  syncCoreWithPrimary,
+} from './PeopleTab/Person'

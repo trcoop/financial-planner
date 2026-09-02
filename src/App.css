@@ -139,6 +139,10 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  /* `scrollbar-gutter: stable` (index.css) reserves the track, but with zero padding here the
+   * thumb sits flush against card borders — reading as "on top of" content. This gap gives the
+   * reserved gutter visual breathing room from the content it's next to. */
+  padding-right: var(--space-3);
 }
 
 @media (max-width: 959px) {
