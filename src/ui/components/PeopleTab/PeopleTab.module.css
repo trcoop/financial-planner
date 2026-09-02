@@ -8,7 +8,8 @@
  * Spouse" action stays visible while the person cards below scroll. Same single-scroll-container
  * `position: sticky` pattern as AccountsTab's own `.header` (AccountsTab.module.css) and
  * `.sectionHeading`/`.profileSubHeading` (App.css). `background` covers person cards scrolling
- * underneath once stuck. */
+ * underneath once stuck — `--color-page-bg` (theme.css), not `--color-bg`: see AccountsTab's
+ * `.header` comment for why (round-1 used `--color-bg` and painted a visible white box). */
 .header {
   position: sticky;
   top: 0;
@@ -18,7 +19,7 @@
   justify-content: space-between;
   gap: var(--space-2);
   padding-bottom: var(--space-2);
-  background: var(--color-bg);
+  background: var(--color-page-bg);
 }
 
 .heading {

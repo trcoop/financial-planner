@@ -134,12 +134,31 @@ body,
   min-height: 100%;
 }
 
+/* Defense-in-depth against scroll-chaining/rubber-band overscroll: `.shell` (App.css) and its
+ * internal scroll panes (`.main`, `.planMain`, `.profileContent`) are each meant to be
+ * self-contained — none of them should ever hand off leftover wheel/trackpad delta to the
+ * document once they hit their own scroll limit. In practice `document.documentElement`'s
+ * measured `scrollHeight` can still come back inflated (a browser metric quirk from nested
+ * `overflow:auto` + `position:sticky` — verified via computed-style walk: every real container's
+ * `scrollHeight === clientHeight`, `body` included, even when `html.scrollHeight` reports far
+ * more), and without this, a trackpad/wheel gesture that keeps going past an inner pane's limit
+ * chains up to `html`, rubber-banding the whole page and briefly exposing the unstyled canvas
+ * beyond it. `overscroll-behavior: none` on both stops that chain at the document boundary
+ * regardless of what the inflated metric claims is scrollable. `background` on `html` is a
+ * second layer — if a bounce ever still shows through momentarily, it matches the app's page
+ * background instead of the browser's bare (often dark-mode-black) canvas. */
+html {
+  background: var(--color-page-bg);
+  overscroll-behavior: none;
+}
+
 body {
   margin: 0;
   font-family: var(--font-family-body);
   font-size: var(--font-size-base);
   color: var(--color-text);
   background: var(--color-page-bg);
+  overscroll-behavior: none;
 }
 
 table {
