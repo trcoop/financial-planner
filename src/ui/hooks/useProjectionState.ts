@@ -112,6 +112,10 @@ export function useProjectionState(
 
   // FIN-114: the non-primary Person in the Profile People list, if any, with a usable (finite)
   // age — guards against malformed/legacy persisted data rather than trusting the caller.
+  // `.find` deliberately takes only the FIRST such match: today's People model caps non-primary
+  // entries at one spouse, so this is unambiguous. If a future person type (e.g. a dependent)
+  // is ever added to `people`, this would silently treat the first one as "the spouse" for
+  // Medicare purposes — revisit this line, not just the Person model, when that lands.
   const spouse = useMemo(
     () => debouncedPeople.find((person) => !person.isPrimary && Number.isFinite(person.age)),
     [debouncedPeople],
