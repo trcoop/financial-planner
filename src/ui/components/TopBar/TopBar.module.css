@@ -1,9 +1,7 @@
 /* Dark unified TopBar (ERD "App Navigation & Shell Redesign", FIN-93 Direction B) — matches
  * LeftNav's dark surface (src/ui/components/LeftNav/LeftNav.module.css) so the TopBar and nav
- * read as one continuous dark shell region above the light content area. FIN-93 only landed
- * light-mode surface/text tokens (see src/ui/theme.css) — no dark-surface token exists yet for
- * this shell region, so #12151c (same hardcoded value LeftNav already uses, for the same
- * documented reason) is the one non-token value below. */
+ * read as one continuous dark shell region above the light content area, via the shared
+ * --color-chrome-bg/--color-chrome-text tokens (src/ui/theme.css, added FIN-124). */
 .topBar {
   display: flex;
   align-items: center;
@@ -11,9 +9,7 @@
   width: 100%;
   height: 68px;
   padding: 0 var(--space-5);
-  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: documented
-     dark-chrome exception above, no --color-chrome-bg token yet (pending FIN-124 cleanup). */
-  background: #12151c;
+  background: var(--color-chrome-bg);
   box-sizing: border-box;
   /* `.shell`'s own auto height resolves against its flex children's *shrunk* sizes, not their
    * natural content sizes (FIN-61) — without this, whenever `.shell`'s content is taller than
@@ -35,9 +31,7 @@
   font-size: var(--font-size-lg);
   font-weight: 800;
   letter-spacing: -0.01em;
-  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
-     documented dark-chrome exception as .topBar's background above. */
-  color: #ffffff;
+  color: var(--color-chrome-text);
   white-space: nowrap;
 }
 

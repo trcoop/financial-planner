@@ -1,17 +1,13 @@
-/* Dark unified TopBar+LeftNav look (ERD "App Navigation & Shell Redesign", FIN-93 Direction B).
- * FIN-93 only landed light-mode surface/text tokens (see src/ui/theme.css) — no dark-surface
- * token exists yet for this shell region, so the two dark values below are the ONE thing in this
- * file not sourced from a token. Everything else (spacing, radius, type, focus ring, primary
- * accent) reuses FIN-93 tokens as-is. */
+/* Dark unified TopBar+LeftNav look (ERD "App Navigation & Shell Redesign", FIN-93 Direction B),
+ * via the shared --color-chrome-bg/--color-chrome-text tokens (src/ui/theme.css, added FIN-124).
+ * Everything else (spacing, radius, type, focus ring, primary accent) reuses FIN-93 tokens as-is. */
 .leftNav {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   width: 232px;
   padding: var(--space-5) var(--space-3);
-  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: documented
-     dark-chrome exception above, no --color-chrome-bg token yet (pending FIN-124 cleanup). */
-  background: #12151c;
+  background: var(--color-chrome-bg);
   height: 100%;
   box-sizing: border-box;
   flex-shrink: 0;
@@ -27,9 +23,7 @@
   font-family: var(--font-family-display);
   font-size: var(--font-size-sm);
   font-weight: 600;
-  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
-     documented dark-chrome exception as .leftNav's background above. */
-  color: rgba(255, 255, 255, 0.72);
+  color: color-mix(in srgb, var(--color-chrome-text) 72%, transparent);
   text-align: left;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
@@ -45,12 +39,8 @@
 
 @media (hover: hover) {
   .item:hover {
-    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
-       documented dark-chrome exception as .leftNav's background above. */
-    color: #ffffff;
-    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
-       documented dark-chrome exception as .leftNav's background above. */
-    background: rgba(255, 255, 255, 0.08);
+    color: var(--color-chrome-text);
+    background: color-mix(in srgb, var(--color-chrome-text) 8%, transparent);
   }
 
   /* `.itemActive` (one class selector) loses specificity to `.item:hover` (class + pseudo-class)
@@ -59,17 +49,13 @@
    * color/background instead of keeping its active look. Re-asserting the active styling here,
    * at equal specificity to `.item:hover` but later in source order, wins back the active look. */
   .itemActive:hover {
-    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
-       documented dark-chrome exception as .leftNav's background above. */
-    color: #ffffff;
+    color: var(--color-chrome-text);
     background: var(--color-primary);
   }
 }
 
 .itemActive {
-  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
-     documented dark-chrome exception as .leftNav's background above. */
-  color: #ffffff;
+  color: var(--color-chrome-text);
   background: var(--color-primary);
   font-weight: 700;
 }

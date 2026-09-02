@@ -81,6 +81,15 @@
   --color-error: #b91c1c;
   --color-highlight: #fef3c7;
   --focus-ring: 0 0 0 3px var(--color-primary);
+  /* Dark app-chrome surface (TopBar/LeftNav, FIN-93 Direction B) — its own pair of tokens
+     rather than reusing --color-bg/--color-text, since chrome is dark while every other
+     surface/text token in this file is light-mode (FIN-124: was hardcoded #12151c/#ffffff
+     pending this token existing). */
+  --color-chrome-bg: #12151c;
+  --color-chrome-text: #ffffff;
+  /* Modal backdrop scrim (ConfirmDialog) — same ink hue as --color-border-subtle at a much
+     higher alpha for backdrop opacity rather than a hairline (FIN-124: was hardcoded). */
+  --color-scrim: rgba(16, 24, 40, 0.48);
 
   /* Spacing — 4px base scale */
   --space-1: 4px;
