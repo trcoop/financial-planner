@@ -243,6 +243,14 @@
   z-index: 2;
 }
 
+/* Applied to the spouse marker only, only when its `x`/`y` coincide with the primary marker's
+   (FIN-121) — pushes it further above the line so the two badges don't render on top of each
+   other and both stay visible/clickable. Comes after `.medicareMarker` so its `transform`
+   overrides that rule's at equal specificity. */
+.medicareMarkerStacked {
+  transform: translate(-50%, calc(-100% - 32px));
+}
+
 .medicareIcon {
   display: flex;
   align-items: center;
@@ -289,6 +297,16 @@
 .medicareMarker:focus-visible .medicareLabel {
   opacity: 1;
   visibility: visible;
+}
+
+/* FIN-121: `.medicareLabel`'s own z-index can't help it — it's a child of its own marker
+   button, so it's confined to that button's stacking context and a later-in-DOM sibling marker
+   (e.g. the spouse marker, stacked above the primary one) still paints over it regardless. Bump
+   the whole hovered/focused marker above its sibling instead, so whichever one the user is
+   actually reading wins. */
+.medicareMarker:hover,
+.medicareMarker:focus-within {
+  z-index: 3;
 }
 
 /* Active/selected-period marker (FIN-60) — bold and solid, using the high-contrast text color

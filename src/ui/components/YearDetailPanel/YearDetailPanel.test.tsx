@@ -153,4 +153,18 @@ describe('YearDetailPanel', () => {
     const panel = screen.getByRole('region', { name: 'Year detail' })
     expect(panel).not.toHaveTextContent('Medicare')
   })
+
+  it('sums the primary and spouse Medicare entries into one Medicare line (FIN-121)', () => {
+    const bothMedicareRow: ChartRow = {
+      ...medicareRow,
+      eventCosts: [
+        { id: 'medicarePartB', amount: 2_434.8 },
+        { id: 'medicareSpousePartB', amount: 2_434.8 },
+      ],
+    }
+    render(<YearDetailPanel row={bothMedicareRow} />)
+    const panel = screen.getByRole('region', { name: 'Year detail' })
+    expect(panel).toHaveTextContent('Medicare')
+    expect(panel).toHaveTextContent('$4,870')
+  })
 })

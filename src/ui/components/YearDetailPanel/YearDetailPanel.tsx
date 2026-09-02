@@ -11,11 +11,13 @@ export interface YearDetailPanelProps {
   row: ChartRow | undefined
 }
 
-/** Stable id of the Medicare Part B event (must match `src/ui/medicareEvent.ts`'s
- * `MEDICARE_PART_B_EVENT.id`) — not imported from there to keep this file free of any
- * Medicare-specific knowledge beyond "look up this key", matching `ChartRow.eventCosts`'s
- * generic, stable-key shape (ERD §9). */
-const MEDICARE_EVENT_ID = 'medicarePartB'
+/** Stable ids of the primary's and spouse's Medicare Part B events (must match
+ * `src/ui/medicareEvent.ts`'s `MEDICARE_PART_B_EVENT.id` and `spouseMedicarePartBEvent`'s
+ * `id`) — not imported from there to keep this file free of any Medicare-specific knowledge
+ * beyond "look up these keys", matching `ChartRow.eventCosts`'s generic, stable-key shape
+ * (ERD §9). FIN-114 added the spouse event but never added its id here, so its cost was
+ * silently excluded from this display even though it's really deducted from the balance. */
+const MEDICARE_EVENT_IDS = ['medicarePartB', 'medicareSpousePartB']
 
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -25,7 +27,11 @@ const currency = new Intl.NumberFormat('en-US', {
 
 /** A fixed-width `Card` showing the detail for the year selected in `ChartContainer`. */
 export function YearDetailPanel({ row }: YearDetailPanelProps) {
-  const medicareEntry = row?.eventCosts.find((entry) => entry.id === MEDICARE_EVENT_ID)
+  // Sums the primary's and (if present) spouse's Medicare Part B costs into one line — the
+  // panel has never had per-person breakdown, and the amount actually deducted from the
+  // balance is the sum of both, so that's what this line should show.
+  const medicareEntries = row?.eventCosts.filter((entry) => MEDICARE_EVENT_IDS.includes(entry.id)) ?? []
+  const medicareTotal = medicareEntries.reduce((sum, entry) => sum + entry.amount, 0)
 
   return (
     <Card className={styles.card}>
@@ -55,10 +61,10 @@ export function YearDetailPanel({ row }: YearDetailPanelProps) {
                 <dt>Annual withdrawal</dt>
                 <dd>{currency.format(row.annualWithdrawal)}</dd>
               </div>
-              {medicareEntry && (
+              {medicareEntries.length > 0 && (
                 <div className={styles.row}>
                   <dt>Medicare</dt>
-                  <dd>{currency.format(medicareEntry.amount)}</dd>
+                  <dd>{currency.format(medicareTotal)}</dd>
                 </div>
               )}
               <div className={styles.row}>

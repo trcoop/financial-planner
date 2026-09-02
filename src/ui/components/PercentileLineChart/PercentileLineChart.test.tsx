@@ -197,6 +197,57 @@ describe('PercentileLineChart', () => {
     expect(screen.queryByTestId('percentile-chart-medicare-marker')).not.toBeInTheDocument()
   })
 
+  it('renders a separate spouse Medicare-start marker alongside the primary one (FIN-121)', () => {
+    render(
+      <PercentileLineChart
+        rows={rows}
+        series={percentileSeries}
+        title="Monte Carlo outcomes"
+        medicareStartAge={36}
+        spouseMedicareStartAge={37}
+      />,
+    )
+    expect(screen.getAllByTestId('percentile-chart-medicare-marker')).toHaveLength(1)
+    const spouseMarkers = screen.getAllByTestId('percentile-chart-spouse-medicare-marker')
+    expect(spouseMarkers).toHaveLength(1)
+    expect(spouseMarkers[0]).toHaveAttribute('title', "Spouse's Medicare starts.")
+  })
+
+  it('renders no spouse Medicare marker when spouseMedicareStartAge is omitted or matches no row', () => {
+    const { rerender } = render(
+      <PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" medicareStartAge={36} />,
+    )
+    expect(screen.queryByTestId('percentile-chart-spouse-medicare-marker')).not.toBeInTheDocument()
+
+    rerender(
+      <PercentileLineChart
+        rows={rows}
+        series={percentileSeries}
+        title="Monte Carlo outcomes"
+        medicareStartAge={36}
+        spouseMedicareStartAge={99}
+      />,
+    )
+    expect(screen.queryByTestId('percentile-chart-spouse-medicare-marker')).not.toBeInTheDocument()
+  })
+
+  it('stacks the spouse marker above the primary one when both land on the same row (FIN-121)', () => {
+    render(
+      <PercentileLineChart
+        rows={rows}
+        series={percentileSeries}
+        title="Monte Carlo outcomes"
+        medicareStartAge={36}
+        spouseMedicareStartAge={36}
+      />,
+    )
+    const primaryMarker = screen.getByTestId('percentile-chart-medicare-marker')
+    const spouseMarker = screen.getByTestId('percentile-chart-spouse-medicare-marker')
+    expect(primaryMarker.style.left).toBe(spouseMarker.style.left)
+    expect(primaryMarker.style.top).toBe(spouseMarker.style.top)
+    expect(spouseMarker.className).toContain('medicareMarkerStacked')
+  })
+
   it('renders no active-period marker until a default or click sets one', () => {
     render(<PercentileLineChart rows={rows} series={percentileSeries} title="Monte Carlo outcomes" />)
     expect(screen.queryByTestId('percentile-chart-active-marker')).not.toBeInTheDocument()
