@@ -11,35 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          # Full history (not the default shallow depth-1 clone) so the Stylelint step below can
-          # diff against the PR's base ref.
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
       - run: npm ci
       - run: npm run lint
-      - name: Stylelint (changed files only)
-        run: |
-          set -e
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch origin "${{ github.base_ref }}" --quiet
-            CHANGED=$(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" | grep -E '^src/ui/.*\.module\.css$' || true)
-          else
-            # Direct push to main: the contributing PR already ran this check against the same
-            # diff, and there's no PR base ref to diff against here — so this is a deliberate
-            # no-op, not something to work around by diffing the pushed commit's own parent.
-            echo 'Push directly to main — the contributing PR already ran this check; skipping the scoped Stylelint pass.'
-            CHANGED=""
-          fi
-          if [ -z "$CHANGED" ]; then
-            echo 'No changed src/ui/**/*.module.css files — nothing to lint.'
-          else
-            echo "Linting changed files:"
-            echo "$CHANGED"
-            echo "$CHANGED" | xargs npx stylelint
-          fi
+      - name: Stylelint (repo-wide)
+        run: npm run stylelint
 
   test:
     runs-on: ubuntu-latest
