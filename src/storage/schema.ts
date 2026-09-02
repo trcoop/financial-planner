@@ -1,4 +1,4 @@
-import type { CoreInputValues } from '../ui/components/CoreInputsForm/CoreInputsForm'
+import type { CoreInputValues } from '../ui/coreInputs/types'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
 import type { Person } from '../ui/components/PeopleTab/Person'
 import type { Account } from '../ui/components/AccountsTab/Account'

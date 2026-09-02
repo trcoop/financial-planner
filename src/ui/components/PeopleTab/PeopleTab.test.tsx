@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { PeopleTab } from './PeopleTab'
 import { createPrimaryPerson, createSpouse, type Person } from './Person'
-import { DEFAULT_CORE_VALUES } from '../CoreInputsForm/defaults'
+import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
 
 const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES)
 

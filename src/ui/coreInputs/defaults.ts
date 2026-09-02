@@ -1,4 +1,4 @@
-import type { CoreInputValues } from './CoreInputsForm'
+import type { CoreInputValues } from './types'
 
 export const DEFAULT_CORE_VALUES: CoreInputValues = {
   currentAge: 35,

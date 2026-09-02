@@ -1,5 +1,5 @@
 import { Card } from '../Card/Card'
-import type { ChartRow } from '../ChartContainer/types'
+import type { ChartRow } from '../../chartRow/types'
 import styles from './YearDetailPanel.module.css'
 
 export interface YearDetailPanelProps {

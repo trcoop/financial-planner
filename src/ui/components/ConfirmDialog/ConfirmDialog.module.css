@@ -14,7 +14,7 @@
   height: 100%;
   border: none;
   padding: 0;
-  background: rgba(16, 24, 40, 0.48);
+  background: var(--color-scrim);
   cursor: default;
 }
 

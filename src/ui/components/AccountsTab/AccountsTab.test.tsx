@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AccountsTab } from './AccountsTab'
 import { createAccount, type Account } from './Account'
 import { createPrimaryPerson, createSpouse } from '../PeopleTab/Person'
-import { DEFAULT_CORE_VALUES } from '../CoreInputsForm/defaults'
+import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
 
 const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES)
 const SPOUSE = createSpouse()

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { CoreInputValues } from '../CoreInputsForm/CoreInputsForm'
-import { DEFAULT_CORE_VALUES } from '../CoreInputsForm/defaults'
+import type { CoreInputValues } from '../../coreInputs/types'
+import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
 import {
   createPrimaryPerson,
   createSpouse,
