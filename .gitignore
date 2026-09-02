@@ -24,6 +24,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.ladle-build
 *.local
 
 # Editor directories and files
