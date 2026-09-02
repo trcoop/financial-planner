@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { PercentileLineChart, type LineChartRow, type LineChartSeries } from '../PercentileLineChart/PercentileLineChart'
-import type { ChartRow } from '../ChartContainer/types'
+import type { ChartRow } from '../../chartRow/types'
 import { YearDetailPanel } from './YearDetailPanel'
 
 const rows: ChartRow[] = [

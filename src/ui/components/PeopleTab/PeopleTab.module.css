@@ -4,36 +4,19 @@
   gap: var(--space-4);
 }
 
-/* Sticky within `.profileContent` (App.css) — the tab's own scroll pane — so the heading + "+
- * Spouse" action stays visible while the person cards below scroll. Same single-scroll-container
- * `position: sticky` pattern as AccountsTab's own `.header` (AccountsTab.module.css) and
- * `.sectionHeading`/`.profileSubHeading` (App.css). `background` covers person cards scrolling
- * underneath once stuck — `--color-page-bg` (theme.css), not `--color-bg`: see AccountsTab's
- * `.header` comment for why (round-1 used `--color-bg` and painted a visible white box). */
+/* FIN-124: the sticky header + entity card + fields-grid shell is shared with AccountsTab via
+   CSS Modules `composes` — see src/ui/entityTabShell.module.css for the sticky/background
+   rationale. */
 .header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding-bottom: var(--space-2);
-  background: var(--color-page-bg);
+  composes: header from '../../entityTabShell.module.css';
 }
 
 .heading {
-  margin: 0;
-  font-size: var(--font-size-lg);
+  composes: heading from '../../entityTabShell.module.css';
 }
 
 .personCard {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
+  composes: card from '../../entityTabShell.module.css';
 }
 
 .personHeader {
@@ -47,13 +30,5 @@
 }
 
 .fields {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: var(--space-3);
-}
-
-@media (min-width: 960px) {
-  .fields {
-    grid-template-columns: 1fr 1fr;
-  }
+  composes: fields from '../../entityTabShell.module.css';
 }

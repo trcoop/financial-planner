@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlanAssumptions } from '../../../engine'
 import type { MonteCarloOrchestrator, StressTestState } from '../../../workers'
-import type { ChartRow } from '../ChartContainer/types'
+import type { ChartRow } from '../../chartRow/types'
 import { medicarePartBEvent } from '../../medicareEvent'
 import { StressTestSection } from './StressTestSection'
 

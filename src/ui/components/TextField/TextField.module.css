@@ -1,13 +1,11 @@
+/* FIN-124: shared with NumberField/SelectField/ToggleGroup via CSS Modules `composes` — see
+   src/ui/formFieldShell.module.css. */
 .field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  composes: field from '../../formFieldShell.module.css';
 }
 
 .label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-  font-weight: 500;
+  composes: label from '../../formFieldShell.module.css';
 }
 
 /* FIN-101: this combines two separate fixes confirmed against the live double-border regression —

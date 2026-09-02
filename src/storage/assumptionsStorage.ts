@@ -1,5 +1,5 @@
-import type { CoreInputValues } from '../ui/components/CoreInputsForm/CoreInputsForm'
-import { DEFAULT_CORE_VALUES } from '../ui/components/CoreInputsForm/defaults'
+import type { CoreInputValues } from '../ui/coreInputs/types'
+import { DEFAULT_CORE_VALUES } from '../ui/coreInputs/defaults'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 import type { Person } from '../ui/components/PeopleTab/Person'

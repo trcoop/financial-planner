@@ -1,5 +1,5 @@
-import type { CoreInputValues } from '../CoreInputsForm/CoreInputsForm'
-import { rangeError } from '../CoreInputsForm/validation'
+import type { CoreInputValues } from '../../coreInputs/types'
+import { rangeError } from '../../coreInputs/validation'
 
 /**
  * FIN-116: replaces the FIN-113 `hasSpouse`/`spouseAge` checkbox pair on `CoreInputValues` —

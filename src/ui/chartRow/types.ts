@@ -5,7 +5,9 @@
  * Deliberately not imported from `src/engine` (CLAUDE.md: `src/ui/` components must not call
  * into or import the engine) — this is a structural subset of `src/engine`'s `ProjectionRow`
  * that the integration ticket (FIN-26) maps real `runProjection` rows onto when wiring this
- * into `App.tsx`.
+ * into `App.tsx`. FIN-124 moved this out of `src/ui/components/` (where it lived as the
+ * now-removed `ChartContainer`'s leftover folder) — naming hygiene, since there's no component
+ * here to mount or write a Ladle story for.
  */
 /**
  * One event's cost for a year, keyed by a stable id (never a positional index) — a structural

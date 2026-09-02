@@ -1,0 +1,51 @@
+/* Shared "sticky tab header + entity card" shell (FIN-124, audit finding #13) — AccountsTab and
+   PeopleTab duplicated this shape (`.header`/`.heading`, the entity card, and the two-column
+   `.fields` grid) near-verbatim across genuinely different domain data (accounts vs. people), so
+   this is a shared shell, not a component merge. Each tab composes its local classes from here
+   via CSS Modules `composes` — see AccountsTab.module.css/PeopleTab.module.css. */
+
+/* Sticky within `.profileContent` (App.css) — the tab's own scroll pane — so the heading + its
+ * "+" action stays visible while the entity cards below scroll. Resolves against
+ * `.profileContent` as the nearest scrolling ancestor, the same single-scroll-container form of
+ * `position: sticky` `.sectionHeading`/`.profileSubHeading` (App.css) use. `background` covers
+ * cards scrolling underneath once stuck — `--color-page-bg` (theme.css), not `--color-bg` (the
+ * white card color): every ancestor between `.header` and `body` is transparent, so `body`'s own
+ * page background is what's actually visible behind it; using `--color-bg` painted a visible
+ * white box around the heading (round-1 mistake). */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  background: var(--color-page-bg);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}
+
+.card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+@media (min-width: 960px) {
+  .fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}

@@ -1,4 +1,4 @@
-import type { CoreInputValues } from './CoreInputsForm'
+import type { CoreInputValues } from './types'
 
 export interface CoreFieldRange {
   key: keyof CoreInputValues
