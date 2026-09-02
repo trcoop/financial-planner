@@ -44,6 +44,10 @@ describe('createSpouse', () => {
     const b = createSpouse()
     expect(a.id).not.toBe(b.id)
   })
+
+  it('defaults salary to $85,000, matching the primary person default', () => {
+    expect(createSpouse().salary).toBe(85000)
+  })
 })
 
 describe('seedPeople (migration)', () => {

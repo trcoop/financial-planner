@@ -24,7 +24,7 @@ export const NEW_SPOUSE_DEFAULTS: Omit<Person, 'id' | 'isPrimary'> = {
   name: 'Spouse',
   age: 35,
   retirementAge: 65,
-  salary: 0,
+  salary: 85_000,
 }
 
 export const PERSON_FIELD_RANGES = {
