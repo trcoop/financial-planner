@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProjection } from '../../engine'
 import { toAssumptions, useProjectionState } from './useProjectionState'
 import { medicarePartBEvent, spouseMedicarePartBEvent } from '../medicareEvent'
-import type { AdvancedAssumptionValues, CoreInputValues, Person } from '../components'
+import type { Account, AdvancedAssumptionValues, CoreInputValues, Person } from '../components'
 
 vi.mock('../../engine', async () => {
   const actual = await vi.importActual<typeof import('../../engine')>('../../engine')
@@ -515,5 +515,118 @@ describe('useProjectionState spousal Medicare wiring (FIN-114)', () => {
     const plan = toAssumptions(CORE, ADVANCED)
 
     expect(runProjection).toHaveBeenCalledWith(expect.anything(), [medicarePartBEvent(plan.inflationRate)])
+  })
+})
+
+/**
+ * FIN-118: spouse salary and their owned Accounts' contributions now reach the engine as
+ * `assumptions.additionalIncomes`, resolved the same way in both the deterministic call
+ * (`runProjection`, exercised here) and the Monte Carlo call site (`StressTestSection`, which
+ * reads this same `assumptions` object — see that requirement in the ticket).
+ */
+describe('useProjectionState additionalIncomes wiring (FIN-118)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.mocked(runProjection).mockClear()
+  })
+
+  const SPOUSE_WITH_SALARY: Person = { ...SPOUSE_PERSON, salary: 60_000, retirementAge: 65 }
+
+  const percentageAccount = (ownerId: string, contributionPercentage: number): Account => ({
+    id: `${ownerId}-pct`,
+    name: 'Account',
+    type: 'taxable',
+    balance: 0,
+    contributionMode: 'percentage',
+    contributionPercentage,
+    contributionFixed: 0,
+    ownerId,
+  })
+
+  const fixedAccount = (ownerId: string, contributionFixed: number): Account => ({
+    id: `${ownerId}-fixed`,
+    name: 'Account',
+    type: 'taxable',
+    balance: 0,
+    contributionMode: 'fixed',
+    contributionPercentage: 0,
+    contributionFixed,
+    ownerId,
+  })
+
+  it('leaves assumptions.additionalIncomes empty when there is no spouse', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], []))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.additionalIncomes).toEqual([])
+  })
+
+  it('sums a spouse-owned percentage-mode account contribution rate into additionalIncomes', () => {
+    const accounts = [percentageAccount(SPOUSE_WITH_SALARY.id, 10)]
+    const { result } = renderHook(() =>
+      useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON, SPOUSE_WITH_SALARY], accounts),
+    )
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.additionalIncomes).toHaveLength(1)
+    const spouseIncome = result.current.assumptions.additionalIncomes![0]
+    expect(spouseIncome.id).toBe(SPOUSE_WITH_SALARY.id)
+    expect(spouseIncome.currentAnnualIncome).toBe(60_000)
+    expect(spouseIncome.contributionRate).toBeCloseTo(0.1, 6)
+    expect(spouseIncome.fixedContribution).toBe(0)
+    // Spouse retires at 65, is currently 30, primary is currently 35 -> primary is 70 when spouse retires.
+    expect(spouseIncome.retiresAtPrimaryAge).toBe(CORE.currentAge + (SPOUSE_WITH_SALARY.retirementAge - SPOUSE_WITH_SALARY.age))
+  })
+
+  it('sums multiple accounts (percentage and fixed) owned by the same spouse', () => {
+    const accounts = [
+      percentageAccount(SPOUSE_WITH_SALARY.id, 5),
+      { ...percentageAccount('unused', 5), ownerId: SPOUSE_WITH_SALARY.id, id: 'second-pct' },
+      fixedAccount(SPOUSE_WITH_SALARY.id, 1_000),
+    ]
+    const { result } = renderHook(() =>
+      useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON, SPOUSE_WITH_SALARY], accounts),
+    )
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    const spouseIncome = result.current.assumptions.additionalIncomes![0]
+    expect(spouseIncome.contributionRate).toBeCloseTo(0.1, 6)
+    expect(spouseIncome.fixedContribution).toBe(1_000)
+  })
+
+  it('ignores accounts owned by the primary when building additionalIncomes', () => {
+    const accounts = [percentageAccount(PRIMARY_PERSON.id, 20)]
+    const { result } = renderHook(() =>
+      useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON, SPOUSE_WITH_SALARY], accounts),
+    )
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    const spouseIncome = result.current.assumptions.additionalIncomes![0]
+    expect(spouseIncome.contributionRate).toBe(0)
+    expect(spouseIncome.fixedContribution).toBe(0)
+  })
+
+  it('feeds additionalIncomes to runProjection via the same assumptions object', () => {
+    vi.mocked(runProjection).mockClear()
+    const accounts = [percentageAccount(SPOUSE_WITH_SALARY.id, 10)]
+    renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON, SPOUSE_WITH_SALARY], accounts))
+
+    const callArgs = vi.mocked(runProjection).mock.calls.at(-1)
+    expect(callArgs).toBeDefined()
+    const passedAssumptions = callArgs![0]
+    expect(passedAssumptions.additionalIncomes).toHaveLength(1)
+    expect(passedAssumptions.additionalIncomes![0].contributionRate).toBeCloseTo(0.1, 6)
   })
 })

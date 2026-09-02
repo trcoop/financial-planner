@@ -165,7 +165,7 @@ export function PlanSection(_props: PlanSectionProps) {
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
   // result — while a field is out of range. See useProjectionState for the full behavior.
   const { rows, error, projectedBalanceAtRetirement, assumptions, debouncedCore, debouncedAdvanced, events } =
-    useProjectionState(effectiveCoreValues, advancedValues, RECALCULATION_DEBOUNCE_MS, people)
+    useProjectionState(effectiveCoreValues, advancedValues, RECALCULATION_DEBOUNCE_MS, people, accounts)
 
   // Persists once per settled (debounced) change, riding useProjectionState's existing ~300ms
   // debounce rather than introducing a second one (ERD §6.1). Fires once on mount too (the

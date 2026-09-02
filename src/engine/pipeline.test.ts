@@ -40,6 +40,7 @@ const periodState = (overrides: Partial<PeriodState> = {}): PeriodState => ({
   eventCosts: [],
   retirementEventCostTotal: 0,
   eventCostBasis: new Map(),
+  additionalPriorIncomes: new Map(),
   ...overrides,
 });
 
@@ -256,6 +257,123 @@ describe('computeIncome', () => {
 
     expect(result.annualContribution).toBe(0);
     expect(result.balance).toBe(750_000);
+  });
+});
+
+describe('computeIncome — FIN-118 additionalIncomes (spouse income & account contributions)', () => {
+  const withSpouse = (spouse: Partial<import('./types').AdditionalIncome> = {}) =>
+    runPeriodInput({
+      assumptions: {
+        ...runPeriodInput().assumptions,
+        additionalIncomes: [
+          {
+            id: 'spouse',
+            currentAnnualIncome: 60_000,
+            annualRaiseRate: 0.03,
+            contributionRate: 0.1,
+            fixedContribution: 0,
+            retiresAtPrimaryAge: 70,
+            ...spouse,
+          },
+        ],
+      },
+    });
+
+  it('has no effect on the primary-only regression case when additionalIncomes is absent', () => {
+    const withField = computeIncome(periodState({ age: 35, year: 0 }), runPeriodInput());
+    const withoutField = computeIncome(
+      periodState({ age: 35, year: 0 }),
+      runPeriodInput({ assumptions: { ...runPeriodInput().assumptions, additionalIncomes: undefined } }),
+    );
+
+    expect(withField).toEqual(withoutField);
+    expect(withField.annualContribution).toBeCloseTo(12_000, 6);
+  });
+
+  it('adds the additional earner contribution to the household total before the spouse retires', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0 }), withSpouse());
+
+    // Primary: 80_000 * 0.15 = 12_000. Spouse: 60_000 * 0.1 = 6_000. Total 18_000.
+    expect(result.annualContribution).toBeCloseTo(18_000, 6);
+  });
+
+  it('tracks the additional earner own raise chain, independent of the primary', () => {
+    const state = {
+      ...periodState({ age: 36, year: 1, priorIncome: 80_000 }),
+      additionalPriorIncomes: new Map([['spouse', 60_000]]),
+    };
+    const result = computeIncome(state, withSpouse());
+
+    expect(result.additionalPriorIncomes.get('spouse')).toBeCloseTo(61_800, 6);
+    // Primary at year 1: 80_000 * 1.03 = 82_400, contribution 82_400 * 0.15 = 12_360.
+    // Spouse contribution off the RAISED income: 61_800 * 0.1 = 6_180.
+    expect(result.annualContribution).toBeCloseTo(12_360 + 6_180, 6);
+  });
+
+  it('sums fixed-dollar contributions on top of percentage ones for the same additional earner', () => {
+    const result = computeIncome(periodState({ age: 35, year: 0 }), withSpouse({ fixedContribution: 500 }));
+
+    // Spouse: 60_000 * 0.1 + 500 = 6_500.
+    expect(result.annualContribution).toBeCloseTo(12_000 + 6_500, 6);
+  });
+
+  it('excludes an additional earner income and contribution once they reach their own retirement age', () => {
+    const result = computeIncome(
+      periodState({ age: 70, year: 35 }),
+      withSpouse({ retiresAtPrimaryAge: 70 }),
+    );
+
+    // Only the primary is retired-checked by isRetired's own retirementAge (67 by default), so
+    // the primary also contributes 0 here — the point under test is the spouse's OWN cutoff.
+    expect(result.annualContribution).toBe(0);
+    expect(result.additionalPriorIncomes.get('spouse')).toBe(0);
+  });
+
+  it('excludes an additional earner before their own retirement but keeps the primary active', () => {
+    // Primary retirementAge is 67 (runPeriodInput default); age 66 is pre-retirement for the
+    // primary, and spouse retiresAtPrimaryAge 70 means the spouse is still active too.
+    const result = computeIncome(
+      {
+        ...periodState({ age: 66, year: 31, priorIncome: 190_000 }),
+        additionalPriorIncomes: new Map([['spouse', 60_000]]),
+      },
+      withSpouse({ retiresAtPrimaryAge: 70 }),
+    );
+
+    expect(result.annualContribution).toBeGreaterThan(0);
+    expect(result.additionalPriorIncomes.get('spouse')).toBeGreaterThan(0);
+  });
+
+  it('sums multiple additional earners by id', () => {
+    const input = runPeriodInput({
+      assumptions: {
+        ...runPeriodInput().assumptions,
+        additionalIncomes: [
+          {
+            id: 'spouse',
+            currentAnnualIncome: 60_000,
+            annualRaiseRate: 0.03,
+            contributionRate: 0.1,
+            fixedContribution: 0,
+            retiresAtPrimaryAge: 70,
+          },
+          {
+            id: 'dependent',
+            currentAnnualIncome: 20_000,
+            annualRaiseRate: 0.01,
+            contributionRate: 0,
+            fixedContribution: 200,
+            retiresAtPrimaryAge: 70,
+          },
+        ],
+      },
+    });
+    const result = computeIncome(periodState({ age: 35, year: 0 }), input);
+
+    // Primary 12_000 + spouse 6_000 + dependent 200 = 18_200.
+    expect(result.annualContribution).toBeCloseTo(18_200, 6);
+    expect(result.additionalPriorIncomes.get('spouse')).toBe(60_000);
+    expect(result.additionalPriorIncomes.get('dependent')).toBe(20_000);
   });
 });
 
