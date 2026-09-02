@@ -389,7 +389,7 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     expect(screen.getByRole('button', { name: 'Reset to defaults' })).toBeInTheDocument()
 
     // FIN-119: Advanced Assumptions moved to the Rates sub-tab, not shown under People anymore.
-    expect(screen.queryByText('Advanced assumptions')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Stock allocation (vs. bonds)')).not.toBeInTheDocument()
 
     // The old Drawer's open/collapse toggle is gone entirely.
     expect(screen.queryByRole('button', { name: /collapse/i })).not.toBeInTheDocument()
@@ -491,19 +491,23 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
     expect(screen.queryByLabelText('Current age')).not.toBeInTheDocument()
   })
 
-  it('shows the Advanced Assumptions form on the Rates sub-tab (FIN-119), and no longer under People', async () => {
+  it('shows the Advanced Assumptions form (titled by its own "Rates" heading) on the Rates sub-tab (FIN-119), and no longer under People', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
 
     await user.click(screen.getByRole('tab', { name: 'Profile' }))
     // People (the default sub-tab) no longer renders Advanced Assumptions.
-    expect(screen.queryByText('Advanced assumptions')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Stock allocation (vs. bonds)')).not.toBeInTheDocument()
 
     const nav = screen.getByRole('navigation', { name: 'Profile sections' })
     await user.click(within(nav).getByRole('button', { name: 'Rates' }))
 
     expect(screen.queryByText('Coming soon.')).not.toBeInTheDocument()
-    expect(screen.getByText('Advanced assumptions')).toBeInTheDocument()
+    // FIN-119 follow-up: no "Advanced assumptions" text anywhere — the CollapsibleSection
+    // summary that used to provide it is gone. The panel's own heading matches its nav label
+    // ("Rates"), the same pattern PeopleTab/AccountsTab already use for their own headings.
+    expect(screen.queryByText('Advanced assumptions')).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Rates', level: 3 })).toBeInTheDocument()
     expect(screen.getByLabelText('Stock allocation (vs. bonds)')).toBeInTheDocument()
   })
 
@@ -736,7 +740,6 @@ describe('PlanSection stock/bond allocation wiring (FIN-56)', () => {
       render(<PlanSection />)
       await user.click(screen.getByRole('tab', { name: 'Profile' }))
       await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Rates' }))
-      await user.click(screen.getByText('Advanced assumptions'))
 
       const allocationInput = screen.getByLabelText('Stock allocation (vs. bonds)')
       await user.clear(allocationInput)
@@ -772,7 +775,6 @@ describe('PlanSection return assumption wiring (FIN-57, FIN-64)', () => {
       render(<PlanSection />)
       await user.click(screen.getByRole('tab', { name: 'Profile' }))
       await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Rates' }))
-      await user.click(screen.getByText('Advanced assumptions'))
 
       const stockReturnInput = screen.getByLabelText('Stock return assumption')
       await user.clear(stockReturnInput)

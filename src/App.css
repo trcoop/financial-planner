@@ -348,3 +348,12 @@
   min-width: 0;
   flex: 1;
 }
+
+/* FIN-119: Rates' own sub-tab heading, in PlanSection.tsx rather than a component's CSS
+ * module (AdvancedAssumptionsForm doesn't own a "Rates" identity) — matches PeopleTab/
+ * AccountsTab's own `.heading` (margin: 0, font-size-lg), the established title-matches-the-
+ * nav-label pattern for Profile's sub-tab content. */
+.profileSubHeading {
+  margin: 0;
+  font-size: var(--font-size-lg);
+}

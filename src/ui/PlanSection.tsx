@@ -431,11 +431,19 @@ export function PlanSection(_props: PlanSectionProps) {
                     ) : null}
 
                     {profileTab === 'rates' ? (
-                      // FIN-119: Advanced Assumptions (stock/bond allocation, return
-                      // assumptions, inflation, etc.) moved here from the People tab — pure
-                      // relocation, no new fields, no behavior change, no storage schema
-                      // change. Replaces the FIN-115 "Coming soon." stub.
-                      <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
+                      <>
+                        {/* FIN-119: Advanced Assumptions (stock/bond allocation, return
+                          * assumptions, inflation, etc.) moved here from the People tab — pure
+                          * relocation, no new fields, no behavior change, no storage schema
+                          * change. Replaces the FIN-115 "Coming soon." stub. AdvancedAssumptionsForm
+                          * itself no longer titles this content (it dropped its
+                          * CollapsibleSection "Advanced assumptions" summary along with the
+                          * relocation) — this heading replaces that, matching the same static
+                          * `<h3>`-titled-to-the-nav-label pattern PeopleTab/AccountsTab already
+                          * use for their own sub-tab content, rather than inventing a new one. */}
+                        <h3 className="profileSubHeading">Rates</h3>
+                        <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
+                      </>
                     ) : null}
                   </div>
                 </div>
