@@ -24,6 +24,23 @@ these checks to pass and the branch to be up to date with `main` before
 merging — don't assume "tests passed earlier" is still true if `main` has
 moved; nudge the PR's branch update if CI shows it as behind.
 
+## Git commit identity
+
+This container's default `git config user.name`/`user.email` is
+`Claude <noreply@anthropic.com>` — **do not commit under that identity.**
+It makes Claude show up as a commit author/participant on PRs, which is not
+wanted here (happened on PR #101 and #102). Before the first commit of a
+session, set the repo-local identity to the actual repo owner instead:
+
+```
+git config user.name "Travis Cooper"
+git config user.email "traviscoop@gmail.com"
+```
+
+The `Co-Authored-By: Claude ... <noreply@anthropic.com>` trailer some
+sessions add to commit messages is separate from this and fine to keep —
+it's the commit *author* field specifically that must not be Claude.
+
 ## Stack
 
 React + TypeScript + Vite. No backend. No external state management library.
