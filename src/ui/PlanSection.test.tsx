@@ -608,24 +608,31 @@ describe('PlanSection persistence (FIN-43)', () => {
   })
 
   it('restores previously edited values across an unmount/remount (reload-equivalent)', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    try {
-      const { unmount } = render(<PlanSection />)
-      await user.click(screen.getByRole('tab', { name: 'Profile' }))
-      const ageInput = screen.getByLabelText('Current age')
-      await user.clear(ageInput)
-      await user.type(ageInput, '42')
-      await vi.advanceTimersByTimeAsync(350)
+    // Real timers + waitFor on the actual persisted value, rather than fake timers advanced
+    // by a fixed margin: `vi.useFakeTimers({ shouldAdvanceTime: true })` ties the fake clock's
+    // auto-advance to real wall-clock time elapsed during `user.type()`, which made this test's
+    // outcome depend on how fast the runner executing it was — it flaked consistently on CI's
+    // shared runners (received the default age — the debounced save hadn't fired) while never
+    // reproducing locally, even after widening the post-typing advance from 350ms to 500ms.
+    // Polling the real debounced save with `waitFor` removes that coupling entirely.
+    const user = userEvent.setup()
+    const { unmount } = render(<PlanSection />)
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const ageInput = screen.getByLabelText('Current age')
+    await user.clear(ageInput)
+    await user.type(ageInput, '42')
 
-      unmount()
-      render(<PlanSection />)
-      await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    await waitFor(() => {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      expect(raw).not.toBeNull()
+      expect(JSON.parse(raw as string).core.currentAge).toBe(42)
+    })
 
-      expect(screen.getByLabelText('Current age')).toHaveValue('42')
-    } finally {
-      vi.useRealTimers()
-    }
+    unmount()
+    render(<PlanSection />)
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+    expect(screen.getByLabelText('Current age')).toHaveValue('42')
   })
 
   it('saves exactly once per settled (debounced) change, not per keystroke', async () => {
