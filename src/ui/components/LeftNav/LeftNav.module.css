@@ -3,16 +3,14 @@
  * token exists yet for this shell region, so the two dark values below are the ONE thing in this
  * file not sourced from a token. Everything else (spacing, radius, type, focus ring, primary
  * accent) reuses FIN-93 tokens as-is. */
-/* stylelint-disable scale-unlimited/declaration-strict-value -- FIN-93: the dark-chrome values
-   this comment already calls out (no --color-chrome-bg/-text token exists yet, pending FIN-124
-   cleanup) recur through hover/active states below at different alpha values. Re-enabled before
-   the light `.inline` variant further down, which must stay fully tokenized. */
 .leftNav {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
   width: 232px;
   padding: var(--space-5) var(--space-3);
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: documented
+     dark-chrome exception above, no --color-chrome-bg token yet (pending FIN-124 cleanup). */
   background: #12151c;
   height: 100%;
   box-sizing: border-box;
@@ -29,6 +27,8 @@
   font-family: var(--font-family-display);
   font-size: var(--font-size-sm);
   font-weight: 600;
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+     documented dark-chrome exception as .leftNav's background above. */
   color: rgba(255, 255, 255, 0.72);
   text-align: left;
   padding: var(--space-3) var(--space-4);
@@ -45,7 +45,11 @@
 
 @media (hover: hover) {
   .item:hover {
+    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+       documented dark-chrome exception as .leftNav's background above. */
     color: #ffffff;
+    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+       documented dark-chrome exception as .leftNav's background above. */
     background: rgba(255, 255, 255, 0.08);
   }
 
@@ -55,18 +59,20 @@
    * color/background instead of keeping its active look. Re-asserting the active styling here,
    * at equal specificity to `.item:hover` but later in source order, wins back the active look. */
   .itemActive:hover {
+    /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+       documented dark-chrome exception as .leftNav's background above. */
     color: #ffffff;
     background: var(--color-primary);
   }
 }
 
 .itemActive {
+  /* stylelint-disable-next-line scale-unlimited/declaration-strict-value -- FIN-93: same
+     documented dark-chrome exception as .leftNav's background above. */
   color: #ffffff;
   background: var(--color-primary);
   font-weight: 700;
 }
-
-/* stylelint-enable scale-unlimited/declaration-strict-value */
 
 /* FIN-115: light variant for reuse as an in-page section-internal switcher (e.g. Profile's
  * People/Accounts/Rates nav) rather than the app-chrome shell. The app-level (dark) LeftNav
