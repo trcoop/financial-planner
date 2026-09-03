@@ -350,6 +350,30 @@
   display: block;
 }
 
+/* FIN-131: TabBar's own mobile CSS (TabBar.module.css) makes *itself* `position: sticky;
+ * top: 56px` — correct for the Views TabBar (App.css line ~271's usage), whose real parent
+ * spans the full scrolling page. Reused here for Profile's People/Accounts/Rates strip, that
+ * same sticky rule instead resolves against *this* div, which (being a plain `display: block`
+ * wrapper with the TabBar as its only child) is exactly as tall as the TabBar itself — leaving
+ * zero room for it to actually stay stuck as content scrolls past, so it just scrolled away
+ * with the page instead (part of the "left bar also goes away when scrolling" report). Moving
+ * the sticky behavior up to this wrapper fixes it: `.profileNavMobile`'s own parent
+ * (`.profileLayout`) spans Profile's full scrollable content, giving it real room to stick.
+ * `top: 116px` stacks it below TopBar (56px) + the Views TabBar (60px, sticky at top: 56px) —
+ * see the matching entityTabShell.module.css `.header` comment for the full stack. The nested
+ * TabBar's own sticky is neutralized below so the two don't fight over the same 60px box. */
+@media (max-width: 959px) {
+  .profileNavMobile {
+    position: sticky;
+    top: 116px;
+    z-index: 2;
+  }
+
+  .profileNavMobile [role='tablist'] {
+    position: static;
+  }
+}
+
 @media (min-width: 960px) {
   /* Structural fix (follow-up to the sticky-nav attempt above): `position: sticky` on
    * `.profileNavDesktop` didn't work because `.profileLayout` sits *inside* `.planMain`, which
@@ -414,4 +438,14 @@
   padding-bottom: var(--space-2);
   background: var(--color-page-bg);
   font-size: var(--font-size-lg);
+}
+
+/* FIN-131: same fix as entityTabShell.module.css's `.header` mobile override — below 960px
+ * `.profileContent` isn't this heading's scroll container (the page is), so `top: 0` sticks it
+ * at the viewport's own top, hidden behind TopBar + the two stacked TabBar strips above it
+ * (see the `.header` comment for the full stack and the 176px = 56 + 60 + 60 math). */
+@media (max-width: 959px) {
+  .profileSubHeading {
+    top: 176px;
+  }
 }
