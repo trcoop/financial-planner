@@ -147,15 +147,23 @@ export function PlanSection(_props: PlanSectionProps) {
   // rather than reading a now-permanently-stale `coreValues` field. See
   // `syncCoreWithPrimaryAccount`'s doc comment for the fixed-contribution-mode caveat.
   const primaryAccount = primary ? primaryAccountFor(accounts, primary.id) : undefined
+  // Bug fix: `syncCoreWithPrimaryAccount` now sums `initialBalance` across every account the
+  // primary owns (not just `primaryAccount`, which is only the first — kept above for its
+  // contribution-mode/rate fields, unaffected by this fix), so the deps below must include the
+  // full owned-accounts balance total, not just `primaryAccount?.balance`.
+  const primaryOwnedBalanceTotal = primary
+    ? accounts.filter((account) => account.ownerId === primary.id).reduce((sum, account) => sum + account.balance, 0)
+    : 0
   const effectiveCoreValues = useMemo(
-    () => syncCoreWithPrimaryAccount(syncCoreWithPrimary(coreValues, people), primaryAccount),
+    () => syncCoreWithPrimaryAccount(syncCoreWithPrimary(coreValues, people), accounts, primary?.id ?? ''),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       coreValues,
       primary?.age,
       primary?.retirementAge,
       primary?.salary,
-      primaryAccount?.balance,
+      primary?.id,
+      primaryOwnedBalanceTotal,
       primaryAccount?.contributionMode,
       primaryAccount?.contributionPercentage,
     ],

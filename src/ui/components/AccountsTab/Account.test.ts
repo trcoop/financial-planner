@@ -127,16 +127,25 @@ describe('seedAccounts', () => {
 describe('syncCoreWithPrimaryAccount', () => {
   it('overrides initialBalance/annualContributionRatePercent from a percentage-mode account', () => {
     const account: Account = { ...createAccount('primary'), balance: 42_000, contributionPercentage: 12 }
-    const synced = syncCoreWithPrimaryAccount(core, account)
+    const synced = syncCoreWithPrimaryAccount(core, [account], 'primary')
     expect(synced.initialBalance).toBe(42_000)
     expect(synced.annualContributionRatePercent).toBe(12)
   })
 
   it('zeroes both fields when there is no primary account, rather than leaving stale core values', () => {
     const staleCore: CoreInputValues = { ...core, initialBalance: 250_000, annualContributionRatePercent: 15 }
-    const synced = syncCoreWithPrimaryAccount(staleCore, undefined)
+    const synced = syncCoreWithPrimaryAccount(staleCore, [], 'primary')
     expect(synced.initialBalance).toBe(0)
     expect(synced.annualContributionRatePercent).toBe(0)
+  })
+
+  it('sums initialBalance across every account owned by the primary, not just the first', () => {
+    const accountA: Account = { ...createAccount('primary'), balance: 42_000, contributionPercentage: 12 }
+    const accountB: Account = { ...createAccount('primary'), balance: 8_000 }
+    const spouseAccount: Account = { ...createAccount('spouse'), balance: 100_000 }
+    const synced = syncCoreWithPrimaryAccount(core, [accountA, accountB, spouseAccount], 'primary')
+    expect(synced.initialBalance).toBe(50_000)
+    expect(synced.annualContributionRatePercent).toBe(12)
   })
 })
 
