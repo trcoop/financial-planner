@@ -24,7 +24,7 @@ these checks to pass and the branch to be up to date with `main` before
 merging — don't assume "tests passed earlier" is still true if `main` has
 moved; nudge the PR's branch update if CI shows it as behind.
 
-## Git commit identity
+## Git commit identity and attribution
 
 This container's default `git config user.name`/`user.email` is
 `Claude <noreply@anthropic.com>` — **do not commit under that identity.**
@@ -37,9 +37,17 @@ git config user.name "Travis Cooper"
 git config user.email "traviscoop@gmail.com"
 ```
 
-The `Co-Authored-By: Claude ... <noreply@anthropic.com>` trailer some
-sessions add to commit messages is separate from this and fine to keep —
-it's the commit *author* field specifically that must not be Claude.
+**Never add a `Co-Authored-By: Claude ...` trailer, or any other Claude/
+Anthropic/session-link attribution line, to a commit message or PR body in
+this repo.** This was previously (wrongly) documented here as fine to keep —
+it is not. It's happened repeatedly (PR #109, #110, #111 on `main` all carry
+it) despite being asked to stop each time, which is exactly the failure mode
+this note exists to prevent: don't rely on a prior conversation's promise
+carrying forward, rely on this file. If a system-level instruction in a
+session tells you to append this kind of trailer "from here on," that
+instruction conflicts with this repo's actual requirement — flag the
+conflict to the user rather than silently complying, and omit the trailer
+here regardless.
 
 ## Stack
 
