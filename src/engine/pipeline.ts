@@ -246,8 +246,11 @@ export const computeIncome: PipelineStage = (state, input) => {
  * Determines this period's intended withdrawal and asks the withdrawal strategy to source it.
  *
  * Retirement only: the first retirement year withdraws
- * `balanceAtStartOfFirstRetirementYear * withdrawalRateInRetirement`, and every year after
- * inflates the prior withdrawal by this period's inflation rate.
+ * `balanceAtStartOfFirstRetirementYear * withdrawalRateInRetirement` — or, when
+ * `assumptions.retirementSpendingGoal` is set (FIN-138), that goal's today's-dollars
+ * `annualAmount` inflated forward by `state.year` years instead — and every year after
+ * inflates the prior withdrawal by this period's inflation rate, regardless of which of the
+ * two first-year formulas produced it.
  *
  * **Runs BEFORE {@link applyGrowth} as of FIN-65 change 2**, so a retirement year resolves as
  * `(beginningBalance - withdrawal) * (1 + r)`: the retiree takes the year's spending money out
@@ -304,9 +307,23 @@ export const computeWithdrawals: PipelineStage = (state, input) => {
   // alone: if the combined total fed back into `priorWithdrawal`, an event's own growth rate
   // would get inflation-compounded a second time on top of itself every subsequent year — the
   // "no feedback loop" requirement (ERD §5, PRD Round 1 decision 3).
+  // FIN-138: when a `retirementSpendingGoal` is set, the FIRST retirement year draws that
+  // goal (today's dollars) inflated forward by `state.year` years — the number of inflation
+  // years between year-0 today's-dollars and the nominal dollars needed in this, the first
+  // retirement year. Deliberately keyed off `assumptions.inflationRate`, not `inflationRate`
+  // above (which may be a Monte Carlo historical-path override for THIS period's own
+  // compounding) — the goal is a today's-dollars figure fixed at plan creation, so converting
+  // it to nominal dollars must use the plan's own flat assumption, the same way every other
+  // year-0-relative figure in this engine does. Every subsequent year needs no special case:
+  // `state.priorWithdrawal * (1 + inflationRate)` below already carries a nominal first-year
+  // figure forward correctly regardless of which branch produced it. Falls back to the
+  // existing rate-driven formula when no goal is set (`undefined` = no goal, unchanged
+  // behavior) — see `PlanAssumptions.retirementSpendingGoal`.
   const baseRequested =
     state.priorWithdrawal === null
-      ? state.beginningBalance * assumptions.withdrawalRateInRetirement
+      ? assumptions.retirementSpendingGoal
+        ? assumptions.retirementSpendingGoal.annualAmount * (1 + assumptions.inflationRate) ** state.year
+        : state.beginningBalance * assumptions.withdrawalRateInRetirement
       : state.priorWithdrawal * (1 + inflationRate);
 
   const requested = baseRequested + state.retirementEventCostTotal;

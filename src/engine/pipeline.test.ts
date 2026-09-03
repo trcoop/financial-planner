@@ -1088,3 +1088,147 @@ describe('computeWithdrawals additive event-cost term', () => {
     expect(withEvent.annualWithdrawal - withoutEvent.annualWithdrawal).toBeCloseTo(1_000, 6);
   });
 });
+
+describe('computeWithdrawals with a retirementSpendingGoal (FIN-138)', () => {
+  /** Mirrors `computeWithdrawals`'s own `retiredState` helper above: post-
+   * `snapshotBeginningBalance`, pre-`applyGrowth`, $1M untouched at the start of the year. */
+  const retiredState = (overrides: Partial<PeriodState> = {}): PeriodState =>
+    periodState({
+      age: 67,
+      year: 0,
+      beginningBalance: 1_000_000,
+      balance: 1_000_000,
+      investmentReturn: 0,
+      ...overrides,
+    });
+
+  const retiredInputWithGoal = (
+    goalAnnualAmount: number,
+    overrides: Partial<RunPeriodInput> = {},
+  ): RunPeriodInput =>
+    runPeriodInput({
+      assumptions: {
+        ...runPeriodInput().assumptions,
+        currentAge: 67,
+        retirementAge: 67,
+        retirementSpendingGoal: { annualAmount: goalAnnualAmount },
+      },
+      ...overrides,
+    });
+
+  it('uses the goal, inflated by the elapsed plan years, as the first retirement year withdrawal', () => {
+    // currentAge (35) -> retirementAge (67) is 32 years in the shared `runPeriodInput`
+    // assumptions, but here currentAge/retirementAge are both set to 67 (already retired at
+    // year 0) by `retiredInputWithGoal`, so `state.year` is what actually drives the exponent.
+    // Exercise the general case with a plan that retires mid-projection instead, at year 5.
+    const result = computeWithdrawals(
+      retiredState({ age: 67, year: 5 }),
+      runPeriodInput({
+        assumptions: {
+          ...runPeriodInput().assumptions,
+          currentAge: 62,
+          retirementAge: 67,
+          retirementSpendingGoal: { annualAmount: 60_000 },
+        },
+      }),
+    );
+
+    // 60_000 * 1.025^5 = 67_889.44...
+    const expected = 60_000 * 1.025 ** 5;
+    expect(result.annualWithdrawal).toBeCloseTo(expected, 6);
+    expect(result.priorWithdrawal).toBeCloseTo(expected, 6);
+  });
+
+  it('inflates the goal by assumptions.inflationRate, not a Monte Carlo inflationForPeriod override', () => {
+    // Mirrors the `inflationForPeriod (FIN-65)` block above, but for the goal-driven first
+    // year: the goal is a today's-dollars figure fixed at plan creation, so converting it to
+    // nominal dollars must use the plan's own flat assumption even when the caller (a Monte
+    // Carlo historical-path trial) supplies a THIS-period inflationForPeriod override for the
+    // ongoing inflation chain. Pairing the goal's conversion with 1942's 10.88% CPI-U instead
+    // of the plan's 2.5% would be wrong on both counts — it's the wrong number, and it isn't
+    // even the number this period's return was drawn against for compounding purposes.
+    const result = computeWithdrawals(
+      retiredState({ age: 67, year: 5 }),
+      runPeriodInput({
+        assumptions: {
+          ...runPeriodInput().assumptions,
+          currentAge: 62,
+          retirementAge: 67,
+          retirementSpendingGoal: { annualAmount: 60_000 },
+        },
+        inflationForPeriod: 0.1088,
+      }),
+    );
+
+    // 60_000 * 1.025^5 = 67_889.44..., using assumptions.inflationRate (2.5%) — NOT
+    // 60_000 * 1.1088^5, which is what using the period-scoped inflationForPeriod would give.
+    const expectedFromPlanRate = 60_000 * 1.025 ** 5;
+    const expectedFromPeriodOverride = 60_000 * 1.1088 ** 5;
+    expect(result.annualWithdrawal).toBeCloseTo(expectedFromPlanRate, 6);
+    expect(result.priorWithdrawal).toBeCloseTo(expectedFromPlanRate, 6);
+    expect(result.annualWithdrawal).not.toBeCloseTo(expectedFromPeriodOverride, 6);
+  });
+
+  it('uses the goal as-is (no inflation) when already retired at plan year 0', () => {
+    // retirementAge <= currentAge, so state.year === 0 at first retirement, and
+    // (1 + inflationRate) ** 0 === 1 — the goal's today's-dollars figure applies unchanged.
+    const result = computeWithdrawals(retiredState({ year: 0 }), retiredInputWithGoal(60_000));
+
+    expect(result.annualWithdrawal).toBeCloseTo(60_000, 6);
+  });
+
+  it('ignores withdrawalRateInRetirement entirely for the first year once a goal is set', () => {
+    // 4% of the $1M beginning balance would be $40,000 — the goal (60,000) must win, not the rate.
+    const result = computeWithdrawals(retiredState({ year: 0 }), retiredInputWithGoal(60_000));
+
+    expect(result.annualWithdrawal).not.toBeCloseTo(40_000, 6);
+    expect(result.annualWithdrawal).toBeCloseTo(60_000, 6);
+  });
+
+  it('inflates subsequent years off the prior withdrawal exactly as the rate-driven path does', () => {
+    const first = computeWithdrawals(retiredState({ year: 0 }), retiredInputWithGoal(60_000));
+    const second = computeWithdrawals(
+      { ...first, age: 68, year: 1, beginningBalance: first.balance },
+      retiredInputWithGoal(60_000),
+    );
+
+    // Same compounding mechanism as the rate-driven path: priorWithdrawal * (1 + inflationRate).
+    expect(second.priorWithdrawal).toBeCloseTo(60_000 * 1.025, 6);
+    expect(second.annualWithdrawal).toBeCloseTo(60_000 * 1.025, 6);
+  });
+
+  it('still composes additively with Medicare/event costs on top of the goal-driven base', () => {
+    // Mirrors the rate-driven "additive event-cost term" tests above.
+    const withoutEvent = computeWithdrawals(
+      retiredState({ year: 0, retirementEventCostTotal: 0 }),
+      retiredInputWithGoal(60_000),
+    );
+    const withEvent = computeWithdrawals(
+      retiredState({ year: 0, retirementEventCostTotal: 1_000 }),
+      retiredInputWithGoal(60_000),
+    );
+
+    // priorWithdrawal tracks only the goal-driven base figure, identical with and without the event.
+    expect(withEvent.priorWithdrawal).toBe(withoutEvent.priorWithdrawal);
+    expect(withEvent.priorWithdrawal).toBeCloseTo(60_000, 6);
+    // annualWithdrawal (what's reported/sourced) differs by exactly the event cost.
+    expect(withEvent.annualWithdrawal - withoutEvent.annualWithdrawal).toBeCloseTo(1_000, 6);
+    expect(withEvent.annualWithdrawal).toBeCloseTo(61_000, 6);
+  });
+
+  it('regression: an undefined retirementSpendingGoal reproduces the rate-driven output bit-for-bit', () => {
+    const rateOnlyInput = runPeriodInput({
+      assumptions: { ...runPeriodInput().assumptions, currentAge: 67, retirementAge: 67 },
+    });
+    const withoutGoal = computeWithdrawals(retiredState(), rateOnlyInput);
+    const explicitlyUndefined = computeWithdrawals(
+      retiredState(),
+      runPeriodInput({
+        assumptions: { ...runPeriodInput().assumptions, currentAge: 67, retirementAge: 67, retirementSpendingGoal: undefined },
+      }),
+    );
+
+    expect(explicitlyUndefined).toEqual(withoutGoal);
+    expect(explicitlyUndefined.annualWithdrawal).toBeCloseTo(40_000, 6);
+  });
+});
