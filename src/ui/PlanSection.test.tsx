@@ -466,6 +466,29 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
   })
 
+  it('FIN-129: sums balances across every primary-owned account, not just the first', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Accounts' }))
+
+    const firstBalanceInput = screen.getByRole('textbox', { name: 'Balance' })
+    await user.clear(firstBalanceInput)
+    await user.type(firstBalanceInput, '300000')
+
+    // "+ Account" defaults the new account's owner to the first Person, which is the primary —
+    // see AccountsTab's `handleAddAccount`.
+    await user.click(screen.getByRole('button', { name: '+ Account' }))
+    const balanceInputs = screen.getAllByRole('textbox', { name: 'Balance' })
+    expect(balanceInputs).toHaveLength(2)
+    await user.clear(balanceInputs[1])
+    await user.type(balanceInputs[1], '200000')
+
+    await user.click(screen.getByRole('tab', { name: 'Projection' }))
+    expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
+  })
+
   it('clicking Reset from Profile triggers the existing reset confirmation flow', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
