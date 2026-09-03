@@ -11,8 +11,8 @@
     "test": "vitest run",
     "ladle": "ladle serve",
     "ladle:build": "ladle build",
-    "test:visual": "playwright test",
-    "test:visual:update": "playwright test --update-snapshots",
+    "test:visual": "npm run ladle:build && playwright test",
+    "test:visual:update": "npm run ladle:build && playwright test --update-snapshots",
     "stylelint": "stylelint \"src/ui/**/*.module.css\"",
     "prepare": "husky"
   },

@@ -12,7 +12,9 @@ test('page: plan section', async ({ page }) => {
 
 test('page: calculators section', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: 'Calculators' }).click()
+  // LeftNav and BottomTabBar are both always mounted (App.css switches visibility by media
+  // query, not conditional render) — scope to .navPane so getByRole doesn't hit both.
+  await page.locator('.navPane').getByRole('button', { name: 'Calculators' }).click()
   await page.waitForLoadState('networkidle')
   await expect(page).toHaveScreenshot('calculators-section.png', { fullPage: true })
 })

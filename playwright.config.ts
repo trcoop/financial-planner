@@ -2,6 +2,11 @@ import { defineConfig, devices } from '@playwright/test'
 
 // Visual regression suite: screenshots diffed against committed baselines under
 // tests/visual/**/*.spec.ts-snapshots/. See tests/visual/README.md for how to run and update.
+//
+// stories.spec.ts reads .ladle-build/meta.json at module load time (test-collection time),
+// so that file must exist before `playwright test` even starts — the `npm run ladle:build`
+// step in this project's `test:visual`/`test:visual:update` scripts (package.json) handles
+// that; the webServer below only serves the already-built output via `ladle preview`.
 export default defineConfig({
   testDir: 'tests/visual',
   fullyParallel: true,
@@ -29,7 +34,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'npm run ladle:build && npx ladle preview --port 61000',
+      // globalSetup already ran `ladle:build`; this just serves the resulting .ladle-build/.
+      command: 'npx ladle preview --port 61000',
       url: 'http://localhost:61000',
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
