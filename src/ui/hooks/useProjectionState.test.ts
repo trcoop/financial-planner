@@ -715,3 +715,63 @@ describe('useProjectionState additionalIncomes wiring (FIN-118)', () => {
     expect(result.current.assumptions.annualContributionRate).toBeCloseTo(CORE.annualContributionRatePercent / 100, 6)
   })
 })
+
+describe('useProjectionState retirementSpendingGoal wiring (FIN-138)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('includes retirementSpendingGoal in assumptions when the param is set', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [], [], 60_000))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.retirementSpendingGoal).toEqual({ annualAmount: 60_000 })
+  })
+
+  it('omits retirementSpendingGoal from assumptions when the param is not passed', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.retirementSpendingGoal).toBeUndefined()
+  })
+
+  it('treats an explicit 0 the same as omitted — no goal set', () => {
+    const { result } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [], [], 0))
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.retirementSpendingGoal).toBeUndefined()
+  })
+
+  it('updates retirementSpendingGoal on the settled assumptions after the debounce delay', () => {
+    // `people`/`accounts` must be the SAME reference across the rerender below, not fresh `[]`
+    // literals — a fresh literal on every render changes `debouncedPeople`/`debouncedAccounts`
+    // themselves once the debounce settles, which would change the `additionalIncomes` memo's
+    // reference on every render regardless of `goal`, masking a broken `retirementSpendingGoal`
+    // dependency in the `assumptions` memo (this test's actual point) behind that unrelated churn.
+    const stablePeople: Person[] = []
+    const stableAccounts: Account[] = []
+    const { result, rerender } = renderHook(
+      ({ goal }: { goal: number | undefined }) =>
+        useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, stablePeople, stableAccounts, goal),
+      { initialProps: { goal: undefined as number | undefined } },
+    )
+    expect(result.current.assumptions.retirementSpendingGoal).toBeUndefined()
+
+    rerender({ goal: 45_000 })
+    act(() => {
+      vi.advanceTimersByTime(DEBOUNCE_MS)
+    })
+
+    expect(result.current.assumptions.retirementSpendingGoal).toEqual({ annualAmount: 45_000 })
+  })
+})

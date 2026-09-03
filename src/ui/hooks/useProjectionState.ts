@@ -95,6 +95,16 @@ export function useProjectionState(
   debounceMs: number,
   people: Person[] = [],
   accounts: Account[] = [],
+  /**
+   * The household's retirement spending goal (FIN-138), already converted to engine-ready
+   * ANNUAL dollars in today's terms — deliberately a plain number, not a UI-layer type: unit
+   * conversion (e.g. monthly vs. annual entry mode) is the concern of whatever future UI
+   * collects this value, not this hook. `undefined` and `0` both mean "no goal set" (a $0
+   * spending goal has no coherent product meaning worth representing separately) — either
+   * omits `retirementSpendingGoal` from `assumptions` entirely, reproducing today's
+   * rate-driven behavior unchanged.
+   */
+  retirementSpendingGoalAnnualAmount?: number,
 ): ProjectionState {
   const debouncedCoreValues = useDebouncedValue(coreValues, debounceMs)
   const debouncedAdvancedValues = useDebouncedValue(advancedValues, debounceMs)
@@ -181,8 +191,20 @@ export function useProjectionState(
       annualContributionRate: primaryContributionRate ?? base.annualContributionRate,
       additionalIncomes,
       primaryFixedContribution,
+      // FIN-138: an explicit 0 is treated the same as undefined — "no goal set" — per this
+      // hook's own param doc comment above.
+      retirementSpendingGoal: retirementSpendingGoalAnnualAmount
+        ? { annualAmount: retirementSpendingGoalAnnualAmount }
+        : undefined,
     }
-  }, [debouncedCoreValues, debouncedAdvancedValues, additionalIncomes, primaryFixedContribution, primaryContributionRate])
+  }, [
+    debouncedCoreValues,
+    debouncedAdvancedValues,
+    additionalIncomes,
+    primaryFixedContribution,
+    primaryContributionRate,
+    retirementSpendingGoalAnnualAmount,
+  ])
 
   // FIN-114: the non-primary Person in the Profile People list, if any, with a usable (finite)
   // age — guards against malformed/legacy persisted data rather than trusting the caller.

@@ -1220,3 +1220,37 @@ describe('FIN-118: additionalIncomes — spouse income & account contributions i
     );
   });
 });
+
+describe('FIN-138: retirementSpendingGoal-driven drawdown', () => {
+  it('rejects a non-finite retirementSpendingGoal.annualAmount at the input boundary', () => {
+    expectRejection(assumptions({ retirementSpendingGoal: { annualAmount: Number.NaN } }), 'NON_FINITE_INPUT');
+    expectRejection(
+      assumptions({ retirementSpendingGoal: { annualAmount: Number.POSITIVE_INFINITY } }),
+      'NON_FINITE_INPUT',
+    );
+  });
+
+  it('withdraws the goal, inflated to the first retirement year, instead of the flat rate', () => {
+    const withGoal = runProjection(assumptions({ retirementSpendingGoal: { annualAmount: 60_000 } }));
+
+    const firstRetiredYear = withGoal.find((row) => row.age === 67)!;
+    // currentAge 35 -> retirementAge 67 is 32 plan years: 60_000 * 1.025^32.
+    expect(firstRetiredYear.annualWithdrawal).toBeCloseTo(60_000 * 1.025 ** 32, 6);
+  });
+
+  it('uses the goal as-is (no inflation) when already retired at plan year 0', () => {
+    const withGoal = runProjection(
+      assumptions({ currentAge: 67, retirementAge: 67, retirementSpendingGoal: { annualAmount: 60_000 } }),
+    );
+
+    const firstRetiredYear = withGoal.find((row) => row.age === 67)!;
+    expect(firstRetiredYear.annualWithdrawal).toBeCloseTo(60_000, 6);
+  });
+
+  it('regression: retirementSpendingGoal absent reproduces the rate-driven output bit-for-bit', () => {
+    const plain = runProjection(assumptions());
+    const withUndefinedField = runProjection(assumptions({ retirementSpendingGoal: undefined }));
+
+    expect(withUndefinedField).toEqual(plain);
+  });
+});
