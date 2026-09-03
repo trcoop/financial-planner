@@ -2,6 +2,7 @@ import type { CoreInputValues } from '../ui/coreInputs/types'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
 import type { Person } from '../ui/components/PeopleTab/Person'
 import type { Account } from '../ui/components/AccountsTab/Account'
+import type { RetirementSpendingValues } from '../ui/components/RetirementSpendingTab/RetirementSpendingGoal'
 
 /** Bumped only on a genuinely breaking schema change (new/removed/retyped field with no safe
  * default). Same-version missing-field drift is handled by the partial-merge in
@@ -26,4 +27,9 @@ export interface PersistedAssumptions {
    * before this ticket — `loadAssumptions` seeds it via `seedAccounts` (empty array, since
    * there's no default account to seed, unlike the pre-loaded primary Person). */
   accounts: Account[]
+  /** FIN-135: household retirement spending goal + itemized Medicare overrides collected on the
+   * Retirement Spending tab. Additive field, same category as `people`/`accounts` above — absent
+   * on any record persisted before this ticket, defaults to `{}` (no goal set, no Medicare
+   * overrides) via `loadAssumptions`/`DEFAULT_RETIREMENT_SPENDING_VALUES`. */
+  retirementSpending: RetirementSpendingValues
 }

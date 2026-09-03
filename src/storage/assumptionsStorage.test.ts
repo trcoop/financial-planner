@@ -5,6 +5,7 @@ import { DEFAULT_CORE_VALUES } from '../ui/coreInputs/defaults'
 import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsForm/defaults'
 import { createPrimaryPerson, createSpouse } from '../ui/components/PeopleTab/Person'
 import { createAccount } from '../ui/components/AccountsTab/Account'
+import { DEFAULT_RETIREMENT_SPENDING_VALUES } from '../ui/components/RetirementSpendingTab/RetirementSpendingGoal'
 
 const DEFAULT_PEOPLE = [createPrimaryPerson(DEFAULT_CORE_VALUES)]
 
@@ -72,7 +73,13 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const people = [createPrimaryPerson(core), createSpouse()]
     saveAssumptions(core, advanced, people)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people, accounts: [] })
+    expect(loadAssumptions()).toEqual({
+      core,
+      advanced,
+      people,
+      accounts: [],
+      retirementSpending: DEFAULT_RETIREMENT_SPENDING_VALUES,
+    })
   })
 
   it('round-trips the FIN-56 stock/bond allocation field', () => {
@@ -83,7 +90,13 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const advanced = { ...DEFAULT_ADVANCED_VALUES, stocksAllocationPercent: 85 }
     saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE, accounts: [] })
+    expect(loadAssumptions()).toEqual({
+      core,
+      advanced,
+      people: DEFAULT_PEOPLE,
+      accounts: [],
+      retirementSpending: DEFAULT_RETIREMENT_SPENDING_VALUES,
+    })
     expect(loadAssumptions()?.advanced.stocksAllocationPercent).toBe(85)
   })
 
@@ -95,7 +108,13 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const advanced = { ...DEFAULT_ADVANCED_VALUES, bondReturnPercent: 5.5 }
     saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({ core, advanced, people: DEFAULT_PEOPLE, accounts: [] })
+    expect(loadAssumptions()).toEqual({
+      core,
+      advanced,
+      people: DEFAULT_PEOPLE,
+      accounts: [],
+      retirementSpending: DEFAULT_RETIREMENT_SPENDING_VALUES,
+    })
     expect(loadAssumptions()?.advanced.bondReturnPercent).toBe(5.5)
   })
 
@@ -251,6 +270,65 @@ describe('loadAssumptions edge cases', () => {
       ownerId: DEFAULT_PEOPLE[0].id,
       balance: DEFAULT_CORE_VALUES.initialBalance,
       contributionPercentage: DEFAULT_CORE_VALUES.annualContributionRatePercent,
+    })
+    expect(loaded?.retirementSpending).toEqual(DEFAULT_RETIREMENT_SPENDING_VALUES)
+  })
+
+  describe('retirementSpending (FIN-135)', () => {
+    it('round-trips a saved retirementSpending value, preserving the raw amount + unit (no monthly normalization)', () => {
+      const fake = createFakeStorage()
+      vi.stubGlobal('localStorage', fake)
+
+      const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+      const retirementSpending = {
+        generalAmount: 60_000,
+        generalAmountUnit: 'annual' as const,
+        primaryMedicareAnnualAmount: 2_500,
+        spouseMedicareAnnualAmount: 2_600,
+      }
+      saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, [primary], [], retirementSpending)
+
+      // Round-trip-safe per ERD §4: an annual entry of $60,000 comes back as $60,000 annual,
+      // not a monthly-derived $5,000.
+      expect(loadAssumptions()?.retirementSpending).toEqual(retirementSpending)
+    })
+
+    it('defaults to no goal set for a record persisted before this field existed', () => {
+      const preFin135 = JSON.stringify({
+        core: DEFAULT_CORE_VALUES,
+        advanced: DEFAULT_ADVANCED_VALUES,
+        people: DEFAULT_PEOPLE,
+        accounts: [],
+      })
+      vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin135 }))
+
+      expect(loadAssumptions()?.retirementSpending).toEqual(DEFAULT_RETIREMENT_SPENDING_VALUES)
+    })
+
+    it('falls back to the default when retirementSpending is present but wrong type', () => {
+      const wrongType = JSON.stringify({
+        core: DEFAULT_CORE_VALUES,
+        advanced: DEFAULT_ADVANCED_VALUES,
+        people: DEFAULT_PEOPLE,
+        accounts: [],
+        retirementSpending: 'not an object',
+      })
+      vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: wrongType }))
+
+      expect(loadAssumptions()?.retirementSpending).toEqual(DEFAULT_RETIREMENT_SPENDING_VALUES)
+    })
+
+    it('partially merges when retirementSpending is missing fields (schema drift)', () => {
+      const partial = JSON.stringify({
+        core: DEFAULT_CORE_VALUES,
+        advanced: DEFAULT_ADVANCED_VALUES,
+        people: DEFAULT_PEOPLE,
+        accounts: [],
+        retirementSpending: { generalAmount: 5_000, generalAmountUnit: 'monthly' },
+      })
+      vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: partial }))
+
+      expect(loadAssumptions()?.retirementSpending).toEqual({ generalAmount: 5_000, generalAmountUnit: 'monthly' })
     })
   })
 

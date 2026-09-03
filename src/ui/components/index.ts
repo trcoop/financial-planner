@@ -56,3 +56,9 @@ export {
   syncCoreWithPrimaryAccount,
   ACCOUNT_TYPE_OPTIONS,
 } from './AccountsTab/Account'
+export { RetirementSpendingTab } from './RetirementSpendingTab/RetirementSpendingTab'
+export type { RetirementSpendingValues } from './RetirementSpendingTab/RetirementSpendingGoal'
+export {
+  DEFAULT_RETIREMENT_SPENDING_VALUES,
+  retirementSpendingGoalAnnualAmount,
+} from './RetirementSpendingTab/RetirementSpendingGoal'

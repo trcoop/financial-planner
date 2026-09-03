@@ -1,0 +1,52 @@
+.tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Matches PeopleTab/AccountsTab's own "Rates"-sibling heading pattern (a static <h3> titled to
+ * the nav label), composed from the shared entity-tab shell (FIN-124) rather than a locally
+ * redeclared rule. */
+.heading {
+  composes: heading from '../../entityTabShell.module.css';
+}
+
+.subheading {
+  margin: 0;
+  font-size: var(--font-size-base);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.medicareSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Matches AdvancedAssumptionsForm's own `.fieldRow` — a field plus an adjacent control,
+ * bottom-aligned so a shorter sibling (e.g. the toggle) lines up with the field's own baseline. */
+.fieldRow {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.fieldRow > * {
+  flex: 1;
+  min-width: 200px;
+}
+
+.depletedCallout {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-warning);
+  font-weight: 600;
+}

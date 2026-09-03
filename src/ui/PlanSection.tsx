@@ -30,12 +30,18 @@ import {
   type LineChartSeries,
 } from './components/PercentileLineChart/PercentileLineChart'
 import { YearDetailPanel } from './components/YearDetailPanel/YearDetailPanel'
-import { PeopleIcon, WalletIcon, PercentIcon } from './components/icons'
+import { PeopleIcon, WalletIcon, PercentIcon, TargetIcon } from './components/icons'
 import { useProjectionState, PLANNING_HORIZON_END_AGE } from './hooks/useProjectionState'
 import { useDebouncedValue } from './hooks/useDebouncedValue'
 import { MEDICARE_PART_B_EVENT } from './medicareEvent'
 import { formatCurrency, formatPercent } from './utils/format'
 import { clearAssumptions, loadAssumptions, saveAssumptions } from '../storage'
+import { RetirementSpendingTab } from './components/RetirementSpendingTab/RetirementSpendingTab'
+import {
+  DEFAULT_RETIREMENT_SPENDING_VALUES,
+  retirementSpendingGoalAnnualAmount,
+  type RetirementSpendingValues,
+} from './components/RetirementSpendingTab/RetirementSpendingGoal'
 
 /** Per FIN-9's notes: form updates are debounced ~300ms before triggering recalculation. */
 const RECALCULATION_DEBOUNCE_MS = 300
@@ -68,6 +74,8 @@ const PROFILE_NAV_ITEMS: NavItem[] = [
   { id: 'people', label: 'People', icon: PeopleIcon },
   { id: 'accounts', label: 'Accounts', icon: WalletIcon },
   { id: 'rates', label: 'Rates', icon: PercentIcon },
+  // FIN-135: fourth Profile sub-tab, after Rates.
+  { id: 'retirement-spending', label: 'Retirement Spending', icon: TargetIcon },
 ]
 
 /** Plan has a single line (the deterministic balance) — one series, legend hidden (FIN-60). */
@@ -95,6 +103,12 @@ export function PlanSection(_props: PlanSectionProps) {
     const primaryId = primaryPerson(seededPeople)?.id ?? seededPeople[0]?.id ?? 'primary'
     return seedAccounts(loaded?.accounts, primaryId, coreValues)
   })
+  // FIN-135: household retirement spending goal + Medicare overrides, same lazy-load-from-
+  // persisted pattern as `people`/`accounts` above. Absent-on-load resolves to
+  // `DEFAULT_RETIREMENT_SPENDING_VALUES` (`{}`) — no goal set, matching the AC's opt-in default.
+  const [retirementSpendingValues, setRetirementSpendingValues] = useState<RetirementSpendingValues>(
+    () => loadAssumptions()?.retirementSpending ?? DEFAULT_RETIREMENT_SPENDING_VALUES,
+  )
   const [activeTab, setActiveTab] = useState<string>(TABS[0].id)
   // FIN-115: which Profile sub-section (People/Accounts/Rates) is showing. Plain React state,
   // scoped to this mount — same pattern as `activeTab` above; no persistence requirement per
@@ -141,6 +155,9 @@ export function PlanSection(_props: PlanSectionProps) {
   // the debounce settle and would fire an extra save. See PlanSection.test.tsx "never saves on
   // chart selection or tab switches".
   const primary = people.find((person) => person.isPrimary)
+  // FIN-135: gates the Retirement Spending tab's spouse Medicare field — same check PeopleTab
+  // itself uses to gate its own "+ Spouse" button/spouse card.
+  const hasSpouse = people.some((person) => !person.isPrimary)
   // FIN-117 bug-fix round: same reasoning as above, extended to initialBalance/
   // annualContributionRatePercent — those two fields moved to the primary's Account (Accounts
   // tab) and CoreInputsForm no longer renders them at all, so they must be synced in here too
@@ -168,11 +185,29 @@ export function PlanSection(_props: PlanSectionProps) {
     ],
   )
 
+  // FIN-135: converted to engine-ready annual dollars here (the `toAssumptions`-adjacent wiring
+  // boundary — ERD §4/§9), then debounced the same ~300ms as every other input
+  // `useProjectionState` recalculates from, so a keystroke on the Retirement Spending tab doesn't
+  // recompute the projection on every character. `undefined` (no goal, or an explicit 0) reaches
+  // the hook unchanged and reproduces today's rate-driven behavior exactly — see this cross-
+  // reference note on the ticket and `useProjectionState`'s own param doc comment.
+  const retirementSpendingGoalAmount = useDebouncedValue(
+    retirementSpendingGoalAnnualAmount(retirementSpendingValues),
+    RECALCULATION_DEBOUNCE_MS,
+  )
+
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
   // result — while a field is out of range. See useProjectionState for the full behavior.
   const { rows, error, projectedBalanceAtRetirement, assumptions, debouncedCore, debouncedAdvanced, events } =
-    useProjectionState(effectiveCoreValues, advancedValues, RECALCULATION_DEBOUNCE_MS, people, accounts)
+    useProjectionState(
+      effectiveCoreValues,
+      advancedValues,
+      RECALCULATION_DEBOUNCE_MS,
+      people,
+      accounts,
+      retirementSpendingGoalAmount,
+    )
 
   // Persists once per settled (debounced) change, riding useProjectionState's existing ~300ms
   // debounce rather than introducing a second one (ERD §6.1). Fires once on mount too (the
@@ -184,10 +219,13 @@ export function PlanSection(_props: PlanSectionProps) {
   // debouncedAdvanced below.
   const debouncedPeople = useDebouncedValue(people, RECALCULATION_DEBOUNCE_MS)
   const debouncedAccounts = useDebouncedValue(accounts, RECALCULATION_DEBOUNCE_MS)
+  // FIN-135: same debounce cadence as `debouncedPeople`/`debouncedAccounts` above — persists the
+  // raw entered value + unit (round-trip-safe, ERD §4), not the converted annual amount.
+  const debouncedRetirementSpendingValues = useDebouncedValue(retirementSpendingValues, RECALCULATION_DEBOUNCE_MS)
 
   useEffect(() => {
-    saveAssumptions(debouncedCore, debouncedAdvanced, debouncedPeople, debouncedAccounts)
-  }, [debouncedCore, debouncedAdvanced, debouncedPeople, debouncedAccounts])
+    saveAssumptions(debouncedCore, debouncedAdvanced, debouncedPeople, debouncedAccounts, debouncedRetirementSpendingValues)
+  }, [debouncedCore, debouncedAdvanced, debouncedPeople, debouncedAccounts, debouncedRetirementSpendingValues])
 
   // Bug fix (FIN-132): the debounced save above only fires once the ~300ms debounce settles.
   // `App.tsx` renders Plan/Calculators as a ternary, so navigating away from Plan fully
@@ -242,6 +280,7 @@ export function PlanSection(_props: PlanSectionProps) {
     const resetPrimary = createPrimaryPerson(DEFAULT_CORE_VALUES)
     setPeople([resetPrimary])
     setAccounts(seedAccounts(undefined, resetPrimary.id, DEFAULT_CORE_VALUES))
+    setRetirementSpendingValues(DEFAULT_RETIREMENT_SPENDING_VALUES)
   }
 
   const handleCancelReset = () => {
@@ -495,6 +534,16 @@ export function PlanSection(_props: PlanSectionProps) {
                         <h3 className="profileSubHeading">Rates</h3>
                         <AdvancedAssumptionsForm values={advancedValues} onChange={setAdvancedValues} />
                       </>
+                    ) : null}
+
+                    {profileTab === 'retirement-spending' ? (
+                      <RetirementSpendingTab
+                        values={retirementSpendingValues}
+                        onChange={setRetirementSpendingValues}
+                        assumptions={assumptions}
+                        rows={rows}
+                        hasSpouse={hasSpouse}
+                      />
                     ) : null}
                   </div>
                 </div>
