@@ -466,6 +466,65 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
   })
 
+  it('FIN-129: sums balances across every primary-owned account, not just the first', async () => {
+    // Same isolation as "shows a spouse Medicare-start marker" above: this describe block never
+    // stubs localStorage, so a real persistence-effect write here would otherwise leak the extra
+    // account into every later test in this file.
+    vi.stubGlobal('localStorage', createFakeStorage())
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Accounts' }))
+
+    const firstBalanceInput = screen.getByRole('textbox', { name: 'Balance' })
+    await user.clear(firstBalanceInput)
+    await user.type(firstBalanceInput, '300000')
+
+    // "+ Account" defaults the new account's owner to the first Person, which is the primary —
+    // see AccountsTab's `handleAddAccount`.
+    await user.click(screen.getByRole('button', { name: '+ Account' }))
+    const balanceInputs = screen.getAllByRole('textbox', { name: 'Balance' })
+    expect(balanceInputs).toHaveLength(2)
+    await user.clear(balanceInputs[1])
+    await user.type(balanceInputs[1], '200000')
+
+    await user.click(screen.getByRole('tab', { name: 'Projection' }))
+    expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
+    vi.unstubAllGlobals()
+  })
+
+  it('FIN-129: includes a spouse-owned account in the household starting balance', async () => {
+    // Same isolation as above — this test adds a spouse, which is exactly the leak the comment
+    // on "shows a spouse Medicare-start marker" warns about.
+    vi.stubGlobal('localStorage', createFakeStorage())
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+
+    await user.click(screen.getByRole('button', { name: '+ Spouse' }))
+
+    await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
+    const firstBalanceInput = screen.getByRole('textbox', { name: 'Balance' })
+    await user.clear(firstBalanceInput)
+    await user.type(firstBalanceInput, '300000')
+
+    await user.click(screen.getByRole('button', { name: '+ Account' }))
+    const ownerSelects = screen.getAllByLabelText('Owner')
+    await user.click(ownerSelects[ownerSelects.length - 1])
+    await user.click(screen.getByRole('option', { name: 'Spouse' }))
+    const balanceInputs = screen.getAllByRole('textbox', { name: 'Balance' })
+    expect(balanceInputs).toHaveLength(2)
+    await user.clear(balanceInputs[1])
+    await user.type(balanceInputs[1], '200000')
+
+    await user.click(screen.getByRole('tab', { name: 'Projection' }))
+    expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
+    vi.unstubAllGlobals()
+  })
+
   it('clicking Reset from Profile triggers the existing reset confirmation flow', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
