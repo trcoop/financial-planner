@@ -157,42 +157,43 @@ export function primaryAccountFor(accounts: Account[], primaryPersonId: string):
   return accounts.find((account) => account.ownerId === primaryPersonId)
 }
 
-/** Overrides `core.initialBalance`/`annualContributionRatePercent` with the primary's own
- * account values, mirroring `syncCoreWithPrimary`'s pattern for age/retirementAge/salary. This
- * is deliberately UI-layer plumbing (not engine wiring, that's FIN-118) — it exists only so the
- * now-hidden `CoreInputValues` fields don't go stale relative to the real source of truth (the
- * primary's Account(s)). When there's no primary account (e.g. the user deleted their only
- * account), both fields are zeroed rather than left as whatever `core` happened to be carrying
- * — there is no UI anywhere to edit those hidden fields any more, so leaving them alone would
- * silently resurrect stale frozen data instead of reflecting the real "no account" state.
+/** Overrides `core.initialBalance`/`annualContributionRatePercent` with values derived from the
+ * household's Accounts, mirroring `syncCoreWithPrimary`'s pattern for age/retirementAge/salary.
+ * This is deliberately UI-layer plumbing (not engine wiring, that's FIN-118) — it exists only so
+ * the now-hidden `CoreInputValues` fields don't go stale relative to the real source of truth
+ * (the Accounts). When there are no accounts at all (e.g. the user deleted their only account),
+ * both fields are zeroed rather than left as whatever `core` happened to be carrying — there is
+ * no UI anywhere to edit those hidden fields any more, so leaving them alone would silently
+ * resurrect stale frozen data instead of reflecting the real "no accounts" state.
  *
- * Bug fix (multiple primary-owned accounts): `initialBalance` is summed across every account the
- * primary owns, not just the first (`primaryAccountFor`'s `.find()` pick) — a second or third
- * account's balance was previously silently dropped from both the displayed stat tile and the
- * engine's starting `beginningBalance`. Mirrors the same fix already applied to the contribution
- * rate on the engine side (see `primaryContributionRate` in `useProjectionState.ts`).
+ * Bug fix (FIN-129): `initialBalance` is the household's starting balance, so it's summed across
+ * EVERY account — the primary's and a spouse's alike — not just the primary's own (and, before
+ * that, not just the first of those). A second/third account, or any spouse-owned account, was
+ * previously silently dropped from both the displayed stat tile and the engine's starting
+ * `beginningBalance`.
  *
- * `annualContributionRatePercent` still reflects only the first owned account's contribution
- * mode/rate — that field is display-only now (the engine reads the summed
- * `primaryContributionRate` from `useProjectionState.ts` directly, bypassing this one), so it's
- * left as the existing single-account approximation rather than duplicating that summation here.
- * A `fixed` contribution mode has no clean translation to a percentage rate, so in that case the
- * contribution rate is left as-is. */
+ * `annualContributionRatePercent` still reflects only the primary's first owned account's
+ * contribution mode/rate — that field is display-only now (the engine reads the summed
+ * `primaryContributionRate`/spouse `additionalIncomes` from `useProjectionState.ts` directly,
+ * bypassing this one), so it's left as the existing single-account approximation rather than
+ * duplicating that summation here. A `fixed` contribution mode has no clean translation to a
+ * percentage rate, so in that case the contribution rate is left as-is. */
 export function syncCoreWithPrimaryAccount(
   core: CoreInputValues,
   accounts: Account[],
   primaryPersonId: string,
 ): CoreInputValues {
-  const ownedAccounts = accounts.filter((account) => account.ownerId === primaryPersonId)
-  if (ownedAccounts.length === 0) {
+  if (accounts.length === 0) {
     return { ...core, initialBalance: 0, annualContributionRatePercent: 0 }
   }
-  const [firstAccount] = ownedAccounts
+  const firstPrimaryAccount = accounts.find((account) => account.ownerId === primaryPersonId)
   return {
     ...core,
-    initialBalance: ownedAccounts.reduce((sum, account) => sum + account.balance, 0),
+    initialBalance: accounts.reduce((sum, account) => sum + account.balance, 0),
     annualContributionRatePercent:
-      firstAccount.contributionMode === 'percentage' ? firstAccount.contributionPercentage : core.annualContributionRatePercent,
+      firstPrimaryAccount?.contributionMode === 'percentage'
+        ? firstPrimaryAccount.contributionPercentage
+        : core.annualContributionRatePercent,
   }
 }
 

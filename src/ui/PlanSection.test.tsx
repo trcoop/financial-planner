@@ -489,6 +489,33 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
   })
 
+  it('FIN-129: includes a spouse-owned account in the household starting balance', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+
+    await user.click(screen.getByRole('button', { name: '+ Spouse' }))
+
+    await user.click(within(nav).getByRole('button', { name: 'Accounts' }))
+    const firstBalanceInput = screen.getByRole('textbox', { name: 'Balance' })
+    await user.clear(firstBalanceInput)
+    await user.type(firstBalanceInput, '300000')
+
+    await user.click(screen.getByRole('button', { name: '+ Account' }))
+    const ownerSelects = screen.getAllByLabelText('Owner')
+    await user.click(ownerSelects[ownerSelects.length - 1])
+    await user.click(screen.getByRole('option', { name: 'Spouse' }))
+    const balanceInputs = screen.getAllByRole('textbox', { name: 'Balance' })
+    expect(balanceInputs).toHaveLength(2)
+    await user.clear(balanceInputs[1])
+    await user.type(balanceInputs[1], '200000')
+
+    await user.click(screen.getByRole('tab', { name: 'Projection' }))
+    expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
+  })
+
   it('clicking Reset from Profile triggers the existing reset confirmation flow', async () => {
     const user = userEvent.setup()
     render(<PlanSection />)
