@@ -2,9 +2,9 @@ import { test, expect } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Story IDs come from the meta.json that `ladle build` writes (see playwright.config.ts's
-// webServer command) — one screenshot per story, in Ladle's chromeless "preview" mode so the
-// shot is just the component, not the story-nav UI around it.
+// Story IDs come from the meta.json that `ladle build` writes (run by the `npm run ladle:build`
+// step in test:visual/test:visual:update, package.json) — one screenshot per story, in Ladle's
+// chromeless "preview" mode so the shot is just the component, not the story-nav UI around it.
 type LadleMeta = { stories: Record<string, { name: string; levels: string[] }> }
 
 const meta: LadleMeta = JSON.parse(

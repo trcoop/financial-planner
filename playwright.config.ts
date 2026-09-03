@@ -34,7 +34,8 @@ export default defineConfig({
   ],
   webServer: [
     {
-      // globalSetup already ran `ladle:build`; this just serves the resulting .ladle-build/.
+      // `npm run ladle:build` (see test:visual/test:visual:update in package.json) already
+      // built .ladle-build/ before this runs; this just serves that output.
       command: 'npx ladle preview --port 61000',
       url: 'http://localhost:61000',
       reuseExistingServer: !process.env.CI,
