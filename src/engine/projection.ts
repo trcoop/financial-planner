@@ -91,6 +91,17 @@ export const validatePlanAssumptions = (assumptions: PlanAssumptions): void => {
     );
   }
 
+  if (
+    assumptions.retirementSpendingGoal !== undefined &&
+    (typeof assumptions.retirementSpendingGoal.annualAmount !== 'number' ||
+      !Number.isFinite(assumptions.retirementSpendingGoal.annualAmount))
+  ) {
+    throw new InvalidProjectionInputError(
+      'NON_FINITE_INPUT',
+      `retirementSpendingGoal.annualAmount must be a finite number, received ${String(assumptions.retirementSpendingGoal.annualAmount)}.`,
+    );
+  }
+
   const {
     currentAge,
     retirementAge,
