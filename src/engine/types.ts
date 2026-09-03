@@ -96,6 +96,17 @@ export interface PlanAssumptions {
    * defaults to a no-op.
    */
   primaryFixedContribution?: number;
+  /**
+   * The household's retirement spending goal, in TODAY'S dollars (year-0 terms) — the general
+   * lump expense line, EXCLUDING Medicare (Medicare rides as its own recurringCost `PlanEvent`,
+   * additive — no double-counting; see {@link PeriodState.retirementEventCostTotal}).
+   * `undefined` = no goal set; the plan falls back to today's `withdrawalRateInRetirement`
+   * behavior, unchanged (FIN-138).
+   */
+  retirementSpendingGoal?: {
+    /** Annual amount, today's dollars. */
+    annualAmount: number;
+  };
 }
 
 /**
