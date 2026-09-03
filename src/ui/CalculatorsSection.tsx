@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SelectField } from './components/SelectField/SelectField'
 import { InvestmentCalculator } from './components/InvestmentCalculator/InvestmentCalculator'
+import { KnowYourNumberCalculator } from './components/KnowYourNumberCalculator/KnowYourNumberCalculator'
 import styles from './CalculatorsSection.module.css'
 
 export interface CalculatorEntry {
@@ -14,6 +15,7 @@ export interface CalculatorEntry {
 // `SelectField`, `LeftNav`, `TopBar`, or `BottomTabBar` needs to change.
 const CALCULATORS: CalculatorEntry[] = [
   { id: 'investment', label: 'Investment Calculator', component: InvestmentCalculator },
+  { id: 'know-your-number', label: 'Know Your Number', component: KnowYourNumberCalculator },
 ]
 
 export interface CalculatorsSectionProps {

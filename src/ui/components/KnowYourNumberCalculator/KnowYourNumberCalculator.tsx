@@ -1,0 +1,426 @@
+import { useState } from 'react'
+import {
+  calculateKnowYourNumber,
+  InvalidKnowYourNumberInputError,
+  type KnowYourNumberResult,
+} from '../../../engine/knowYourNumber'
+import { loadAssumptions } from '../../../storage'
+import { primaryPerson } from '../PeopleTab/Person'
+import { formatCurrency } from '../../utils/format'
+import { Button } from '../Button/Button'
+import { NumberField } from '../NumberField/NumberField'
+import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
+import { StatTile } from '../StatTile/StatTile'
+import styles from './KnowYourNumberCalculator.module.css'
+
+/**
+ * Mirrors `PLANNING_HORIZON_END_AGE` (`src/ui/hooks/useProjectionState.ts`) — this app's fixed,
+ * non-user-editable planning-horizon constant, which the ERD (§15) designates as this
+ * calculator's `lifeExpectancy` source for both the standalone default and the "pull from my
+ * plan" case (both agree on the same value today, so there is no separate pulled-vs-standalone
+ * default to draw). Defined locally, matching `knowYourNumber.ts`'s own `DEFAULT_LIFE_EXPECTANCY`,
+ * rather than imported from `useProjectionState.ts` — this standalone, non-pipeline calculator has
+ * no other reason to depend on that hook's import graph (engine pipeline, Medicare event wiring,
+ * debounce hook) just for one constant.
+ */
+const PLANNING_HORIZON_END_AGE = 100
+
+interface RequiredValues {
+  currentAge: number
+  retirementAge: number
+  /** Today's dollars, monthly. */
+  desiredMonthlySpend: number
+  currentBalance: number
+  /** Today's dollars, annual — the engine inflates this forward each accumulation year (see
+   * FIN-132's ticket note); no UI-side inflation handling is needed here. */
+  annualContribution: number
+}
+
+type RequiredField = keyof RequiredValues
+
+interface AdvancedValues {
+  /** Plain percentage (e.g. 2.5 for 2.5%), matching AdvancedAssumptionsForm's own convention. */
+  inflationPercent: number
+  safeWithdrawalRatePercent: number
+  annualReturnPercent: number
+  lifeExpectancy: number
+}
+
+type FormValues = RequiredValues & AdvancedValues
+
+/** Every required field starts blank (AC: "no result shown and required fields are clearly
+ * marked" on first open) — `NaN` is `NumberField`'s own contract for "render as empty text"
+ * (see its `formatValue` helper), not a real value a user could reach through typing. */
+const BLANK_REQUIRED_VALUES: RequiredValues = {
+  currentAge: NaN,
+  retirementAge: NaN,
+  desiredMonthlySpend: NaN,
+  currentBalance: NaN,
+  annualContribution: NaN,
+}
+
+/** Matches `knowYourNumber.ts`'s own defaults exactly, so leaving the Advanced section untouched
+ * reproduces the engine's own default behavior. */
+const DEFAULT_ADVANCED_VALUES: AdvancedValues = {
+  inflationPercent: 2.5,
+  safeWithdrawalRatePercent: 4,
+  annualReturnPercent: 6.8,
+  lifeExpectancy: PLANNING_HORIZON_END_AGE,
+}
+
+const DEFAULT_VALUES: FormValues = { ...BLANK_REQUIRED_VALUES, ...DEFAULT_ADVANCED_VALUES }
+
+const REQUIRED_FIELDS: RequiredField[] = [
+  'currentAge',
+  'retirementAge',
+  'desiredMonthlySpend',
+  'currentBalance',
+  'annualContribution',
+]
+
+interface FieldErrors {
+  currentAge?: string
+  retirementAge?: string
+  desiredMonthlySpend?: string
+  currentBalance?: string
+  annualContribution?: string
+  inflationPercent?: string
+  safeWithdrawalRatePercent?: string
+  annualReturnPercent?: string
+  lifeExpectancy?: string
+}
+
+/**
+ * Client-side validation for immediate UX feedback, on top of (not instead of) the engine's own
+ * validation (architecture.md convention, matching `InvestmentCalculator`'s own
+ * `validateForm`). Bounds mirror `knowYourNumber.ts`'s own checks where it has one (retirement
+ * age not before current age, life expectancy not before retirement age, safe withdrawal rate in
+ * (0%, 100%]); the rest are UI-only sanity caps, since the engine deliberately has no absolute
+ * age/amount bounds of its own (ERD §12).
+ */
+function validateForm(values: FormValues, blankFields: ReadonlySet<RequiredField>): FieldErrors {
+  const errors: FieldErrors = {}
+
+  if (blankFields.has('currentAge')) {
+    errors.currentAge = 'Enter your current age.'
+  } else if (values.currentAge < 0 || values.currentAge > 120) {
+    errors.currentAge = 'Current age must be between 0 and 120.'
+  }
+
+  if (blankFields.has('retirementAge')) {
+    errors.retirementAge = 'Enter your target retirement age.'
+  } else if (values.retirementAge < 0 || values.retirementAge > 120) {
+    errors.retirementAge = 'Retirement age must be between 0 and 120.'
+  } else if (!blankFields.has('currentAge') && values.retirementAge < values.currentAge) {
+    errors.retirementAge = 'Retirement age must be at or after current age.'
+  }
+
+  if (blankFields.has('desiredMonthlySpend')) {
+    errors.desiredMonthlySpend = 'Enter your desired monthly retirement spend.'
+  } else if (values.desiredMonthlySpend < 0) {
+    errors.desiredMonthlySpend = 'Desired monthly spend must be zero or more.'
+  } else if (values.desiredMonthlySpend > 1_000_000) {
+    errors.desiredMonthlySpend = 'Desired monthly spend must be $1,000,000 or less.'
+  }
+
+  if (blankFields.has('currentBalance')) {
+    errors.currentBalance = 'Enter your current retirement account balance.'
+  } else if (values.currentBalance < 0) {
+    errors.currentBalance = 'Current balance must be zero or more.'
+  } else if (values.currentBalance > 100_000_000) {
+    errors.currentBalance = 'Current balance must be $100,000,000 or less.'
+  }
+
+  if (blankFields.has('annualContribution')) {
+    errors.annualContribution = 'Enter your annual investment/contribution amount.'
+  } else if (values.annualContribution < 0) {
+    errors.annualContribution = 'Annual contribution must be zero or more.'
+  } else if (values.annualContribution > 5_000_000) {
+    errors.annualContribution = 'Annual contribution must be $5,000,000 or less.'
+  }
+
+  if (values.inflationPercent < -50 || values.inflationPercent > 100) {
+    errors.inflationPercent = 'Inflation rate must be between -50% and 100%.'
+  }
+
+  if (values.safeWithdrawalRatePercent <= 0 || values.safeWithdrawalRatePercent > 100) {
+    errors.safeWithdrawalRatePercent = 'Safe withdrawal rate must be greater than 0% and at most 100%.'
+  }
+
+  if (values.annualReturnPercent < -50 || values.annualReturnPercent > 100) {
+    errors.annualReturnPercent = 'Expected annual return must be between -50% and 100%.'
+  }
+
+  if (values.lifeExpectancy < 0 || values.lifeExpectancy > 130) {
+    errors.lifeExpectancy = 'Life expectancy must be between 0 and 130.'
+  } else if (!blankFields.has('retirementAge') && values.lifeExpectancy < values.retirementAge) {
+    errors.lifeExpectancy = 'Life expectancy must be at or after retirement age.'
+  }
+
+  return errors
+}
+
+/** The exactly-one headline the AC requires — never a probability/percentage. */
+function describeResult(result: KnowYourNumberResult): string {
+  switch (result.status) {
+    case 'onTrack':
+      return 'On track'
+    case 'shortBy':
+      return `Short by ${formatCurrency(result.shortfallAmount)}`
+    case 'couldRetireEarlier':
+      return `Could retire at age ${result.earliestAge}`
+  }
+}
+
+/**
+ * Standalone "Know Your Number" calculator (FIN-132). Owns its own form + result state; calls
+ * `calculateKnowYourNumber` only on "Calculate" click — no live recalculation (two-tier
+ * interaction pattern, matching `InvestmentCalculator`/`StressTestSection`). Fully standalone —
+ * no dependency on the saved plan/projection engine (the ticket's "no dependency on a saved
+ * plan" requirement) except for the strictly opt-in, read-only "Pull from my plan" prefill below,
+ * which never writes back to storage.
+ */
+export function KnowYourNumberCalculator() {
+  const [values, setValues] = useState<FormValues>(DEFAULT_VALUES)
+  const [blankFields, setBlankFields] = useState<ReadonlySet<RequiredField>>(new Set(REQUIRED_FIELDS))
+  const [hasAttemptedCalculate, setHasAttemptedCalculate] = useState(false)
+  // Set only by a genuine `calculateKnowYourNumber` throw — effectively unreachable today since
+  // `validateForm`'s bounds mirror the engine's own, kept as a defensive fallback in case the two
+  // ever drift (matches `InvestmentCalculator`'s identical rationale).
+  const [engineError, setEngineError] = useState<string | null>(null)
+  const [result, setResult] = useState<KnowYourNumberResult | null>(null)
+  // Lazily read once on mount — a plan saved *after* this calculator opens still won't show the
+  // button until the calculator is reopened, matching the "read-only, one-time" (not a live
+  // binding) contract the ticket specifies for this feature as a whole.
+  const [hasPlan] = useState(() => loadAssumptions() !== undefined)
+
+  const setNumericField = <K extends keyof FormValues>(key: K, value: number) => {
+    setValues((prev) => ({ ...prev, [key]: value }))
+    setEngineError(null)
+  }
+
+  const setBlank = (key: RequiredField, isBlank: boolean) => {
+    setEngineError(null)
+    setBlankFields((prev) => {
+      const alreadySet = prev.has(key)
+      if (isBlank === alreadySet) return prev
+      const next = new Set(prev)
+      if (isBlank) next.add(key)
+      else next.delete(key)
+      return next
+    })
+  }
+
+  const errors: FieldErrors = hasAttemptedCalculate ? validateForm(values, blankFields) : {}
+
+  const handleCalculate = () => {
+    setHasAttemptedCalculate(true)
+    const fieldErrors = validateForm(values, blankFields)
+    if (Object.keys(fieldErrors).length > 0) {
+      setResult(null)
+      return
+    }
+
+    try {
+      const computed = calculateKnowYourNumber({
+        currentAge: values.currentAge,
+        retirementAge: values.retirementAge,
+        desiredMonthlySpend: values.desiredMonthlySpend,
+        currentBalance: values.currentBalance,
+        annualContribution: values.annualContribution,
+        inflationRate: values.inflationPercent / 100,
+        safeWithdrawalRate: values.safeWithdrawalRatePercent / 100,
+        annualReturnRate: values.annualReturnPercent / 100,
+        lifeExpectancy: values.lifeExpectancy,
+      })
+      setEngineError(null)
+      setResult(computed)
+    } catch (error) {
+      // The engine validates independently of the client-side checks above (architecture.md);
+      // surface any failure it still finds as a generic top-level error rather than crashing.
+      setResult(null)
+      setEngineError(
+        error instanceof InvalidKnowYourNumberInputError
+          ? error.message
+          : 'Something went wrong calculating your number.',
+      )
+    }
+  }
+
+  // Read-only, one-time prefill (never a live binding, never writes back to `people`/`accounts`/
+  // `assumptions` — ERD §5/§12): currentAge/retirementAge from the primary Person, currentBalance
+  // from summing every account's balance (mirrors `PlanSection.tsx`'s `totalAccountBalance`
+  // pattern), lifeExpectancy from the app's planning-horizon constant. `desiredMonthlySpend` and
+  // `annualContribution` have no equivalent on the saved plan, so they're left for the user to
+  // enter either way.
+  const handlePullFromPlan = () => {
+    const persisted = loadAssumptions()
+    if (!persisted) return
+
+    const primary = primaryPerson(persisted.people)
+    const totalBalance = persisted.accounts.reduce((sum, account) => sum + account.balance, 0)
+
+    setValues((prev) => ({
+      ...prev,
+      currentAge: primary ? primary.age : prev.currentAge,
+      retirementAge: primary ? primary.retirementAge : prev.retirementAge,
+      currentBalance: totalBalance,
+      lifeExpectancy: PLANNING_HORIZON_END_AGE,
+    }))
+    setBlankFields((prev) => {
+      const next = new Set(prev)
+      if (primary) {
+        next.delete('currentAge')
+        next.delete('retirementAge')
+      }
+      next.delete('currentBalance')
+      return next
+    })
+    setEngineError(null)
+  }
+
+  return (
+    <section className={styles.calculator} aria-label="Know Your Number calculator">
+      {hasPlan && (
+        <div className={styles.pullRow}>
+          <Button type="button" variant="secondary" onClick={handlePullFromPlan}>
+            Pull from my plan
+          </Button>
+        </div>
+      )}
+
+      <form
+        className={styles.form}
+        aria-label="Know Your Number calculator inputs"
+        onSubmit={(event) => {
+          event.preventDefault()
+          handleCalculate()
+        }}
+      >
+        <p className={styles.requiredLegend}>* Required</p>
+
+        <NumberField
+          label="Current age *"
+          value={values.currentAge}
+          onChange={(value) => setNumericField('currentAge', value)}
+          onTextChange={(text) => setBlank('currentAge', text.trim() === '')}
+          min={0}
+          max={120}
+          step={1}
+          error={errors.currentAge}
+        />
+        <NumberField
+          label="Target retirement age *"
+          value={values.retirementAge}
+          onChange={(value) => setNumericField('retirementAge', value)}
+          onTextChange={(text) => setBlank('retirementAge', text.trim() === '')}
+          min={0}
+          max={120}
+          step={1}
+          error={errors.retirementAge}
+        />
+        <NumberField
+          label="Desired monthly retirement spend (today's dollars) *"
+          value={values.desiredMonthlySpend}
+          onChange={(value) => setNumericField('desiredMonthlySpend', value)}
+          onTextChange={(text) => setBlank('desiredMonthlySpend', text.trim() === '')}
+          min={0}
+          max={1_000_000}
+          prefix="$"
+          error={errors.desiredMonthlySpend}
+        />
+        <NumberField
+          label="Current retirement account balance *"
+          value={values.currentBalance}
+          onChange={(value) => setNumericField('currentBalance', value)}
+          onTextChange={(text) => setBlank('currentBalance', text.trim() === '')}
+          min={0}
+          max={100_000_000}
+          prefix="$"
+          error={errors.currentBalance}
+        />
+        <div>
+          <NumberField
+            label="Annual investment/contribution amount *"
+            value={values.annualContribution}
+            onChange={(value) => setNumericField('annualContribution', value)}
+            onTextChange={(text) => setBlank('annualContribution', text.trim() === '')}
+            min={0}
+            max={5_000_000}
+            prefix="$"
+            error={errors.annualContribution}
+          />
+          <p className={styles.hint}>
+            Today&rsquo;s dollars — automatically adjusted for inflation each year until retirement.
+          </p>
+        </div>
+
+        <CollapsibleSection summary="Advanced assumptions">
+          <div className={styles.advanced}>
+            <NumberField
+              label="Inflation rate"
+              value={values.inflationPercent}
+              onChange={(value) => setNumericField('inflationPercent', value)}
+              min={-50}
+              max={100}
+              step={0.1}
+              suffix="%"
+              error={errors.inflationPercent}
+            />
+            <NumberField
+              label="Safe withdrawal rate"
+              value={values.safeWithdrawalRatePercent}
+              onChange={(value) => setNumericField('safeWithdrawalRatePercent', value)}
+              min={0.1}
+              max={100}
+              step={0.1}
+              suffix="%"
+              error={errors.safeWithdrawalRatePercent}
+            />
+            <NumberField
+              label="Expected annual return"
+              value={values.annualReturnPercent}
+              onChange={(value) => setNumericField('annualReturnPercent', value)}
+              min={-50}
+              max={100}
+              step={0.1}
+              suffix="%"
+              error={errors.annualReturnPercent}
+            />
+            <NumberField
+              label="Life expectancy"
+              value={values.lifeExpectancy}
+              onChange={(value) => setNumericField('lifeExpectancy', value)}
+              min={0}
+              max={130}
+              step={1}
+              error={errors.lifeExpectancy}
+            />
+          </div>
+        </CollapsibleSection>
+
+        <Button type="submit" className={styles.calculateButton}>
+          Calculate
+        </Button>
+      </form>
+
+      {engineError && (
+        <p role="alert" className={styles.engineError}>
+          {engineError}
+        </p>
+      )}
+
+      {result && (
+        <div className={styles.results}>
+          <p className={styles.headline} data-status={result.status}>
+            {describeResult(result)}
+          </p>
+          <div className={styles.statRow}>
+            <StatTile label="Your number" value={formatCurrency(result.targetBalance)} />
+            <StatTile label="Projected balance" value={formatCurrency(result.projectedBalance)} />
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
