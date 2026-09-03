@@ -467,6 +467,10 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
   })
 
   it('FIN-129: sums balances across every primary-owned account, not just the first', async () => {
+    // Same isolation as "shows a spouse Medicare-start marker" above: this describe block never
+    // stubs localStorage, so a real persistence-effect write here would otherwise leak the extra
+    // account into every later test in this file.
+    vi.stubGlobal('localStorage', createFakeStorage())
     const user = userEvent.setup()
     render(<PlanSection />)
 
@@ -487,9 +491,13 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
+    vi.unstubAllGlobals()
   })
 
   it('FIN-129: includes a spouse-owned account in the household starting balance', async () => {
+    // Same isolation as above — this test adds a spouse, which is exactly the leak the comment
+    // on "shows a spouse Medicare-start marker" warns about.
+    vi.stubGlobal('localStorage', createFakeStorage())
     const user = userEvent.setup()
     render(<PlanSection />)
 
@@ -514,6 +522,7 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
+    vi.unstubAllGlobals()
   })
 
   it('clicking Reset from Profile triggers the existing reset confirmation flow', async () => {
