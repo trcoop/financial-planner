@@ -24,6 +24,24 @@
   background: var(--color-page-bg);
 }
 
+/* FIN-131: `top: 0` above only lands correctly when `.profileContent` (App.css) is this
+ * header's own scroll container — true only at >=960px (see `.profileContent`'s App.css
+ * comment). Below 960px `.profileContent` isn't a scroll container at all (the page itself
+ * scrolls, same reasoning as `.main`'s mobile `overflow-y: visible`), so this header's sticky
+ * offset resolves against the viewport instead — and stacks below the chrome that's *also*
+ * sticky to the viewport there: TopBar (56px, TopBar.module.css) + the Views TabBar
+ * (App.css/PlanSection.tsx, stuck at top: 56px) + Profile's own People/Accounts/Rates strip
+ * (`.profileNavMobile`, stuck at top: 116px, see App.css). `top: 0` here left this header
+ * stuck at the very top of the viewport, painted over by that stack (mainly TopBar's higher
+ * z-index) — effectively invisible once scrolled, reported as "the add button scrolls out of
+ * view" (FIN-131). 176px = 56 + 60 + 60, the other three panes' measured heights; update this
+ * if any of their heights change. */
+@media (max-width: 959px) {
+  .header {
+    top: 176px;
+  }
+}
+
 .heading {
   margin: 0;
   font-size: var(--font-size-lg);
