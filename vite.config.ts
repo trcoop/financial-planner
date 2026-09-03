@@ -24,7 +24,9 @@ export default defineConfig({
     // every sibling agent worktree under `.claude/worktrees/*/src/**` — running ~3 copies of
     // the suite against stale code from other branches, and letting an unrelated branch's red
     // test fail this one's run. CI clones clean so it never saw this; local runs did.
-    exclude: [...configDefaults.exclude, '.claude/**'],
+    // tests/visual/**/*.spec.ts are Playwright specs (see playwright.config.ts), not Vitest
+    // ones — Vitest's default include would otherwise collect and try to run them itself.
+    exclude: [...configDefaults.exclude, '.claude/**', 'tests/visual/**'],
     // Vitest's 5000ms default is too tight for the heaviest Monte Carlo tests (8,000-path
     // trials in calibration.test.ts, monteCarloHandler.test.ts) under CI's slower/loaded
     // runners — they run comfortably under 5s locally but have flaked repeatedly in CI on

@@ -32,6 +32,11 @@ dist-ssr
 .ladle-build
 *.local
 
+# Playwright visual regression run output (not the committed baseline snapshots)
+test-results
+playwright-report
+blob-report
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

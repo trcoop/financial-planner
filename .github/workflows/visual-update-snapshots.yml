@@ -1,0 +1,32 @@
+name: Update visual baselines
+
+# Manual trigger for regenerating tests/visual/**/*-snapshots/*.png. Baselines must be
+# generated on the same OS as the `visual` CI job (ubuntu-latest) to avoid font-rendering
+# diffs, so run this instead of `npm run test:visual:update` locally on a non-Linux machine —
+# download the resulting artifact and commit the PNGs it contains.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch to generate baselines from
+        required: false
+        default: main
+
+jobs:
+  update-snapshots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:visual:update
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visual-baselines
+          path: tests/visual/**/*-snapshots/*.png
+          retention-days: 14
