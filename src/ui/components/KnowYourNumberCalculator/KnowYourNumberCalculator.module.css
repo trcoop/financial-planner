@@ -1,0 +1,105 @@
+/* Mirrors InvestmentCalculator.module.css's structure/rationale (same standalone-calculator
+   family) — see that file's own comments for why width/min-width/max-width are pinned here. */
+.calculator {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.pullRow {
+  display: flex;
+}
+
+.requiredLegend {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Same 960px two-column treatment as InvestmentCalculator's form. */
+@media (min-width: 960px) {
+  .form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+}
+
+.hint {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.advanced {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+@media (min-width: 960px) {
+  .advanced {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+}
+
+@media (min-width: 960px) {
+  .calculateButton {
+    grid-column: 1 / -1;
+    align-self: flex-start;
+  }
+}
+
+.engineError {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-error);
+}
+
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.headline {
+  margin: 0;
+  font-family: var(--font-family-display);
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+}
+
+.headline[data-status='onTrack'],
+.headline[data-status='couldRetireEarlier'] {
+  color: var(--color-success);
+}
+
+.headline[data-status='shortBy'] {
+  color: var(--color-warning);
+}
+
+.statRow {
+  display: grid;
+  /* `minmax(0, 1fr)` guards against a large formatted-currency value forcing its column wider
+     than its `fr` share at phone widths — same fix as InvestmentCalculator.module.css. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+@media (min-width: 640px) {
+  .statRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
