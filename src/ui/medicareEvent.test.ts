@@ -99,6 +99,19 @@ describe('medicarePartBEvent', () => {
 
     expect(high.growthRate - low.growthRate).toBeCloseTo(0.04, 10)
   })
+
+  it('falls back to the shared MEDICARE_PART_B_EVENT.annualAmount when no override is given', () => {
+    const event = medicarePartBEvent(0.03)
+
+    expect(event.annualAmount).toBe(2_434.8)
+  })
+
+  it('uses the given override as the first-year annualAmount, leaving growthRate unaffected', () => {
+    const event = medicarePartBEvent(0.03, 3_000)
+
+    expect(event.annualAmount).toBe(3_000)
+    expect(event.growthRate).toBeCloseTo(0.03 + medicalInflationSpread(), 10)
+  })
 })
 
 describe('spouseMedicarePartBEvent', () => {
@@ -144,5 +157,18 @@ describe('spouseMedicarePartBEvent', () => {
     const high = spouseMedicarePartBEvent(40, 38, 0.05)
 
     expect(high.growthRate - low.growthRate).toBeCloseTo(0.04, 10)
+  })
+
+  it('falls back to the shared MEDICARE_PART_B_EVENT.annualAmount when no override is given', () => {
+    const event = spouseMedicarePartBEvent(40, 38, 0.03)
+
+    expect(event.annualAmount).toBe(2_434.8)
+  })
+
+  it('uses the given override as the first-year annualAmount, independent of the primary event', () => {
+    const event = spouseMedicarePartBEvent(40, 38, 0.03, 4_200)
+
+    expect(event.annualAmount).toBe(4_200)
+    expect(event.growthRate).toBeCloseTo(0.03 + medicalInflationSpread(), 10)
   })
 })
