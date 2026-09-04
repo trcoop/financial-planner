@@ -8,6 +8,7 @@ import { DEFAULT_ADVANCED_VALUES } from '../AdvancedAssumptionsForm/defaults'
 import { createAccount } from '../AccountsTab/Account'
 import type { Person } from '../PeopleTab/Person'
 import { blendedPortfolioReturn } from '../../../engine'
+import { DEFAULT_RETIREMENT_SPENDING_VALUES } from '../RetirementSpendingTab/RetirementSpendingGoal'
 
 async function openAdvanced(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByText('Advanced assumptions'))
@@ -421,5 +422,73 @@ describe('RetirementNumberCalculator', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.getByLabelText(/current age/i)).not.toHaveAttribute('aria-invalid', 'true')
     expect(screen.getByLabelText(/target retirement age/i)).not.toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('"Pull from my plan" prefills desiredMonthlySpend from a monthly-entered household spending goal', async () => {
+    const user = userEvent.setup()
+    const primary: Person = {
+      id: 'primary',
+      name: 'You',
+      age: 42,
+      retirementAge: 67,
+      salary: 120_000,
+      isPrimary: true,
+    }
+    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, [primary], [], {
+      generalAmount: 5_000,
+      generalAmountUnit: 'monthly',
+    })
+
+    render(<RetirementNumberCalculator />)
+    await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
+
+    expect(screen.getByLabelText(/desired monthly retirement spend/i)).toHaveValue('$5,000')
+  })
+
+  it('"Pull from my plan" prefills desiredMonthlySpend from an annual-entered household spending goal, converting to monthly', async () => {
+    const user = userEvent.setup()
+    const primary: Person = {
+      id: 'primary',
+      name: 'You',
+      age: 42,
+      retirementAge: 67,
+      salary: 120_000,
+      isPrimary: true,
+    }
+    // $70,000/year / 12 = $5,833.333... -- rounded to cents to avoid a floating-point tail.
+    saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, [primary], [], {
+      generalAmount: 70_000,
+      generalAmountUnit: 'annual',
+    })
+
+    render(<RetirementNumberCalculator />)
+    await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
+
+    expect(screen.getByLabelText(/desired monthly retirement spend/i)).toHaveValue('$5,833.33')
+  })
+
+  it('"Pull from my plan" leaves desiredMonthlySpend untouched when no household spending goal has been set', async () => {
+    const user = userEvent.setup()
+    const primary: Person = {
+      id: 'primary',
+      name: 'You',
+      age: 42,
+      retirementAge: 67,
+      salary: 120_000,
+      isPrimary: true,
+    }
+    saveAssumptions(
+      DEFAULT_CORE_VALUES,
+      DEFAULT_ADVANCED_VALUES,
+      [primary],
+      [],
+      DEFAULT_RETIREMENT_SPENDING_VALUES,
+    )
+
+    render(<RetirementNumberCalculator />)
+    await setField(user, /desired monthly retirement spend/i, '2500')
+    await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
+
+    expect(screen.getByLabelText(/desired monthly retirement spend/i)).toHaveValue('$2,500')
   })
 })
