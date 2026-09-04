@@ -297,10 +297,8 @@ export function RetirementNumberCalculator() {
           handleCalculate()
         }}
       >
-        <p className={styles.requiredLegend}>* Required</p>
-
         <NumberField
-          label="Current age *"
+          label="Current age"
           value={values.currentAge}
           onChange={(value) => setNumericField('currentAge', value)}
           onTextChange={(text) => setBlank('currentAge', text.trim() === '')}
@@ -310,7 +308,7 @@ export function RetirementNumberCalculator() {
           error={errors.currentAge}
         />
         <NumberField
-          label="Target retirement age *"
+          label="Target retirement age"
           value={values.retirementAge}
           onChange={(value) => setNumericField('retirementAge', value)}
           onTextChange={(text) => setBlank('retirementAge', text.trim() === '')}
@@ -320,7 +318,7 @@ export function RetirementNumberCalculator() {
           error={errors.retirementAge}
         />
         <NumberField
-          label="Desired monthly retirement spend (today's dollars) *"
+          label="Desired monthly retirement spend (today's dollars)"
           value={values.desiredMonthlySpend}
           onChange={(value) => setNumericField('desiredMonthlySpend', value)}
           onTextChange={(text) => setBlank('desiredMonthlySpend', text.trim() === '')}
@@ -330,7 +328,7 @@ export function RetirementNumberCalculator() {
           error={errors.desiredMonthlySpend}
         />
         <NumberField
-          label="Current retirement account balance *"
+          label="Current retirement account balance"
           value={values.currentBalance}
           onChange={(value) => setNumericField('currentBalance', value)}
           onTextChange={(text) => setBlank('currentBalance', text.trim() === '')}
@@ -341,7 +339,7 @@ export function RetirementNumberCalculator() {
         />
         <div>
           <NumberField
-            label="Annual investment/contribution amount *"
+            label="Annual investment/contribution amount"
             value={values.annualContribution}
             onChange={(value) => setNumericField('annualContribution', value)}
             onTextChange={(text) => setBlank('annualContribution', text.trim() === '')}

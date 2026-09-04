@@ -49,16 +49,16 @@ describe('RetirementNumberCalculator', () => {
     expect(screen.queryByText(/could retire/i)).not.toBeInTheDocument()
     expect(screen.queryByText('Your number')).not.toBeInTheDocument()
 
-    expect(screen.getByLabelText(/current age \*/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/target retirement age \*/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/desired monthly retirement spend.*\*/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/current retirement account balance \*/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/annual investment\/contribution amount \*/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/current age/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/target retirement age/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/desired monthly retirement spend/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/current retirement account balance/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/annual investment\/contribution amount/i)).toBeInTheDocument()
 
     // Every required field starts genuinely blank (not prefilled with a default number) — the
     // NumberField's own contract is that a non-finite value renders as empty text.
-    expect(screen.getByLabelText(/current age \*/i)).toHaveValue('')
-    expect(screen.getByLabelText(/target retirement age \*/i)).toHaveValue('')
+    expect(screen.getByLabelText(/current age/i)).toHaveValue('')
+    expect(screen.getByLabelText(/target retirement age/i)).toHaveValue('')
   })
 
   it('shows a validation error per required field and no result when Calculate is clicked blank', async () => {
@@ -69,11 +69,11 @@ describe('RetirementNumberCalculator', () => {
 
     const alerts = screen.getAllByRole('alert')
     expect(alerts.length).toBeGreaterThanOrEqual(5)
-    expect(screen.getByLabelText(/current age \*/i)).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByLabelText(/target retirement age \*/i)).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByLabelText(/desired monthly retirement spend.*\*/i)).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByLabelText(/current retirement account balance \*/i)).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByLabelText(/annual investment\/contribution amount \*/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/current age/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/target retirement age/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/desired monthly retirement spend/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/current retirement account balance/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/annual investment\/contribution amount/i)).toHaveAttribute('aria-invalid', 'true')
     expect(screen.queryByText('Your number')).not.toBeInTheDocument()
   })
 
@@ -82,11 +82,11 @@ describe('RetirementNumberCalculator', () => {
     render(<RetirementNumberCalculator />)
 
     await user.click(screen.getByRole('button', { name: 'Calculate' }))
-    expect(screen.getByLabelText(/current age \*/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/current age/i)).toHaveAttribute('aria-invalid', 'true')
 
-    await user.type(screen.getByLabelText(/current age \*/i), '40')
+    await user.type(screen.getByLabelText(/current age/i), '40')
 
-    expect(screen.getByLabelText(/current age \*/i)).not.toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/current age/i)).not.toHaveAttribute('aria-invalid', 'true')
   })
 
   it('shows "On track" with no probability/percentage when projected balance covers the target', async () => {
@@ -183,17 +183,17 @@ describe('RetirementNumberCalculator', () => {
 
     await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
 
-    expect(screen.getByLabelText(/current age \*/i)).toHaveValue('42')
-    expect(screen.getByLabelText(/target retirement age \*/i)).toHaveValue('67')
+    expect(screen.getByLabelText(/current age/i)).toHaveValue('42')
+    expect(screen.getByLabelText(/target retirement age/i)).toHaveValue('67')
     // Sum of both accounts (mirrors PlanSection's totalAccountBalance pattern).
-    expect(screen.getByLabelText(/current retirement account balance \*/i)).toHaveValue('$175,000')
+    expect(screen.getByLabelText(/current retirement account balance/i)).toHaveValue('$175,000')
 
     await openAdvanced(user)
     expect(screen.getByLabelText(/life expectancy/i)).toHaveValue('100')
 
     // Still editable after the pull — not a live/locked binding.
-    await setField(user, /current age \*/i, '50')
-    expect(screen.getByLabelText(/current age \*/i)).toHaveValue('50')
+    await setField(user, /current age/i, '50')
+    expect(screen.getByLabelText(/current age/i)).toHaveValue('50')
 
     // Read-only: pulling never writes anything back to storage.
     expect(localStorage.getItem(STORAGE_KEY)).toEqual(persistedBefore)
@@ -223,7 +223,7 @@ describe('RetirementNumberCalculator', () => {
     // No stale "Enter your current age."/"Enter your target retirement age." errors, even
     // though those two fields were never directly typed into by the user (only pulled).
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByLabelText(/current age \*/i)).not.toHaveAttribute('aria-invalid', 'true')
-    expect(screen.getByLabelText(/target retirement age \*/i)).not.toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/current age/i)).not.toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/target retirement age/i)).not.toHaveAttribute('aria-invalid', 'true')
   })
 })
