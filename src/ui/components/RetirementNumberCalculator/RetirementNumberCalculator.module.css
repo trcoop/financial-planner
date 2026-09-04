@@ -41,8 +41,14 @@
 }
 
 @media (min-width: 960px) {
-  .advanced {
+  /* The CollapsibleSection itself is the direct grid child here (not .advanced, which is only
+     its inner content wrapper) — without this it shares a row with "Annual investment/
+     contribution amount" instead of getting its own line. */
+  .advancedSection {
     grid-column: 1 / -1;
+  }
+
+  .advanced {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-4);

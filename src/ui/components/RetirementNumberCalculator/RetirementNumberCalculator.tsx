@@ -353,7 +353,7 @@ export function RetirementNumberCalculator() {
           </p>
         </div>
 
-        <CollapsibleSection summary="Advanced assumptions">
+        <CollapsibleSection summary="Advanced assumptions" className={styles.advancedSection}>
           <div className={styles.advanced}>
             <NumberField
               label="Inflation rate"
