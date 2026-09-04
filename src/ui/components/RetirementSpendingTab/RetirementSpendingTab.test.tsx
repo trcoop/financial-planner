@@ -2,7 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlanAssumptions, ProjectionRow } from '../../../engine'
-import * as knowYourNumberModule from '../../../engine/knowYourNumber'
+import * as retirementNumberModule from '../../../engine/retirementNumber'
 import { RetirementSpendingTab } from './RetirementSpendingTab'
 import { DEFAULT_RETIREMENT_SPENDING_VALUES, type RetirementSpendingValues } from './RetirementSpendingGoal'
 
@@ -12,11 +12,11 @@ import { DEFAULT_RETIREMENT_SPENDING_VALUES, type RetirementSpendingValues } fro
 // `goalAnnualAmount !== undefined` gate's own tests didn't kill a mutant that removed the gate,
 // because an ungated call with `desiredMonthlySpend: undefined / 12` throws NON_FINITE_INPUT and
 // the component's catch block hides it identically — same rendered output, wrong reason).
-const calculateKnowYourNumberSpy = vi.spyOn(knowYourNumberModule, 'calculateKnowYourNumber')
+const calculateRetirementNumberSpy = vi.spyOn(retirementNumberModule, 'calculateRetirementNumber')
 
 afterEach(() => cleanup())
 
-/** currentAge === retirementAge collapses `knowYourNumber`'s accumulation loop to zero years,
+/** currentAge === retirementAge collapses `retirementNumber`'s accumulation loop to zero years,
  * so `projectedBalance` is simply `initialBalance` — deterministic reference numbers below rely
  * on this to avoid re-deriving compound-growth arithmetic in test fixtures. */
 const BASE_ASSUMPTIONS: PlanAssumptions = {
@@ -143,12 +143,12 @@ describe('RetirementSpendingTab — Medicare lines', () => {
   })
 })
 
-describe('RetirementSpendingTab — on-track readout (shared knowYourNumber module)', () => {
-  it('shows a placeholder, not a readout, when no goal is set — and never even calls calculateKnowYourNumber', () => {
-    calculateKnowYourNumberSpy.mockClear()
+describe('RetirementSpendingTab — on-track readout (shared retirementNumber module)', () => {
+  it('shows a placeholder, not a readout, when no goal is set — and never even calls calculateRetirementNumber', () => {
+    calculateRetirementNumberSpy.mockClear()
     renderTab({ values: DEFAULT_RETIREMENT_SPENDING_VALUES })
     expect(screen.getByText(/set a spending goal/i)).toBeInTheDocument()
-    expect(calculateKnowYourNumberSpy).not.toHaveBeenCalled()
+    expect(calculateRetirementNumberSpy).not.toHaveBeenCalled()
   })
 
   it('reports on track when the projected balance covers the target (goal well within reach)', () => {
@@ -174,11 +174,11 @@ describe('RetirementSpendingTab — on-track readout (shared knowYourNumber modu
       annualReturnRate: 0.068,
     }
     // desiredMonthlySpend $1,000 -> targetBalance = 1,000*12/0.04 = 300,000, already well below
-    // the $3,000,000 starting balance at age 40 — on track at the requested age already, so this
-    // exercises the "onTrack" (not couldRetireEarlier) short-circuit instead; see the dedicated
-    // couldRetireEarlier-shaped fixture below for that branch.
+    // the $3,000,000 starting balance at age 40 — the engine finds this on track from age 40
+    // itself (25 years before the requested retirementAge 65), so it reports couldRetireEarlier
+    // at age 40 rather than onTrack at 65.
     renderTab({ values: { generalAmount: 1_000, generalAmountUnit: 'monthly' }, assumptions })
-    expect(screen.getByText(/on track/i)).toBeInTheDocument()
+    expect(screen.getByText('Could retire at age 40')).toBeInTheDocument()
   })
 
   it('does not crash and falls back to the placeholder for a malformed plan (retirementAge before currentAge)', () => {

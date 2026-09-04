@@ -5,7 +5,7 @@ import { rangeError } from '../../coreInputs/validation'
  * `AdvancedAssumptionValues`/`Person`/`Account` in `src/storage/` — mirrors `AdvancedAssumptionValues`'s
  * home in `AdvancedAssumptionsForm/`, a UI-owned settings shape rather than an engine type
  * (`src/ui/` does not import engine internals directly for this — only the standalone
- * `knowYourNumber` module, the same way `InvestmentCalculator` imports `investmentCalculator.ts`
+ * `retirementNumber` module, the same way `InvestmentCalculator` imports `investmentCalculator.ts`
  * directly per architecture.md's precedent for sibling, non-pipeline engine modules).
  *
  * ERD §4 (round 2 review correction): a round-trip-safe two-field contract, NOT a

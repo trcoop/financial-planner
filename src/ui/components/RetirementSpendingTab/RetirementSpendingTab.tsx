@@ -1,5 +1,5 @@
 import type { PlanAssumptions, ProjectionRow } from '../../../engine'
-import { InvalidKnowYourNumberInputError, calculateKnowYourNumber, type KnowYourNumberResult } from '../../../engine/knowYourNumber'
+import { InvalidRetirementNumberInputError, calculateRetirementNumber, type RetirementNumberResult } from '../../../engine/retirementNumber'
 import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
 import { formatCurrency } from '../../utils/format'
 import { NumberField } from '../NumberField/NumberField'
@@ -25,8 +25,8 @@ function roundToCents(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-/** Turns a `KnowYourNumberResult` into the tab's one-line status text. */
-function statusText(result: KnowYourNumberResult): string {
+/** Turns a `RetirementNumberResult` into the tab's one-line status text. */
+function statusText(result: RetirementNumberResult): string {
   switch (result.status) {
     case 'onTrack':
       return 'On track'
@@ -59,7 +59,7 @@ interface RetirementSpendingTabProps {
  * FIN-135: the fourth Profile sub-tab (People | Accounts | Rates | Retirement Spending). Collects
  * a household spending goal (monthly or annual, today's dollars, round-trip-safe per ERD §4) plus
  * itemized Medicare overrides, and shows a read-only on-track readout + depletion callout driven
- * by the shared `knowYourNumber` engine module (ERD §5/§8's shared-module assertion — the same
+ * by the shared `retirementNumber` engine module (ERD §5/§8's shared-module assertion — the same
  * function the standalone Know Your Number calculator uses, not a re-implementation).
  *
  * No inflation rate / return rate / life expectancy inputs here — those are read from
@@ -84,10 +84,10 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
 
   const goalAnnualAmount = retirementSpendingGoalAnnualAmount(values)
 
-  let knowYourNumberResult: KnowYourNumberResult | undefined
+  let retirementNumberResult: RetirementNumberResult | undefined
   if (goalAnnualAmount !== undefined) {
     try {
-      knowYourNumberResult = calculateKnowYourNumber({
+      retirementNumberResult = calculateRetirementNumber({
         currentAge: assumptions.currentAge,
         retirementAge: assumptions.retirementAge,
         desiredMonthlySpend: goalAnnualAmount / 12,
@@ -102,8 +102,8 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
     } catch (error) {
       // Defensive only: a malformed plan (e.g. retirementAge before currentAge) shouldn't crash
       // this tab — it silently shows no readout instead of surfacing an engine error here.
-      if (!(error instanceof InvalidKnowYourNumberInputError)) throw error
-      knowYourNumberResult = undefined
+      if (!(error instanceof InvalidRetirementNumberInputError)) throw error
+      retirementNumberResult = undefined
     }
   }
 
@@ -160,11 +160,11 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
         * row already uses — reused here rather than duplicating its responsive grid rules in
         * this component's own CSS module. */}
       <div className="statTiles">
-        {knowYourNumberResult ? (
+        {retirementNumberResult ? (
           <>
-            <StatTile label="Your number" value={formatCurrency(knowYourNumberResult.targetBalance)} />
-            <StatTile label="Projected balance" value={formatCurrency(knowYourNumberResult.projectedBalance)} />
-            <StatTile label="Status" value={statusText(knowYourNumberResult)} />
+            <StatTile label="Your number" value={formatCurrency(retirementNumberResult.targetBalance)} />
+            <StatTile label="Projected balance" value={formatCurrency(retirementNumberResult.projectedBalance)} />
+            <StatTile label="Status" value={statusText(retirementNumberResult)} />
           </>
         ) : (
           <StatTile label="Status" value="Set a spending goal above to see whether you're on track." isPlaceholder />
