@@ -13,6 +13,15 @@ import react from '@vitejs/plugin-react'
 // entirely and let Ladle supply its own Vite-6-compatible one instead.
 const isLadle = Boolean(process.env.VITE_LADLE_APP_ID)
 
+// Node 22+ added an experimental global `localStorage` (stable as of Node 24, still gated by
+// `--no-experimental-webstorage` to turn off) that shadows jsdom's own `localStorage` inside
+// Vitest's worker processes — every test that touches `src/storage/*` silently gets a broken
+// `localStorage.setItem`/`getItem` instead of jsdom's. CI pins Node 20 (`.github/workflows/
+// ci.yml`), which predates this global entirely, so this only needs to guard local runs on a
+// newer Node — hence the version check rather than always passing the flag (which Node 20
+// rejects outright: "--no-experimental-webstorage is not allowed in NODE_OPTIONS").
+const nodeMajorVersion = Number(process.versions.node.split('.')[0])
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: isLadle ? [] : [react()],
@@ -33,5 +42,6 @@ export default defineConfig({
     // this exact timeout. Raised globally rather than per-test since the same class of test
     // recurs across files.
     testTimeout: 15000,
+    ...(nodeMajorVersion >= 22 ? { execArgv: ['--no-experimental-webstorage'] } : {}),
   },
 })
