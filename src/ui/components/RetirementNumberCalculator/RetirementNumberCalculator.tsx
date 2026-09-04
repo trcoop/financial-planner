@@ -14,6 +14,7 @@ import { NumberField } from '../NumberField/NumberField'
 import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
 import { StatTile } from '../StatTile/StatTile'
 import { DEFAULT_ADVANCED_VALUES as SHARED_DEFAULT_ADVANCED_VALUES } from '../AdvancedAssumptionsForm/defaults'
+import { retirementSpendingGoalAnnualAmount } from '../RetirementSpendingTab/RetirementSpendingGoal'
 import styles from './RetirementNumberCalculator.module.css'
 
 /**
@@ -308,8 +309,12 @@ export function RetirementNumberCalculator() {
   // from summing every account's balance (mirrors `PlanSection.tsx`'s `totalAccountBalance`
   // pattern), annualContribution from summing every account's own dollar contribution (across
   // every owner, not just the primary — a spouse's accounts count too), lifeExpectancy from the
-  // app's planning-horizon constant. `desiredMonthlySpend` has no equivalent on the saved plan,
-  // so it's left for the user to enter either way.
+  // app's planning-horizon constant. `desiredMonthlySpend` is pulled from the household spending
+  // goal set on the Retirement Spending profile tab (`persisted.retirementSpending`), normalized to
+  // an annual figure via `retirementSpendingGoalAnnualAmount` and converted to monthly here (same
+  // convention `RetirementSpendingTab.tsx` uses when deriving its own `desiredMonthlySpend`) — if no
+  // goal has ever been set, the field is left untouched, same as the other pulled fields when their
+  // source data is absent.
   const handlePullFromPlan = () => {
     const persisted = loadAssumptions()
     if (!persisted) return
@@ -320,11 +325,15 @@ export function RetirementNumberCalculator() {
       (sum, account) => sum + accountAnnualContribution(account, persisted.people),
       0,
     )
+    const goalAnnualAmount = retirementSpendingGoalAnnualAmount(persisted.retirementSpending)
+    const monthlySpend =
+      goalAnnualAmount !== undefined ? Math.round((goalAnnualAmount / 12) * 100) / 100 : undefined
 
     setValues((prev) => ({
       ...prev,
       currentAge: primary ? primary.age : prev.currentAge,
       retirementAge: primary ? primary.retirementAge : prev.retirementAge,
+      desiredMonthlySpend: monthlySpend !== undefined ? monthlySpend : prev.desiredMonthlySpend,
       currentBalance: totalBalance,
       annualContribution: totalContribution,
       lifeExpectancy: PLANNING_HORIZON_END_AGE,
@@ -334,6 +343,9 @@ export function RetirementNumberCalculator() {
       if (primary) {
         next.delete('currentAge')
         next.delete('retirementAge')
+      }
+      if (monthlySpend !== undefined) {
+        next.delete('desiredMonthlySpend')
       }
       next.delete('currentBalance')
       next.delete('annualContribution')

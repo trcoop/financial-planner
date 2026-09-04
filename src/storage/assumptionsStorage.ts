@@ -6,6 +6,8 @@ import type { Person } from '../ui/components/PeopleTab/Person'
 import { PERSON_ID_PRIMARY, primaryPerson, seedPeople } from '../ui/components/PeopleTab/Person'
 import type { Account } from '../ui/components/AccountsTab/Account'
 import { seedAccounts } from '../ui/components/AccountsTab/Account'
+import type { RetirementSpendingValues } from '../ui/components/RetirementSpendingTab/RetirementSpendingGoal'
+import { DEFAULT_RETIREMENT_SPENDING_VALUES } from '../ui/components/RetirementSpendingTab/RetirementSpendingGoal'
 import { STORAGE_KEY, type PersistedAssumptions } from './schema'
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -63,7 +65,17 @@ export function loadAssumptions(): PersistedAssumptions | undefined {
   // mirroring how `seedPeople` seeds the primary Person from `core`.
   const accounts: Account[] = seedAccounts(parsed.accounts, primaryPersonId, core)
 
-  return { core, advanced, people, accounts }
+  // FIN-135: `retirementSpending` is a new field, same "absent on pre-this-ticket records"
+  // category as `people`/`accounts` above — a per-field merge against the empty-object default
+  // (mirroring `core`/`advanced`'s own merge above) rather than a seed function, since there's no
+  // migration source to seed from (unlike `people`/`accounts`, which backfill from legacy `core`
+  // fields) — an absent or malformed record simply means "no goal set" outright.
+  const retirementSpending: RetirementSpendingValues = {
+    ...DEFAULT_RETIREMENT_SPENDING_VALUES,
+    ...(isPlainObject(parsed.retirementSpending) ? (parsed.retirementSpending as Partial<RetirementSpendingValues>) : {}),
+  }
+
+  return { core, advanced, people, accounts, retirementSpending }
 }
 
 /**
@@ -77,9 +89,16 @@ export function saveAssumptions(
   advanced: AdvancedAssumptionValues,
   people: Person[],
   accounts: Account[] = [],
+  retirementSpending: RetirementSpendingValues = DEFAULT_RETIREMENT_SPENDING_VALUES,
 ): void {
   try {
-    const json = JSON.stringify({ core, advanced, people, accounts } satisfies PersistedAssumptions)
+    const json = JSON.stringify({
+      core,
+      advanced,
+      people,
+      accounts,
+      retirementSpending,
+    } satisfies PersistedAssumptions)
     localStorage.setItem(STORAGE_KEY, json)
   } catch (error) {
     console.warn('Failed to save assumptions to localStorage', error)

@@ -579,6 +579,38 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  // FIN-135: a saved retirement spending goal is plan state, same as core/advanced/people —
+  // "Reset to defaults" must clear it too, not leave it orphaned behind a freshly-defaulted plan.
+  it('reset control also clears a saved retirement spending goal', async () => {
+    vi.stubGlobal('localStorage', createFakeStorage())
+    const user = userEvent.setup()
+    try {
+      render(<PlanSection />)
+      await user.click(screen.getByRole('tab', { name: 'Profile' }))
+      const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+      await user.click(within(nav).getByRole('button', { name: 'Retirement Spending' }))
+      const field = screen.getByLabelText(/expected household expenses/i)
+      await user.clear(field)
+      await user.type(field, '5000')
+
+      await waitFor(() => {
+        const raw = window.localStorage.getItem(STORAGE_KEY)
+        expect(raw).not.toBeNull()
+        expect(JSON.parse(raw as string).retirementSpending.generalAmount).toBe(5000)
+      })
+
+      // "Reset to defaults" only renders on the People sub-tab.
+      await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'People' }))
+      await user.click(screen.getByRole('button', { name: 'Reset to defaults' }))
+      await user.click(screen.getByRole('button', { name: 'Reset' }))
+      await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Retirement Spending' }))
+
+      expect((screen.getByLabelText(/expected household expenses/i) as HTMLInputElement).value).toBe('$0')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })
 
 describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () => {
@@ -690,6 +722,83 @@ describe('PlanSection Profile nav shell (FIN-115: People/Accounts/Rates)', () =>
     expect(within(strip).getByRole('tab', { name: 'Accounts' }).querySelector('svg')).toBeInTheDocument()
     expect(within(strip).getByRole('tab', { name: 'Rates' }).querySelector('svg')).toBeInTheDocument()
   })
+
+  // FIN-135: the fourth Profile sub-tab, after Rates.
+  it('shows "Retirement Spending" as a fourth Profile nav item, after Rates', async () => {
+    const user = userEvent.setup()
+    render(<PlanSection />)
+
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    const buttons = within(nav).getAllByRole('button').map((button) => button.textContent)
+    expect(buttons).toEqual(['People', 'Accounts', 'Rates', 'Retirement Spending'])
+    expect(within(nav).getByRole('button', { name: 'Retirement Spending' }).querySelector('svg')).toBeInTheDocument()
+  })
+})
+
+describe('PlanSection Retirement Spending tab (FIN-135)', () => {
+  // Isolated fake storage per test (mirrors the "PlanSection persistence" describe block) — this
+  // suite's own tests save a goal to localStorage, which would otherwise leak into a later test
+  // in this same file via jsdom's real, file-scoped localStorage.
+  beforeEach(() => {
+    mockMatchMedia(true)
+    vi.stubGlobal('localStorage', createFakeStorage())
+  })
+  afterEach(() => {
+    cleanup()
+    vi.unstubAllGlobals()
+  })
+
+  async function openRetirementSpendingTab(user: ReturnType<typeof userEvent.setup>) {
+    render(<PlanSection />)
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    await user.click(within(nav).getByRole('button', { name: 'Retirement Spending' }))
+  }
+
+  it('renders the Retirement Spending panel when selected from the nav', async () => {
+    const user = userEvent.setup()
+    await openRetirementSpendingTab(user)
+
+    expect(screen.getByRole('heading', { name: 'Retirement Spending', level: 3 })).toBeInTheDocument()
+    expect(screen.getByLabelText(/expected household expenses/i)).toBeInTheDocument()
+  })
+
+  it('does not duplicate inflation rate, return rate, or life expectancy inputs on this tab', async () => {
+    const user = userEvent.setup()
+    await openRetirementSpendingTab(user)
+
+    expect(screen.queryByLabelText('Inflation rate')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Stock return assumption')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/life expectancy/i)).not.toBeInTheDocument()
+  })
+
+  // FIN-135 cross-reference note: wires this tab's saved goal into the `useProjectionState`
+  // call site so a saved goal actually takes effect — PR #110's `retirementSpendingGoalAnnualAmount`
+  // param (6th positional arg) has no other caller until this ticket.
+  it('wires a saved general spending goal into useProjectionState as an annual amount (monthly x 12)', async () => {
+    const user = userEvent.setup()
+    await openRetirementSpendingTab(user)
+
+    const field = screen.getByLabelText(/expected household expenses/i)
+    await user.clear(field)
+    await user.type(field, '5000')
+
+    await waitFor(() => {
+      const lastCall = vi.mocked(useProjectionStateModule.useProjectionState).mock.calls.at(-1)
+      expect(lastCall?.[5]).toBe(60_000)
+    })
+  })
+
+  it('passes no goal amount (undefined) to useProjectionState when the tab has never been touched — opt-in, no regression', async () => {
+    render(<PlanSection />)
+
+    await waitFor(() => {
+      const lastCall = vi.mocked(useProjectionStateModule.useProjectionState).mock.calls.at(-1)
+      expect(lastCall?.[5]).toBeUndefined()
+    })
+  })
 })
 
 describe('PlanSection focus management (FIN-98: mount-triggers-focus on internal tab switch)', () => {
@@ -788,6 +897,38 @@ describe('PlanSection persistence (FIN-43)', () => {
     const raw = localStorage.getItem(STORAGE_KEY)
     expect(raw).not.toBeNull()
     expect(JSON.parse(raw as string).core.currentAge).toBe(51)
+  })
+
+  // FIN-135 AC: "Given I've saved a spending goal, when I navigate away and back, then my value
+  // persists" — and per the round 2 review's round-trip contract, an annual entry redisplays as
+  // annual, not a derived monthly figure.
+  it('persists a saved retirement spending goal (annual entry, round-trip-safe) across an unmount/remount', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<PlanSection />)
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const nav = screen.getByRole('navigation', { name: 'Profile sections' })
+    await user.click(within(nav).getByRole('button', { name: 'Retirement Spending' }))
+
+    const toggle = within(screen.getByRole('radiogroup', { name: /frequency/i })).getByRole('radio', { name: 'Annual' })
+    await user.click(toggle)
+    const field = screen.getByLabelText(/expected household expenses/i)
+    await user.clear(field)
+    await user.type(field, '60000')
+
+    await waitFor(() => {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      expect(raw).not.toBeNull()
+      expect(JSON.parse(raw as string).retirementSpending).toEqual({ generalAmount: 60_000, generalAmountUnit: 'annual' })
+    })
+
+    unmount()
+    render(<PlanSection />)
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Retirement Spending' }))
+
+    const restoredField = screen.getByLabelText(/expected household expenses/i) as HTMLInputElement
+    expect(restoredField.value).toBe('$60,000')
+    expect(within(screen.getByRole('radiogroup', { name: /frequency/i })).getByRole('radio', { name: 'Annual' })).toBeChecked()
   })
 
   it('saves exactly once per settled (debounced) change, not per keystroke', async () => {

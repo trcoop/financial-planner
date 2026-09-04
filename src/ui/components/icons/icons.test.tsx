@@ -6,6 +6,7 @@ import { CalculatorIcon } from './CalculatorIcon'
 import { PeopleIcon } from './PeopleIcon'
 import { WalletIcon } from './WalletIcon'
 import { PercentIcon } from './PercentIcon'
+import { TargetIcon } from './TargetIcon'
 
 describe.each([
   ['ChartIcon', ChartIcon],
@@ -14,6 +15,7 @@ describe.each([
   ['PeopleIcon', PeopleIcon],
   ['WalletIcon', WalletIcon],
   ['PercentIcon', PercentIcon],
+  ['TargetIcon', TargetIcon],
 ])('%s', (name, Icon) => {
   it('renders an inline svg', () => {
     const { container } = render(<Icon />)

@@ -69,8 +69,18 @@
  * `--color-page-bg` — distinct from `--color-bg` white and from `--color-surface`'s card tint)
  * rather than faking a boundary with a border/radius "card" floating next to the content. */
 .inline {
-  width: 200px;
+  /* FIN-135 fix: 200px clipped the longest current label ("Retirement Spending" + icon) against
+   * the adjacent content pane at >=960px desktop widths. `.leftNav`'s own 232px shell width is
+   * exactly enough to fit that label with no room to spare — since `.inline` shares `.leftNav`'s
+   * fixed width and `box-sizing: border-box`, adding `padding-right` below to create breathing
+   * room would shrink the content box by that same amount and clip the label again. So this
+   * variant needs a width strictly wider than `.leftNav`'s 232px: the extra padding-right amount
+   * on top of it, not carved out of it. */
+  width: calc(232px + var(--space-4));
   background: var(--color-page-bg);
+  /* FIN-135 fix: breathing room to the right of the label/icon, matching the app-chrome shell's
+   * feel. Real extra space because `width` above already accounts for it (see comment above). */
+  padding-right: var(--space-4);
 }
 
 .inline .item {

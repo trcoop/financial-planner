@@ -23,6 +23,15 @@ interface NumberFieldProps {
    * message on blank) can do so without this component ever surfacing `NaN` through `onChange`.
    */
   onTextChange?: (text: string) => void
+  /**
+   * Additive, optional content (e.g. a `Tooltip` info trigger) rendered inline immediately after
+   * the label text, on the same line — for a field that needs an explanatory affordance next to
+   * its label rather than elsewhere in the field's layout. Rendered as a sibling of `<label>`
+   * inside a flex row, not inside the `<label>` itself, so it never becomes part of the label's
+   * computed accessible name (which would otherwise corrupt `getByLabelText(label)` lookups and
+   * the input's own accessible name). Omitting this prop leaves rendering exactly as before.
+   */
+  labelAdornment?: React.ReactNode
 }
 
 /** Comma-grouped for display (e.g. 250000 -> "250,000"); not used while the field is
@@ -57,6 +66,7 @@ export function NumberField({
   prefix,
   suffix,
   onTextChange,
+  labelAdornment,
 }: NumberFieldProps) {
   const inputId = useId()
   const errorId = useId()
@@ -132,9 +142,18 @@ export function NumberField({
 
   return (
     <div className={styles.field}>
-      <label htmlFor={inputId} className={styles.label}>
-        {label}
-      </label>
+      {labelAdornment ? (
+        <div className={styles.labelRow}>
+          <label htmlFor={inputId} className={styles.label}>
+            {label}
+          </label>
+          {labelAdornment}
+        </div>
+      ) : (
+        <label htmlFor={inputId} className={styles.label}>
+          {label}
+        </label>
+      )}
       <input
         ref={inputRef}
         id={inputId}

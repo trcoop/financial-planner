@@ -8,6 +8,15 @@
   composes: label from '../../formFieldShell.module.css';
 }
 
+/* Only rendered when `labelAdornment` is passed — keeps the label text and adornment (e.g. an
+   info tooltip trigger) on one line, as a sibling of `<label>` rather than inside it, so the
+   adornment's own accessible content never becomes part of the label's accessible name. */
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 /* FIN-101: this combines two separate fixes confirmed against the live double-border regression —
    1) `appearance: none` turns off the browser's own native text-field chrome (Safari/macOS paints
    its own control border underneath ours; that native line, not ours, was the one rendering
