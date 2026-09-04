@@ -16,12 +16,6 @@
   font-size: var(--font-size-base);
 }
 
-.hint {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--color-text-muted);
-}
-
 .medicareSection {
   display: flex;
   flex-direction: column;

@@ -133,7 +133,6 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
 
       <div className={styles.medicareSection}>
         <h4 className={styles.subheading}>Medicare Part B</h4>
-        <p className={styles.hint}>Suggested from CMS's current standard premium — edit to override.</p>
         <div className={styles.fieldRow}>
           <div className={styles.medicareField}>
             <NumberField
@@ -144,12 +143,14 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
               max={100_000}
               prefix="$"
               error={medicareAmountError(values.primaryMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount)}
+              labelAdornment={
+                <Tooltip label="Why this Medicare Part B amount?">
+                  CMS's current standard premium: {formatCurrency(MEDICARE_PART_B_EVENT.annualAmount)}/yr
+                </Tooltip>
+              }
             />
-            <div className={styles.medicareFieldActions}>
-              <Tooltip label="Why this Medicare Part B amount?">
-                CMS's current standard premium: {formatCurrency(MEDICARE_PART_B_EVENT.annualAmount)}/yr
-              </Tooltip>
-              {values.primaryMedicareAnnualAmount !== undefined && (
+            {values.primaryMedicareAnnualAmount !== undefined && (
+              <div className={styles.medicareFieldActions}>
                 <Button
                   variant="secondary"
                   className={styles.resetButton}
@@ -157,8 +158,8 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
                 >
                   Reset to suggested amount
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
           {hasSpouse && (
             <div className={styles.medicareField}>
@@ -170,12 +171,14 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
                 max={100_000}
                 prefix="$"
                 error={medicareAmountError(values.spouseMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount)}
+                labelAdornment={
+                  <Tooltip label="Why this Medicare Part B amount?">
+                    CMS's current standard premium: {formatCurrency(MEDICARE_PART_B_EVENT.annualAmount)}/yr
+                  </Tooltip>
+                }
               />
-              <div className={styles.medicareFieldActions}>
-                <Tooltip label="Why this Medicare Part B amount?">
-                  CMS's current standard premium: {formatCurrency(MEDICARE_PART_B_EVENT.annualAmount)}/yr
-                </Tooltip>
-                {values.spouseMedicareAnnualAmount !== undefined && (
+              {values.spouseMedicareAnnualAmount !== undefined && (
+                <div className={styles.medicareFieldActions}>
                   <Button
                     variant="secondary"
                     className={styles.resetButton}
@@ -183,8 +186,8 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
                   >
                     Reset to suggested amount
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
         </div>

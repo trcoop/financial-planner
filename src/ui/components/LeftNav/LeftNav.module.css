@@ -74,6 +74,11 @@
    * width, which is wide enough with the same padding/icon/gap sizing. */
   width: 232px;
   background: var(--color-page-bg);
+  /* FIN-135 fix: the widened label no longer clips, but its nowrap text now runs right up to
+   * `.leftNav`'s own right padding with no breathing room in the inline (Profile sub-nav)
+   * variant. Widen just the right side here rather than touching `.leftNav`'s shared padding,
+   * which already reads correctly for the app-chrome shell. */
+  padding-right: var(--space-4);
 }
 
 .inline .item {

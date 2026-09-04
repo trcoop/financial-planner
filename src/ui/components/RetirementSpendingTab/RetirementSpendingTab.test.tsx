@@ -161,6 +161,16 @@ describe('RetirementSpendingTab — Medicare suggested-amount info + reset (FIN-
     expect(screen.getByText(/\$2,435\/yr/)).toBeInTheDocument()
   })
 
+  it('places the info tooltip trigger right after the field label, not below the input', () => {
+    renderTab({ hasSpouse: false })
+    const label = screen.getByText('Medicare Part B (you)')
+    const trigger = screen.getByRole('button', { name: /why this medicare part b amount/i })
+    // The trigger's own wrapper (Tooltip renders its button inside a container div) is a
+    // sibling of the <label> itself (NumberField's `labelAdornment` row), rather than the
+    // trigger being off in a separate actions row below the input box.
+    expect(trigger.parentElement?.parentElement).toBe(label.parentElement)
+  })
+
   it('does not show a reset action when the primary Medicare field is still at the default (no override)', () => {
     renderTab({ values: DEFAULT_RETIREMENT_SPENDING_VALUES, hasSpouse: false })
     expect(screen.queryByRole('button', { name: /reset to suggested amount/i })).not.toBeInTheDocument()
