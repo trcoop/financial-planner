@@ -45,23 +45,29 @@ describe('calculateRetirementNumber — target balance', () => {
   });
 });
 
-describe('calculateRetirementNumber — onTrack (short-circuit, no search)', () => {
-  it('returns onTrack immediately when the requested retirementAge already clears the target', () => {
+describe('calculateRetirementNumber — onTrack', () => {
+  it('reports onTrack when the target is first reached exactly at the requested retirementAge', () => {
+    // NOTE: with $10,000/yr contribution and $100,000 starting balance, a $4,000/mo target
+    // (as this scenario originally used) is cleared years before age 65 -- that made the old
+    // "check retirementAge first, short-circuit to onTrack" test implicitly rely on the old,
+    // broken control flow (which never checked for an earlier on-track age once retirementAge
+    // itself passed). Hand-computed via reference script instead: target is set to the exact
+    // projected balance at age 65 (35 years of growth-then-inflated-contribution from 100,000
+    // at 6.8% with a $10,000 today's-dollars contribution inflated at 2.5%/yr), so age 65 is
+    // genuinely the earliest on-track age -- age 64's balance (~2,575,349.11) still falls short.
     const result = calculateRetirementNumber(
       input({
         currentAge: 30,
         retirementAge: 65,
-        desiredMonthlySpend: 4000,
+        desiredMonthlySpend: 9_245.420251803056,
         currentBalance: 100_000,
         annualContribution: 10_000,
       }),
     );
 
-    // Hand-computed via reference script: 35 years of growth-then-inflated-contribution from
-    // 100,000 at 6.8% with a $10,000 (today's-dollars) annual contribution inflated at 2.5%/yr.
     expect(result.status).toBe('onTrack');
     if (result.status !== 'onTrack') throw new Error('unreachable');
-    expect(result.targetBalance).toBeCloseTo(1_200_000, 6);
+    expect(result.targetBalance).toBeCloseTo(2_773_626.08, 2);
     expect(result.projectedBalance).toBeCloseTo(2_773_626.08, 2);
   });
 });
@@ -109,14 +115,40 @@ describe('calculateRetirementNumber — couldRetireEarlier', () => {
       }),
     );
 
-    // target = 2667*12/0.04 = 800,100. proj@70 = 667,607.97 (fails); proj@50 (currentAge,
-    // 0 years elapsed) = currentBalance = 1,000,000 (passes) -- the earliest, and only,
-    // passing age in range given the monotonic decay.
+    // target = 2667*12/0.04 = 800,100. proj@70 (the requested retirementAge) = 667,607.97
+    // (fails); proj@50 (currentAge, 0 years elapsed) = currentBalance = 1,000,000 (passes) --
+    // the earliest, and only, passing age in range given the monotonic decay. `projectedBalance`
+    // is still the balance at the *requested* retirementAge (70), not at earliestAge (50).
     expect(result.status).toBe('couldRetireEarlier');
     if (result.status !== 'couldRetireEarlier') throw new Error('unreachable');
     expect(result.targetBalance).toBeCloseTo(800_100, 6);
     expect(result.earliestAge).toBe(50);
-    expect(result.projectedBalance).toBe(1_000_000);
+    expect(result.projectedBalance).toBeCloseTo(667_607.9717550945, 6);
+  });
+
+  it('finds an earlier on-track age even when the requested retirementAge itself is already on-track (monotonic growth)', () => {
+    // With a positive annualReturnRate and a healthy contribution, projectedBalance grows
+    // monotonically with age, so the requested retirementAge (65) clears the target too --
+    // but the household actually hits the target years earlier, at age 40. The old
+    // "check retirementAge first, only search on failure" logic would have short-circuited
+    // to `onTrack` here without ever discovering the earlier age -- this is the scenario
+    // that was truly unreachable before the fix (as opposed to the decay scenario above,
+    // which the old forward-from-currentAge search could already stumble into).
+    const result = calculateRetirementNumber(
+      input({
+        currentAge: 30,
+        retirementAge: 65,
+        desiredMonthlySpend: 2_000,
+        currentBalance: 0,
+        annualContribution: 40_000,
+      }),
+    );
+
+    // target = 2000*12/0.04 = 600,000. Balance crosses it at age 40 (~605,214.29).
+    expect(result.status).toBe('couldRetireEarlier');
+    if (result.status !== 'couldRetireEarlier') throw new Error('unreachable');
+    expect(result.targetBalance).toBeCloseTo(600_000, 6);
+    expect(result.earliestAge).toBe(40);
   });
 });
 
@@ -199,13 +231,17 @@ describe('calculateRetirementNumber — annualContribution inflation adjustment 
     // With annualContribution inflation-adjusted (spec-correct): projectedBalance ~= 1,633,613.09
     // With annualContribution held flat-nominal (the bug this regression test guards against):
     // projectedBalance ~= 1,207,243.93
-    // desiredMonthlySpend of 4,730 puts targetBalance (1,419,000) strictly between the two,
-    // so the two implementations disagree on-track/short-by for the same inputs.
-    const result = calculateRetirementNumber(input({ ...params, desiredMonthlySpend: 4_730 }));
+    // desiredMonthlySpend of 5,333.33 sets targetBalance to 1,600,000, comfortably between age
+    // 64's inflation-adjusted balance (~1,514,883.56, still short) and age 65's
+    // (~1,633,613.09, passes) but strictly above the flat-nominal figure -- so the two
+    // implementations disagree on-track/short-by for the same inputs, and the earliest
+    // on-track age under the (correct) inflation-adjusted balance lands exactly at the
+    // requested retirementAge rather than an earlier one.
+    const result = calculateRetirementNumber(input({ ...params, desiredMonthlySpend: 5_333.33 }));
 
     expect(result.status).toBe('onTrack');
     if (result.status !== 'onTrack') throw new Error('unreachable');
-    expect(result.targetBalance).toBeCloseTo(1_419_000, 6);
+    expect(result.targetBalance).toBeCloseTo(1_599_999, 2);
     expect(result.projectedBalance).toBeCloseTo(1_633_613.0942569003, 2);
   });
 });

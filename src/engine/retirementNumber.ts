@@ -167,83 +167,67 @@ const validate = (input: RetirementNumberInput): Required<RetirementNumberInput>
 };
 
 /**
- * Forward-projects `currentBalance` from `currentAge` to `toAge`, one year at a time.
+ * Computes the household's target balance (the "number") and, given the requested
+ * `retirementAge`, whether the household is on track, short, or could retire earlier.
  *
- * Per year: growth is applied to the beginning balance first, then that year's
- * contribution is added — `balance = balance * (1 + annualReturnRate) + contributionInYear`
- * — matching the main plan engine's own per-period order (growth applied before that
- * period's cash flow), even though this calculator is otherwise fully independent of that
- * engine (ERD §5, round 1 resolution).
+ * Single incremental pass (O(n) in the `currentAge`..`lifeExpectancy` range), since
+ * `targetBalance` does not depend on the candidate age being checked: walk the balance
+ * forward one year at a time — growth applied to the beginning balance first, then that
+ * year's contribution added (`balance = balance * (1 + annualReturnRate) +
+ * contributionInYear`), with the flat `annualContribution` inflated by the number of
+ * accumulation years already elapsed before being added each year (`annualContribution *
+ * (1 + inflationRate) ** yearsFromNow`, `yearsFromNow` 0-indexed from `currentAge`) —
+ * recording the first age at which the balance reaches `targetBalance`
+ * (`earliestOnTrackAge`) and the balance at the requested `retirementAge` along the way.
  *
- * `annualContribution` is a flat today's-dollars figure with no percentage-of-salary mode,
- * so it is inflated by the number of accumulation years already elapsed before being added
- * each year (`annualContribution * (1 + inflationRate) ** yearsFromNow`, `yearsFromNow`
- * 0-indexed) — left flat-nominal it would silently lose real value the further
- * `retirementAge` is from `currentAge`, understating `projectedBalance`.
+ * Classification from `earliestOnTrackAge` vs. `retirementAge`:
+ * - Strictly before `retirementAge` → `couldRetireEarlier`, `earliestAge` set to it.
+ * - At (or, if never reached, effectively never before) `retirementAge` → `onTrack`.
+ * - Never reached by `lifeExpectancy`, or only reached after `retirementAge` → `shortBy`.
  */
-const projectBalance = (
-  params: Required<RetirementNumberInput>,
-  toAge: number,
-): number => {
-  const { currentAge, currentBalance, annualContribution, inflationRate, annualReturnRate } = params;
-  const accumulationYears = toAge - currentAge;
+export const calculateRetirementNumber = (input: RetirementNumberInput): RetirementNumberResult => {
+  const validated = validate(input);
+  const { currentAge, retirementAge, desiredMonthlySpend, annualContribution, inflationRate, annualReturnRate, safeWithdrawalRate, lifeExpectancy } =
+    validated;
 
-  let balance = currentBalance;
-  for (let yearsFromNow = 0; yearsFromNow < accumulationYears; yearsFromNow += 1) {
+  const targetBalance = (desiredMonthlySpend * 12) / safeWithdrawalRate;
+
+  let balance = validated.currentBalance;
+  let earliestOnTrackAge: number | undefined;
+  let balanceAtRetirementAge = balance;
+
+  for (let age = currentAge; age <= lifeExpectancy; age += 1) {
+    if (earliestOnTrackAge === undefined && balance >= targetBalance) {
+      earliestOnTrackAge = age;
+    }
+    if (age === retirementAge) {
+      balanceAtRetirementAge = balance;
+    }
+    if (age === lifeExpectancy) {
+      break;
+    }
+    const yearsFromNow = age - currentAge;
     const contributionInYear = annualContribution * (1 + inflationRate) ** yearsFromNow;
     balance = balance * (1 + annualReturnRate) + contributionInYear;
   }
 
-  return balance;
-};
-
-/**
- * Computes the household's target balance (the "number") and, given the requested
- * `retirementAge`, whether the household is on track, short, or could retire earlier.
- *
- * "Could retire at age Y" search (ERD §12, pinned control flow — do not deviate):
- * 1. The on-track check at the requested `retirementAge` is evaluated first. If it passes,
- *    `onTrack` is returned immediately with no search performed.
- * 2. Otherwise, integer ages from `currentAge` to `lifeExpectancy` are scanned in
- *    increasing order (a linear scan, not binary — the on-track predicate is not
- *    guaranteed monotonic in age) for the first age where the on-track check passes.
- * 3. If that earliest passing age is strictly before the requested `retirementAge`,
- *    `couldRetireEarlier` is returned with that age.
- * 4. If a passing age is found but it is not before the requested age (on track only at
- *    some later age — step 1 already ruled out the requested age itself passing, so an
- *    "exactly at it" outcome cannot occur here), or if no age in the range passes at all,
- *    the result is `shortBy` at the requested age either way.
- */
-export const calculateRetirementNumber = (input: RetirementNumberInput): RetirementNumberResult => {
-  const validated = validate(input);
-  const { currentAge, retirementAge, desiredMonthlySpend, safeWithdrawalRate, lifeExpectancy } = validated;
-
-  const targetBalance = (desiredMonthlySpend * 12) / safeWithdrawalRate;
-  const isOnTrack = (age: number): boolean => projectBalance(validated, age) >= targetBalance;
-
-  const requestedProjectedBalance = projectBalance(validated, retirementAge);
-  if (requestedProjectedBalance >= targetBalance) {
-    return { status: 'onTrack', targetBalance, projectedBalance: requestedProjectedBalance };
+  if (earliestOnTrackAge !== undefined && earliestOnTrackAge < retirementAge) {
+    return {
+      status: 'couldRetireEarlier',
+      targetBalance,
+      projectedBalance: balanceAtRetirementAge,
+      earliestAge: earliestOnTrackAge,
+    };
   }
 
-  for (let age = currentAge; age <= lifeExpectancy; age += 1) {
-    if (isOnTrack(age)) {
-      if (age < retirementAge) {
-        return {
-          status: 'couldRetireEarlier',
-          targetBalance,
-          projectedBalance: projectBalance(validated, age),
-          earliestAge: age,
-        };
-      }
-      break;
-    }
+  if (earliestOnTrackAge !== undefined && earliestOnTrackAge <= retirementAge) {
+    return { status: 'onTrack', targetBalance, projectedBalance: balanceAtRetirementAge };
   }
 
   return {
     status: 'shortBy',
     targetBalance,
-    projectedBalance: requestedProjectedBalance,
-    shortfallAmount: targetBalance - requestedProjectedBalance,
+    projectedBalance: balanceAtRetirementAge,
+    shortfallAmount: targetBalance - balanceAtRetirementAge,
   };
 };

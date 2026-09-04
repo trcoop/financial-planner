@@ -93,11 +93,17 @@ describe('RetirementNumberCalculator', () => {
     const user = userEvent.setup()
     render(<RetirementNumberCalculator />)
 
+    // NOTE: a $2,000,000 starting balance (as this scenario originally used) already clears a
+    // $300,000 target decades before age 65 -- that made the test implicitly rely on the old,
+    // broken control flow (which never checked for an earlier on-track age once retirementAge
+    // itself passed). With default rates, $100,000 start + $10,000/yr contribution reaches
+    // ~$2,575,349.11 by age 64 and ~$2,773,626.08 by age 65, so a $2,700,000 target (desired
+    // monthly spend $9,000) is only first cleared exactly at the requested retirementAge.
     await fillRequiredFields(user, {
       currentAge: '30',
       retirementAge: '65',
-      desiredMonthlySpend: '1000',
-      currentBalance: '2000000',
+      desiredMonthlySpend: '9000',
+      currentBalance: '100000',
       annualContribution: '10000',
     })
     await user.click(screen.getByRole('button', { name: 'Calculate' }))
@@ -154,6 +160,30 @@ describe('RetirementNumberCalculator', () => {
     // balance is still the full $1,000,000 (>= target) -> the earliest passing age is 60, before
     // the requested 70, so this is "could retire at age 60", not "short by".
     expect(screen.getByText(/could retire at age 60/i)).toBeInTheDocument()
+    expect(screen.queryByText(/short by/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^on track$/i)).not.toBeInTheDocument()
+  })
+
+  it('shows "could retire at age Y" when the requested age is itself on-track but an earlier age already was (monotonic growth)', async () => {
+    const user = userEvent.setup()
+    render(<RetirementNumberCalculator />)
+
+    // With default (positive) return/contribution, the projected balance grows monotonically
+    // with age, so the requested retirementAge (65) is itself on-track too -- but the target is
+    // actually first reached at age 40. Before the engine fix, the "check retirementAge first,
+    // short-circuit to onTrack" control flow made this path unreachable end-to-end: it would
+    // have shown "On track" without ever surfacing the earlier age.
+    await fillRequiredFields(user, {
+      currentAge: '30',
+      retirementAge: '65',
+      desiredMonthlySpend: '2000',
+      currentBalance: '0',
+      annualContribution: '40000',
+    })
+    await user.click(screen.getByRole('button', { name: 'Calculate' }))
+
+    // targetBalance = (2000*12)/0.04 = 600,000, first reached at age 40 (~$605,214.29).
+    expect(screen.getByText(/could retire at age 40/i)).toBeInTheDocument()
     expect(screen.queryByText(/short by/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/^on track$/i)).not.toBeInTheDocument()
   })
