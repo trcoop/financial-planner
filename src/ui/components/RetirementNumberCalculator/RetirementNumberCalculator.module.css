@@ -13,8 +13,10 @@
   display: flex;
 }
 
+/* .form's flex `gap` already puts space-4 below this — pull most of it back so the legend
+   doesn't read as an empty field's worth of space before the first real input. */
 .requiredLegend {
-  margin: 0;
+  margin: 0 0 calc(-1 * (var(--space-4) - var(--space-1))) 0;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
 }
@@ -31,6 +33,12 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: var(--space-4);
+  }
+
+  /* Otherwise shares a grid row with "Current age" and, being the shorter of the two, leaves
+     that row's leftover height as empty space in its own cell before the next row starts. */
+  .requiredLegend {
+    grid-column: 1 / -1;
   }
 }
 

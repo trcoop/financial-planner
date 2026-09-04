@@ -12,7 +12,7 @@
  * readout — see ERD: Retirement Spending Goal & Know Your Number Calculator, §5/§6/§12.
  */
 
-export interface KnowYourNumberInput {
+export interface RetirementNumberInput {
   currentAge: number;
   retirementAge: number;
   /** Today's dollars, monthly. */
@@ -32,7 +32,7 @@ export interface KnowYourNumberInput {
   lifeExpectancy?: number;
 }
 
-export type KnowYourNumberResult =
+export type RetirementNumberResult =
   | { status: 'onTrack'; targetBalance: number; projectedBalance: number }
   | { status: 'shortBy'; targetBalance: number; projectedBalance: number; shortfallAmount: number }
   | { status: 'couldRetireEarlier'; targetBalance: number; projectedBalance: number; earliestAge: number };
@@ -47,7 +47,7 @@ export type KnowYourNumberResult =
  * No absolute age-range bounds (e.g. rejecting a negative age) are enforced here — that is
  * a UI `NumberField` bounds concern, not this engine module's (ERD §12).
  */
-export type KnowYourNumberErrorCode =
+export type RetirementNumberErrorCode =
   /** Any numeric input field is `NaN`, `Infinity`, `-Infinity`, or not a number. */
   | 'NON_FINITE_INPUT'
   /** `desiredMonthlySpend`, `currentBalance`, or `annualContribution` is negative. */
@@ -67,17 +67,17 @@ export type KnowYourNumberErrorCode =
   | 'RATE_BELOW_NEGATIVE_100_PERCENT';
 
 /**
- * Thrown when caller-supplied input to `calculateKnowYourNumber` violates an invariant.
+ * Thrown when caller-supplied input to `calculateRetirementNumber` violates an invariant.
  *
  * Same `.code`/`.message` shape as `InvalidInvestmentInputError`/`InvalidProjectionInputError`,
  * but its own class — this module does not extend either (ERD §6).
  */
-export class InvalidKnowYourNumberInputError extends Error {
-  readonly code: KnowYourNumberErrorCode;
+export class InvalidRetirementNumberInputError extends Error {
+  readonly code: RetirementNumberErrorCode;
 
-  constructor(code: KnowYourNumberErrorCode, message: string) {
+  constructor(code: RetirementNumberErrorCode, message: string) {
     super(message);
-    this.name = 'InvalidKnowYourNumberInputError';
+    this.name = 'InvalidRetirementNumberInputError';
     this.code = code;
   }
 }
@@ -88,8 +88,8 @@ const DEFAULT_ANNUAL_RETURN_RATE = 0.068;
 /** Matches `PLANNING_HORIZON_END_AGE` (`src/ui/hooks/useProjectionState.ts`). */
 const DEFAULT_LIFE_EXPECTANCY = 100;
 
-const fail = (code: KnowYourNumberErrorCode, message: string): never => {
-  throw new InvalidKnowYourNumberInputError(code, message);
+const fail = (code: RetirementNumberErrorCode, message: string): never => {
+  throw new InvalidRetirementNumberInputError(code, message);
 };
 
 const assertFinite = (value: number, label: string): void => {
@@ -98,8 +98,8 @@ const assertFinite = (value: number, label: string): void => {
   }
 };
 
-/** Validates raw input and returns it with defaults applied. Throws `InvalidKnowYourNumberInputError` on any violation. */
-const validate = (input: KnowYourNumberInput): Required<KnowYourNumberInput> => {
+/** Validates raw input and returns it with defaults applied. Throws `InvalidRetirementNumberInputError` on any violation. */
+const validate = (input: RetirementNumberInput): Required<RetirementNumberInput> => {
   const inflationRate = input.inflationRate ?? DEFAULT_INFLATION_RATE;
   const safeWithdrawalRate = input.safeWithdrawalRate ?? DEFAULT_SAFE_WITHDRAWAL_RATE;
   const annualReturnRate = input.annualReturnRate ?? DEFAULT_ANNUAL_RETURN_RATE;
@@ -182,7 +182,7 @@ const validate = (input: KnowYourNumberInput): Required<KnowYourNumberInput> => 
  * `retirementAge` is from `currentAge`, understating `projectedBalance`.
  */
 const projectBalance = (
-  params: Required<KnowYourNumberInput>,
+  params: Required<RetirementNumberInput>,
   toAge: number,
 ): number => {
   const { currentAge, currentBalance, annualContribution, inflationRate, annualReturnRate } = params;
@@ -214,7 +214,7 @@ const projectBalance = (
  *    "exactly at it" outcome cannot occur here), or if no age in the range passes at all,
  *    the result is `shortBy` at the requested age either way.
  */
-export const calculateKnowYourNumber = (input: KnowYourNumberInput): KnowYourNumberResult => {
+export const calculateRetirementNumber = (input: RetirementNumberInput): RetirementNumberResult => {
   const validated = validate(input);
   const { currentAge, retirementAge, desiredMonthlySpend, safeWithdrawalRate, lifeExpectancy } = validated;
 

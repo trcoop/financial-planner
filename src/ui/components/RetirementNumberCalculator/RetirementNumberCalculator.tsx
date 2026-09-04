@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import {
-  calculateKnowYourNumber,
-  InvalidKnowYourNumberInputError,
-  type KnowYourNumberResult,
-} from '../../../engine/knowYourNumber'
+  calculateRetirementNumber,
+  InvalidRetirementNumberInputError,
+  type RetirementNumberResult,
+} from '../../../engine/retirementNumber'
 import { loadAssumptions } from '../../../storage'
 import { primaryPerson } from '../PeopleTab/Person'
 import { formatCurrency } from '../../utils/format'
@@ -11,14 +11,14 @@ import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
 import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
 import { StatTile } from '../StatTile/StatTile'
-import styles from './KnowYourNumberCalculator.module.css'
+import styles from './RetirementNumberCalculator.module.css'
 
 /**
  * Mirrors `PLANNING_HORIZON_END_AGE` (`src/ui/hooks/useProjectionState.ts`) — this app's fixed,
  * non-user-editable planning-horizon constant, which the ERD (§15) designates as this
  * calculator's `lifeExpectancy` source for both the standalone default and the "pull from my
  * plan" case (both agree on the same value today, so there is no separate pulled-vs-standalone
- * default to draw). Defined locally, matching `knowYourNumber.ts`'s own `DEFAULT_LIFE_EXPECTANCY`,
+ * default to draw). Defined locally, matching `retirementNumber.ts`'s own `DEFAULT_LIFE_EXPECTANCY`,
  * rather than imported from `useProjectionState.ts` — this standalone, non-pipeline calculator has
  * no other reason to depend on that hook's import graph (engine pipeline, Medicare event wiring,
  * debounce hook) just for one constant.
@@ -59,7 +59,7 @@ const BLANK_REQUIRED_VALUES: RequiredValues = {
   annualContribution: NaN,
 }
 
-/** Matches `knowYourNumber.ts`'s own defaults exactly, so leaving the Advanced section untouched
+/** Matches `retirementNumber.ts`'s own defaults exactly, so leaving the Advanced section untouched
  * reproduces the engine's own default behavior. */
 const DEFAULT_ADVANCED_VALUES: AdvancedValues = {
   inflationPercent: 2.5,
@@ -93,7 +93,7 @@ interface FieldErrors {
 /**
  * Client-side validation for immediate UX feedback, on top of (not instead of) the engine's own
  * validation (architecture.md convention, matching `InvestmentCalculator`'s own
- * `validateForm`). Bounds mirror `knowYourNumber.ts`'s own checks where it has one (retirement
+ * `validateForm`). Bounds mirror `retirementNumber.ts`'s own checks where it has one (retirement
  * age not before current age, life expectancy not before retirement age, safe withdrawal rate in
  * (0%, 100%]); the rest are UI-only sanity caps, since the engine deliberately has no absolute
  * age/amount bounds of its own (ERD §12).
@@ -161,7 +161,7 @@ function validateForm(values: FormValues, blankFields: ReadonlySet<RequiredField
 }
 
 /** The exactly-one headline the AC requires — never a probability/percentage. */
-function describeResult(result: KnowYourNumberResult): string {
+function describeResult(result: RetirementNumberResult): string {
   switch (result.status) {
     case 'onTrack':
       return 'On track'
@@ -173,22 +173,22 @@ function describeResult(result: KnowYourNumberResult): string {
 }
 
 /**
- * Standalone "Know Your Number" calculator (FIN-132). Owns its own form + result state; calls
- * `calculateKnowYourNumber` only on "Calculate" click — no live recalculation (two-tier
+ * Standalone "Retirement Number" calculator (FIN-132). Owns its own form + result state; calls
+ * `calculateRetirementNumber` only on "Calculate" click — no live recalculation (two-tier
  * interaction pattern, matching `InvestmentCalculator`/`StressTestSection`). Fully standalone —
  * no dependency on the saved plan/projection engine (the ticket's "no dependency on a saved
  * plan" requirement) except for the strictly opt-in, read-only "Pull from my plan" prefill below,
  * which never writes back to storage.
  */
-export function KnowYourNumberCalculator() {
+export function RetirementNumberCalculator() {
   const [values, setValues] = useState<FormValues>(DEFAULT_VALUES)
   const [blankFields, setBlankFields] = useState<ReadonlySet<RequiredField>>(new Set(REQUIRED_FIELDS))
   const [hasAttemptedCalculate, setHasAttemptedCalculate] = useState(false)
-  // Set only by a genuine `calculateKnowYourNumber` throw — effectively unreachable today since
+  // Set only by a genuine `calculateRetirementNumber` throw — effectively unreachable today since
   // `validateForm`'s bounds mirror the engine's own, kept as a defensive fallback in case the two
   // ever drift (matches `InvestmentCalculator`'s identical rationale).
   const [engineError, setEngineError] = useState<string | null>(null)
-  const [result, setResult] = useState<KnowYourNumberResult | null>(null)
+  const [result, setResult] = useState<RetirementNumberResult | null>(null)
   // Lazily read once on mount — a plan saved *after* this calculator opens still won't show the
   // button until the calculator is reopened, matching the "read-only, one-time" (not a live
   // binding) contract the ticket specifies for this feature as a whole.
@@ -222,7 +222,7 @@ export function KnowYourNumberCalculator() {
     }
 
     try {
-      const computed = calculateKnowYourNumber({
+      const computed = calculateRetirementNumber({
         currentAge: values.currentAge,
         retirementAge: values.retirementAge,
         desiredMonthlySpend: values.desiredMonthlySpend,
@@ -240,7 +240,7 @@ export function KnowYourNumberCalculator() {
       // surface any failure it still finds as a generic top-level error rather than crashing.
       setResult(null)
       setEngineError(
-        error instanceof InvalidKnowYourNumberInputError
+        error instanceof InvalidRetirementNumberInputError
           ? error.message
           : 'Something went wrong calculating your number.',
       )
@@ -280,10 +280,10 @@ export function KnowYourNumberCalculator() {
   }
 
   return (
-    <section className={styles.calculator} aria-label="Know Your Number calculator">
+    <section className={styles.calculator} aria-label="Retirement Number calculator">
       {hasPlan && (
         <div className={styles.pullRow}>
-          <Button type="button" variant="secondary" onClick={handlePullFromPlan}>
+          <Button type="button" onClick={handlePullFromPlan}>
             Pull from my plan
           </Button>
         </div>
@@ -291,7 +291,7 @@ export function KnowYourNumberCalculator() {
 
       <form
         className={styles.form}
-        aria-label="Know Your Number calculator inputs"
+        aria-label="Retirement Number calculator inputs"
         onSubmit={(event) => {
           event.preventDefault()
           handleCalculate()

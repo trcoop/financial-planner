@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { KnowYourNumberCalculator } from './KnowYourNumberCalculator'
+import { RetirementNumberCalculator } from './RetirementNumberCalculator'
 import { saveAssumptions, STORAGE_KEY } from '../../../storage'
 import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
 import { DEFAULT_ADVANCED_VALUES } from '../AdvancedAssumptionsForm/defaults'
@@ -35,14 +35,14 @@ async function fillRequiredFields(
   await setField(user, /annual investment\/contribution amount/i, values.annualContribution)
 }
 
-describe('KnowYourNumberCalculator', () => {
+describe('RetirementNumberCalculator', () => {
   afterEach(() => {
     cleanup()
     localStorage.clear()
   })
 
   it('shows no result and marks every required field on first open', () => {
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
 
     expect(screen.queryByText(/on track/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/short by/i)).not.toBeInTheDocument()
@@ -63,7 +63,7 @@ describe('KnowYourNumberCalculator', () => {
 
   it('shows a validation error per required field and no result when Calculate is clicked blank', async () => {
     const user = userEvent.setup()
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
 
     await user.click(screen.getByRole('button', { name: 'Calculate' }))
 
@@ -79,7 +79,7 @@ describe('KnowYourNumberCalculator', () => {
 
   it('clears a required-field error live once that field is filled in, without another Calculate click', async () => {
     const user = userEvent.setup()
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
 
     await user.click(screen.getByRole('button', { name: 'Calculate' }))
     expect(screen.getByLabelText(/current age \*/i)).toHaveAttribute('aria-invalid', 'true')
@@ -91,7 +91,7 @@ describe('KnowYourNumberCalculator', () => {
 
   it('shows "On track" with no probability/percentage when projected balance covers the target', async () => {
     const user = userEvent.setup()
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
 
     await fillRequiredFields(user, {
       currentAge: '30',
@@ -110,7 +110,7 @@ describe('KnowYourNumberCalculator', () => {
 
   it('shows "short by $X" at the requested age when no age in range is on-track (already-retired edge case)', async () => {
     const user = userEvent.setup()
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
 
     await fillRequiredFields(user, {
       currentAge: '65',
@@ -135,7 +135,7 @@ describe('KnowYourNumberCalculator', () => {
 
   it('shows "could retire at age Y" when an earlier age is on-track but the requested age is not', async () => {
     const user = userEvent.setup()
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
 
     await fillRequiredFields(user, {
       currentAge: '60',
@@ -159,7 +159,7 @@ describe('KnowYourNumberCalculator', () => {
   })
 
   it('hides "Pull from my plan" when no plan has ever been saved', () => {
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
 
     expect(screen.queryByRole('button', { name: /pull from my plan/i })).not.toBeInTheDocument()
   })
@@ -179,7 +179,7 @@ describe('KnowYourNumberCalculator', () => {
     saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, [primary], [account1, account2])
     const persistedBefore = localStorage.getItem(STORAGE_KEY)
 
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
 
     await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
 
@@ -213,7 +213,7 @@ describe('KnowYourNumberCalculator', () => {
       { ...createAccount('primary'), balance: 150_000 },
     ])
 
-    render(<KnowYourNumberCalculator />)
+    render(<RetirementNumberCalculator />)
     await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
     // Only the two fields the plan has no equivalent for still need to be filled in.
     await setField(user, /desired monthly retirement spend/i, '1000')

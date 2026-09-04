@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  InvalidKnowYourNumberInputError,
-  calculateKnowYourNumber,
-} from './knowYourNumber';
-import type { KnowYourNumberErrorCode, KnowYourNumberInput } from './knowYourNumber';
+  InvalidRetirementNumberInputError,
+  calculateRetirementNumber,
+} from './retirementNumber';
+import type { RetirementNumberErrorCode, RetirementNumberInput } from './retirementNumber';
 
 /** Default happy-path input, overridable per scenario. */
-const input = (overrides: Partial<KnowYourNumberInput> = {}): KnowYourNumberInput => ({
+const input = (overrides: Partial<RetirementNumberInput> = {}): RetirementNumberInput => ({
   currentAge: 30,
   retirementAge: 65,
   desiredMonthlySpend: 4000,
@@ -20,34 +20,34 @@ const input = (overrides: Partial<KnowYourNumberInput> = {}): KnowYourNumberInpu
   ...overrides,
 });
 
-/** Asserts `calculateKnowYourNumber` throws `InvalidKnowYourNumberInputError` carrying `code`. */
+/** Asserts `calculateRetirementNumber` throws `InvalidRetirementNumberInputError` carrying `code`. */
 const expectRejection = (
-  bad: KnowYourNumberInput,
-  code: KnowYourNumberErrorCode,
+  bad: RetirementNumberInput,
+  code: RetirementNumberErrorCode,
 ): void => {
   let thrown: unknown;
   try {
-    calculateKnowYourNumber(bad);
+    calculateRetirementNumber(bad);
   } catch (error) {
     thrown = error;
   }
 
-  expect(thrown).toBeInstanceOf(InvalidKnowYourNumberInputError);
-  expect((thrown as InvalidKnowYourNumberInputError).code).toBe(code);
-  expect((thrown as InvalidKnowYourNumberInputError).message).toBeTruthy();
+  expect(thrown).toBeInstanceOf(InvalidRetirementNumberInputError);
+  expect((thrown as InvalidRetirementNumberInputError).code).toBe(code);
+  expect((thrown as InvalidRetirementNumberInputError).message).toBeTruthy();
 };
 
-describe('calculateKnowYourNumber — target balance', () => {
+describe('calculateRetirementNumber — target balance', () => {
   it('computes targetBalance as (desiredMonthlySpend * 12) / safeWithdrawalRate', () => {
     // 4000 * 12 = 48000; 48000 / 0.04 = 1,200,000
-    const result = calculateKnowYourNumber(input());
+    const result = calculateRetirementNumber(input());
     expect(result.targetBalance).toBeCloseTo(1_200_000, 6);
   });
 });
 
-describe('calculateKnowYourNumber — onTrack (short-circuit, no search)', () => {
+describe('calculateRetirementNumber — onTrack (short-circuit, no search)', () => {
   it('returns onTrack immediately when the requested retirementAge already clears the target', () => {
-    const result = calculateKnowYourNumber(
+    const result = calculateRetirementNumber(
       input({
         currentAge: 30,
         retirementAge: 65,
@@ -66,9 +66,9 @@ describe('calculateKnowYourNumber — onTrack (short-circuit, no search)', () =>
   });
 });
 
-describe('calculateKnowYourNumber — shortBy (general reference scenario)', () => {
+describe('calculateRetirementNumber — shortBy (general reference scenario)', () => {
   it('reports shortBy with the hand-computed shortfall at the requested age', () => {
-    const result = calculateKnowYourNumber(
+    const result = calculateRetirementNumber(
       input({
         currentAge: 50,
         retirementAge: 60,
@@ -88,7 +88,7 @@ describe('calculateKnowYourNumber — shortBy (general reference scenario)', () 
   });
 });
 
-describe('calculateKnowYourNumber — couldRetireEarlier', () => {
+describe('calculateRetirementNumber — couldRetireEarlier', () => {
   it('finds the earliest on-track age when it is before the requested retirementAge', () => {
     // A positive annualReturnRate with a nonnegative contribution makes projectedBalance
     // monotonically increasing in age, so if the requested retirementAge fails on-track no
@@ -98,7 +98,7 @@ describe('calculateKnowYourNumber — couldRetireEarlier', () => {
     // scenario instead: the balance is highest today and decays every year after, so the
     // requested (much later) age can fail on-track while an earlier age -- here, currentAge
     // itself -- still passes.
-    const result = calculateKnowYourNumber(
+    const result = calculateRetirementNumber(
       input({
         currentAge: 50,
         retirementAge: 70,
@@ -120,9 +120,9 @@ describe('calculateKnowYourNumber — couldRetireEarlier', () => {
   });
 });
 
-describe('calculateKnowYourNumber — on-track only at a later age', () => {
+describe('calculateRetirementNumber — on-track only at a later age', () => {
   it('reports shortBy at the requested age, never a false couldRetireEarlier, when the earliest passing age is after the requested age', () => {
-    const result = calculateKnowYourNumber(
+    const result = calculateRetirementNumber(
       input({
         currentAge: 55,
         retirementAge: 60,
@@ -142,9 +142,9 @@ describe('calculateKnowYourNumber — on-track only at a later age', () => {
   });
 });
 
-describe('calculateKnowYourNumber — no on-track age anywhere in range', () => {
+describe('calculateRetirementNumber — no on-track age anywhere in range', () => {
   it('falls back to shortBy at the requested age when nothing in [currentAge, lifeExpectancy] passes', () => {
-    const result = calculateKnowYourNumber(
+    const result = calculateRetirementNumber(
       input({
         currentAge: 60,
         retirementAge: 65,
@@ -163,9 +163,9 @@ describe('calculateKnowYourNumber — no on-track age anywhere in range', () => 
   });
 });
 
-describe('calculateKnowYourNumber — already-retired input (retirementAge === currentAge)', () => {
+describe('calculateRetirementNumber — already-retired input (retirementAge === currentAge)', () => {
   it('computes a valid year-0 result with a non-empty search range', () => {
-    const result = calculateKnowYourNumber(
+    const result = calculateRetirementNumber(
       input({
         currentAge: 65,
         retirementAge: 65,
@@ -184,7 +184,7 @@ describe('calculateKnowYourNumber — already-retired input (retirementAge === c
   });
 });
 
-describe('calculateKnowYourNumber — annualContribution inflation adjustment (regression)', () => {
+describe('calculateRetirementNumber — annualContribution inflation adjustment (regression)', () => {
   it('inflates annualContribution each accumulation year rather than holding it flat-nominal, changing the on-track result', () => {
     const params = {
       currentAge: 25,
@@ -201,7 +201,7 @@ describe('calculateKnowYourNumber — annualContribution inflation adjustment (r
     // projectedBalance ~= 1,207,243.93
     // desiredMonthlySpend of 4,730 puts targetBalance (1,419,000) strictly between the two,
     // so the two implementations disagree on-track/short-by for the same inputs.
-    const result = calculateKnowYourNumber(input({ ...params, desiredMonthlySpend: 4_730 }));
+    const result = calculateRetirementNumber(input({ ...params, desiredMonthlySpend: 4_730 }));
 
     expect(result.status).toBe('onTrack');
     if (result.status !== 'onTrack') throw new Error('unreachable');
@@ -210,7 +210,7 @@ describe('calculateKnowYourNumber — annualContribution inflation adjustment (r
   });
 });
 
-describe('calculateKnowYourNumber — validation errors', () => {
+describe('calculateRetirementNumber — validation errors', () => {
   it('NON_FINITE_INPUT: rejects a non-finite currentAge', () => {
     expectRejection(input({ currentAge: NaN }), 'NON_FINITE_INPUT');
   });
@@ -239,7 +239,7 @@ describe('calculateKnowYourNumber — validation errors', () => {
   });
 
   it('RETIREMENT_AGE_NOT_AFTER_CURRENT_AGE: does not reject retirementAge === currentAge', () => {
-    expect(() => calculateKnowYourNumber(input({ currentAge: 50, retirementAge: 50 }))).not.toThrow();
+    expect(() => calculateRetirementNumber(input({ currentAge: 50, retirementAge: 50 }))).not.toThrow();
   });
 
   it('LIFE_EXPECTANCY_BEFORE_RETIREMENT_AGE: rejects lifeExpectancy < retirementAge', () => {
@@ -266,18 +266,18 @@ describe('calculateKnowYourNumber — validation errors', () => {
   });
 });
 
-describe('calculateKnowYourNumber — defaults', () => {
+describe('calculateRetirementNumber — defaults', () => {
   it('applies documented defaults when optional rate/horizon fields are omitted', () => {
-    const minimalInput: KnowYourNumberInput = {
+    const minimalInput: RetirementNumberInput = {
       currentAge: 30,
       retirementAge: 65,
       desiredMonthlySpend: 4000,
       currentBalance: 100_000,
       annualContribution: 10_000,
-    } as KnowYourNumberInput;
+    } as RetirementNumberInput;
 
-    const withDefaults = calculateKnowYourNumber(minimalInput);
-    const withExplicitDefaults = calculateKnowYourNumber(
+    const withDefaults = calculateRetirementNumber(minimalInput);
+    const withExplicitDefaults = calculateRetirementNumber(
       input({
         currentAge: 30,
         retirementAge: 65,
