@@ -137,7 +137,29 @@ describe('RetirementNumberCalculator', () => {
     // a false "could retire at" (search range is the single age 65, which already failed).
     expect(screen.getByText(/short by/i)).toBeInTheDocument()
     expect(screen.getByText(/\$1,490,000/)).toBeInTheDocument()
-    expect(screen.queryByText(/on track/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/not projected to catch up by age 65/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^on track$/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/could retire/i)).not.toBeInTheDocument()
+  })
+
+  it('shows "short by $X — on track by age Y" when the earliest on-track age is after the requested retirement age', async () => {
+    const user = userEvent.setup()
+    render(<RetirementNumberCalculator />)
+
+    // Same fixture as the engine's "on-track only at a later age" test: shortBy at the
+    // requested age 60, but balance catches up to its own year's inflated target at age 82.
+    await fillRequiredFields(user, {
+      currentAge: '55',
+      retirementAge: '60',
+      desiredMonthlySpend: '3000',
+      currentBalance: '80000',
+      annualContribution: '15000',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Calculate' }))
+
+    expect(screen.getByText(/short by/i)).toBeInTheDocument()
+    expect(screen.getByText(/on track by age 82/i)).toBeInTheDocument()
     expect(screen.queryByText(/could retire/i)).not.toBeInTheDocument()
   })
 

@@ -185,12 +185,15 @@ function accountAnnualContribution(account: Account, people: Person[]): number {
 }
 
 /** The exactly-one headline the AC requires — never a probability/percentage. */
-function describeResult(result: RetirementNumberResult): string {
+function describeResult(result: RetirementNumberResult, lifeExpectancy: number): string {
   switch (result.status) {
     case 'onTrack':
       return 'On track'
     case 'shortBy':
-      return `Short by ${formatCurrency(result.shortfallAmount)}`
+      if (result.onTrackAge !== undefined) {
+        return `Short by ${formatCurrency(result.shortfallAmount)} — on track by age ${result.onTrackAge}`
+      }
+      return `Short by ${formatCurrency(result.shortfallAmount)} — not projected to catch up by age ${lifeExpectancy}`
     case 'couldRetireEarlier':
       return `Could retire at age ${result.earliestAge}`
   }
@@ -213,6 +216,10 @@ export function RetirementNumberCalculator() {
   // ever drift (matches `InvestmentCalculator`'s identical rationale).
   const [engineError, setEngineError] = useState<string | null>(null)
   const [result, setResult] = useState<RetirementNumberResult | null>(null)
+  // Captured alongside `result` at calculate time so the "not projected to catch up by age X"
+  // headline can't drift from the `lifeExpectancy` the result was actually computed with, even
+  // if the user edits the field afterward without recalculating.
+  const [resultLifeExpectancy, setResultLifeExpectancy] = useState<number | null>(null)
   // Lazily read once on mount — a plan saved *after* this calculator opens still won't show the
   // button until the calculator is reopened, matching the "read-only, one-time" (not a live
   // binding) contract the ticket specifies for this feature as a whole.
@@ -259,10 +266,12 @@ export function RetirementNumberCalculator() {
       })
       setEngineError(null)
       setResult(computed)
+      setResultLifeExpectancy(values.lifeExpectancy)
     } catch (error) {
       // The engine validates independently of the client-side checks above (architecture.md);
       // surface any failure it still finds as a generic top-level error rather than crashing.
       setResult(null)
+      setResultLifeExpectancy(null)
       setEngineError(
         error instanceof InvalidRetirementNumberInputError
           ? error.message
@@ -442,7 +451,7 @@ export function RetirementNumberCalculator() {
       {result && (
         <div className={styles.results}>
           <p className={styles.headline} data-status={result.status}>
-            {describeResult(result)}
+            {describeResult(result, resultLifeExpectancy ?? values.lifeExpectancy)}
           </p>
           <div className={styles.statRow}>
             <StatTile label="Your number" value={formatCurrency(result.targetBalance)} />

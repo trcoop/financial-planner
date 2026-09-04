@@ -34,7 +34,19 @@ export interface RetirementNumberInput {
 
 export type RetirementNumberResult =
   | { status: 'onTrack'; targetBalance: number; projectedBalance: number }
-  | { status: 'shortBy'; targetBalance: number; projectedBalance: number; shortfallAmount: number }
+  | {
+      status: 'shortBy';
+      targetBalance: number;
+      projectedBalance: number;
+      shortfallAmount: number;
+      /**
+       * The first age (after `retirementAge`, up to `lifeExpectancy`) at which `balance`
+       * would catch up to its inflated target, given the same inputs. Absent when no such
+       * age exists within `lifeExpectancy` — i.e. still short even living to the end of the
+       * planning horizon.
+       */
+      onTrackAge?: number;
+    }
   | { status: 'couldRetireEarlier'; targetBalance: number; projectedBalance: number; earliestAge: number };
 
 /**
@@ -188,8 +200,10 @@ const validate = (input: RetirementNumberInput): Required<RetirementNumberInput>
  *
  * Classification from `earliestOnTrackAge` vs. `retirementAge`:
  * - Strictly before `retirementAge` → `couldRetireEarlier`, `earliestAge` set to it.
- * - At (or, if never reached, effectively never before) `retirementAge` → `onTrack`.
- * - Never reached by `lifeExpectancy`, or only reached after `retirementAge` → `shortBy`.
+ * - At `retirementAge` → `onTrack`.
+ * - Strictly after `retirementAge` (found by `lifeExpectancy`) → `shortBy`, with `onTrackAge`
+ *   set to it.
+ * - Never reached by `lifeExpectancy` → `shortBy`, `onTrackAge` absent.
  *
  * The `targetBalance` returned to callers (and shown as "Your number" in the UI) is the
  * today's-dollars figure inflated forward specifically to `retirementAge` — the single
@@ -239,10 +253,13 @@ export const calculateRetirementNumber = (input: RetirementNumberInput): Retirem
     return { status: 'onTrack', targetBalance: targetBalanceAtRetirement, projectedBalance: balanceAtRetirementAge };
   }
 
+  const onTrackAge = earliestOnTrackAge !== undefined && earliestOnTrackAge > retirementAge ? earliestOnTrackAge : undefined;
+
   return {
     status: 'shortBy',
     targetBalance: targetBalanceAtRetirement,
     projectedBalance: balanceAtRetirementAge,
     shortfallAmount: targetBalanceAtRetirement - balanceAtRetirementAge,
+    ...(onTrackAge !== undefined ? { onTrackAge } : {}),
   };
 };

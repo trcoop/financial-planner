@@ -180,6 +180,7 @@ describe('calculateRetirementNumber — on-track only at a later age', () => {
     expect(result.targetBalance).toBeCloseTo(1_018_267.39, 2);
     expect(result.projectedBalance).toBeCloseTo(201_188.88001960047, 2);
     expect(result.shortfallAmount).toBeCloseTo(1_018_267.39 - 201_188.88001960047, 2);
+    expect(result.onTrackAge).toBe(82);
   });
 });
 
@@ -203,6 +204,7 @@ describe('calculateRetirementNumber — no on-track age anywhere in range', () =
     if (result.status !== 'shortBy') throw new Error('unreachable');
     expect(result.targetBalance).toBeCloseTo(3_394_224.64, 2);
     expect(result.projectedBalance).toBeCloseTo(39_793.782356873366, 2);
+    expect(result.onTrackAge).toBeUndefined();
   });
 });
 
