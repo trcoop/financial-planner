@@ -748,6 +748,28 @@ describe('PlanSection persistence (FIN-43)', () => {
     expect(screen.getByLabelText('Current age')).toHaveValue('42')
   })
 
+  it('flushes an in-flight edit to storage on unmount, even before the save debounce settles (FIN-132)', async () => {
+    // Reproduces the real "Pull from my plan" bug: App.tsx unmounts PlanSection (ternary render,
+    // not CSS-hide) when the user navigates from Plan to Calculators. `useDebouncedValue`'s
+    // pending setTimeout is cancelled by its own useEffect cleanup on unmount, so without an
+    // unmount-time flush, an edit made within the ~300ms save-debounce window is silently lost
+    // and never reaches localStorage — confirmed live via a real Accounts-tab edit (contribution
+    // % change) followed by an immediate navigation to Calculators, before adding this fix.
+    const user = userEvent.setup()
+    const { unmount } = render(<PlanSection />)
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const ageInput = screen.getByLabelText('Current age')
+    await user.clear(ageInput)
+    await user.type(ageInput, '51')
+
+    // Unmount immediately — no waitFor, no advancing timers — so the debounce has not settled.
+    unmount()
+
+    const raw = localStorage.getItem(STORAGE_KEY)
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw as string).core.currentAge).toBe(51)
+  })
+
   it('saves exactly once per settled (debounced) change, not per keystroke', async () => {
     vi.doMock('../storage', async (importOriginal) => {
       const actual = await importOriginal<typeof import('../storage')>()

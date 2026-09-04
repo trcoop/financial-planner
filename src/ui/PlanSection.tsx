@@ -189,6 +189,34 @@ export function PlanSection(_props: PlanSectionProps) {
     saveAssumptions(debouncedCore, debouncedAdvanced, debouncedPeople, debouncedAccounts)
   }, [debouncedCore, debouncedAdvanced, debouncedPeople, debouncedAccounts])
 
+  // Bug fix (FIN-132): the debounced save above only fires once the ~300ms debounce settles.
+  // `App.tsx` renders Plan/Calculators as a ternary, so navigating away from Plan fully
+  // *unmounts* PlanSection — which cancels `useDebouncedValue`'s pending `setTimeout` in its own
+  // unmount cleanup before it can ever update `debouncedPeople`/`debouncedAccounts`/etc. Any edit
+  // made within that debounce window (e.g. typing a new contribution %, then immediately
+  // switching to Calculators) was silently discarded and never reached localStorage — reproduced
+  // live: edit an account's contribution, navigate to Calculators before 300ms elapses, and
+  // "Pull from my plan" pulls the stale pre-edit value.
+  //
+  // This ref mirrors the latest (non-debounced) values on every render, and a separate
+  // mount-only effect flushes it straight to `saveAssumptions` from its cleanup — which React
+  // runs synchronously during unmount, before the debounce's own cleanup has a chance to lose
+  // the pending update. `saveAssumptions` is cheap/synchronous (plain localStorage write) so an
+  // unmount-time call is safe.
+  const latestForFlushRef = useRef({
+    core: effectiveCoreValues,
+    advanced: advancedValues,
+    people,
+    accounts,
+  })
+  latestForFlushRef.current = { core: effectiveCoreValues, advanced: advancedValues, people, accounts }
+  useEffect(() => {
+    return () => {
+      const latest = latestForFlushRef.current
+      saveAssumptions(latest.core, latest.advanced, latest.people, latest.accounts)
+    }
+  }, [])
+
   // FIN-117 PM/Eng addendum round 2: confirming PeopleTab's cascade-delete dialog removes the
   // spouse from `people` — this wrapper also removes any account(s) that spouse owned, so no
   // orphaned account (owner deleted, account left behind) can result. Detects a removal by diff
