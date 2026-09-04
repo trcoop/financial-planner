@@ -199,8 +199,14 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
       <div className="statTiles">
         {retirementNumberResult ? (
           <>
-            <StatTile label="Your number" value={formatCurrency(retirementNumberResult.targetBalance)} />
-            <StatTile label="Projected balance" value={formatCurrency(retirementNumberResult.projectedBalance)} />
+            <StatTile
+              label={`Your number (future dollars, age ${assumptions.retirementAge})`}
+              value={formatCurrency(retirementNumberResult.targetBalance)}
+            />
+            <StatTile
+              label={`Projected balance (future dollars, age ${assumptions.retirementAge})`}
+              value={formatCurrency(retirementNumberResult.projectedBalance)}
+            />
             <StatTile label="Status" value={statusText(retirementNumberResult)} />
           </>
         ) : (

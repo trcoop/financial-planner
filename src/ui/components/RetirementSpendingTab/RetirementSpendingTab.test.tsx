@@ -228,6 +228,12 @@ describe('RetirementSpendingTab — on-track readout (shared retirementNumber mo
     expect(screen.getByText('$1,200,000')).toBeInTheDocument()
   })
 
+  it('labels the number/balance tiles as future dollars at the plan\'s retirement age, not today\'s dollars', () => {
+    renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' } })
+    expect(screen.getByText(/your number.*future dollars.*age 65/i)).toBeInTheDocument()
+    expect(screen.getByText(/projected balance.*future dollars.*age 65/i)).toBeInTheDocument()
+  })
+
   it('reports a shortfall amount when the projected balance falls short of the target', () => {
     // desiredMonthlySpend $10,000 -> targetBalance = 10,000*12/0.04 = 3,000,000 > 2,000,000 balance.
     // shortfallAmount = 3,000,000 - 2,000,000 = 1,000,000.
@@ -255,7 +261,7 @@ describe('RetirementSpendingTab — on-track readout (shared retirementNumber mo
     const assumptions: PlanAssumptions = { ...BASE_ASSUMPTIONS, currentAge: 70, retirementAge: 65 }
     renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' }, assumptions })
     expect(screen.getByText("Set a spending goal above to see whether you're on track.")).toBeInTheDocument()
-    expect(screen.queryByText('Your number')).not.toBeInTheDocument()
+    expect(screen.queryByText(/your number/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/short by/i)).not.toBeInTheDocument()
   })
 })
