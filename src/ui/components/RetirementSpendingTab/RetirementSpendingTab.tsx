@@ -2,8 +2,10 @@ import type { PlanAssumptions, ProjectionRow } from '../../../engine'
 import { InvalidRetirementNumberInputError, calculateRetirementNumber, type RetirementNumberResult } from '../../../engine/retirementNumber'
 import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
 import { formatCurrency } from '../../utils/format'
+import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
 import { StatTile } from '../StatTile/StatTile'
+import { Tooltip } from '../Tooltip/Tooltip'
 import { ToggleGroup } from '../InvestmentCalculator/ToggleGroup'
 import {
   generalAmountError,
@@ -118,7 +120,7 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
 
       <div className={styles.fieldRow}>
         <NumberField
-          label="Household spending goal"
+          label="Expected household expenses (today's dollars)"
           value={amount}
           onChange={handleAmountChange}
           min={0}
@@ -133,25 +135,57 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
         <h4 className={styles.subheading}>Medicare Part B</h4>
         <p className={styles.hint}>Suggested from CMS's current standard premium — edit to override.</p>
         <div className={styles.fieldRow}>
-          <NumberField
-            label="Medicare Part B (you)"
-            value={values.primaryMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount}
-            onChange={(value) => onChange({ ...values, primaryMedicareAnnualAmount: value })}
-            min={0}
-            max={100_000}
-            prefix="$"
-            error={medicareAmountError(values.primaryMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount)}
-          />
-          {hasSpouse && (
+          <div className={styles.medicareField}>
             <NumberField
-              label="Spouse's Medicare Part B"
-              value={values.spouseMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount}
-              onChange={(value) => onChange({ ...values, spouseMedicareAnnualAmount: value })}
+              label="Medicare Part B (you)"
+              value={values.primaryMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount}
+              onChange={(value) => onChange({ ...values, primaryMedicareAnnualAmount: value })}
               min={0}
               max={100_000}
               prefix="$"
-              error={medicareAmountError(values.spouseMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount)}
+              error={medicareAmountError(values.primaryMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount)}
             />
+            <div className={styles.medicareFieldActions}>
+              <Tooltip label="Why this Medicare Part B amount?">
+                CMS's current standard premium: {formatCurrency(MEDICARE_PART_B_EVENT.annualAmount)}/yr
+              </Tooltip>
+              {values.primaryMedicareAnnualAmount !== undefined && (
+                <Button
+                  variant="secondary"
+                  className={styles.resetButton}
+                  onClick={() => onChange({ ...values, primaryMedicareAnnualAmount: undefined })}
+                >
+                  Reset to suggested amount
+                </Button>
+              )}
+            </div>
+          </div>
+          {hasSpouse && (
+            <div className={styles.medicareField}>
+              <NumberField
+                label="Medicare Part B (spouse)"
+                value={values.spouseMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount}
+                onChange={(value) => onChange({ ...values, spouseMedicareAnnualAmount: value })}
+                min={0}
+                max={100_000}
+                prefix="$"
+                error={medicareAmountError(values.spouseMedicareAnnualAmount ?? MEDICARE_PART_B_EVENT.annualAmount)}
+              />
+              <div className={styles.medicareFieldActions}>
+                <Tooltip label="Why this Medicare Part B amount?">
+                  CMS's current standard premium: {formatCurrency(MEDICARE_PART_B_EVENT.annualAmount)}/yr
+                </Tooltip>
+                {values.spouseMedicareAnnualAmount !== undefined && (
+                  <Button
+                    variant="secondary"
+                    className={styles.resetButton}
+                    onClick={() => onChange({ ...values, spouseMedicareAnnualAmount: undefined })}
+                  >
+                    Reset to suggested amount
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -69,7 +69,10 @@
  * `--color-page-bg` — distinct from `--color-bg` white and from `--color-surface`'s card tint)
  * rather than faking a boundary with a border/radius "card" floating next to the content. */
 .inline {
-  width: 200px;
+  /* FIN-135 fix: 200px clipped the longest current label ("Retirement Spending" + icon) against
+   * the adjacent content pane at >=960px desktop widths. Matches `.leftNav`'s own 232px shell
+   * width, which is wide enough with the same padding/icon/gap sizing. */
+  width: 232px;
   background: var(--color-page-bg);
 }
 

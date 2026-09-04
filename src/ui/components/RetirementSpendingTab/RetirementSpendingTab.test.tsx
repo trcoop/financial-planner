@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PlanAssumptions, ProjectionRow } from '../../../engine'
@@ -59,20 +59,20 @@ function renderTab(
 describe('RetirementSpendingTab — general spending goal (FIN-135)', () => {
   it('renders the general amount field and a monthly/annual frequency toggle', () => {
     renderTab()
-    expect(screen.getByLabelText(/household spending goal/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/expected household expenses/i)).toBeInTheDocument()
     expect(screen.getByRole('radiogroup', { name: /frequency/i })).toBeInTheDocument()
   })
 
   it('round-trips an annual entry as annual — $60,000 redisplays as $60,000, not a derived $5,000/mo (ERD §4 round-trip contract)', () => {
     renderTab({ values: { generalAmount: 60_000, generalAmountUnit: 'annual' } })
-    const field = screen.getByLabelText(/household spending goal/i) as HTMLInputElement
+    const field = screen.getByLabelText(/expected household expenses/i) as HTMLInputElement
     expect(field.value).toBe('$60,000')
     expect(within(screen.getByRole('radiogroup', { name: /frequency/i })).getByRole('radio', { name: 'Annual' })).toBeChecked()
   })
 
   it('round-trips a monthly entry as monthly', () => {
     renderTab({ values: { generalAmount: 5_000, generalAmountUnit: 'monthly' } })
-    const field = screen.getByLabelText(/household spending goal/i) as HTMLInputElement
+    const field = screen.getByLabelText(/expected household expenses/i) as HTMLInputElement
     expect(field.value).toBe('$5,000')
     expect(within(screen.getByRole('radiogroup', { name: /frequency/i })).getByRole('radio', { name: 'Monthly' })).toBeChecked()
   })
@@ -81,7 +81,7 @@ describe('RetirementSpendingTab — general spending goal (FIN-135)', () => {
     const user = userEvent.setup()
     const { onChange } = renderTab({ values: { generalAmount: 0, generalAmountUnit: 'monthly' } })
 
-    const field = screen.getByLabelText(/household spending goal/i)
+    const field = screen.getByLabelText(/expected household expenses/i)
     await user.clear(field)
     await user.type(field, '4500')
 
@@ -114,20 +114,26 @@ describe('RetirementSpendingTab — no duplicated rate inputs (AC)', () => {
 describe('RetirementSpendingTab — Medicare lines', () => {
   it('always shows the primary Medicare Part B field, prefilled with the suggested default', () => {
     renderTab({ hasSpouse: false })
-    const field = screen.getByLabelText(/medicare part b/i) as HTMLInputElement
+    const field = screen.getByLabelText(/^medicare part b/i) as HTMLInputElement
     expect(field).toBeInTheDocument()
     expect(field.value).toBe('$2,434.8')
   })
 
   it('omits the spouse Medicare field entirely when there is no spouse (not disabled — absent)', () => {
     renderTab({ hasSpouse: false })
-    expect(screen.queryByLabelText(/spouse.*medicare/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/medicare part b \(spouse\)/i)).not.toBeInTheDocument()
   })
 
   it('shows the spouse Medicare field, prefilled with the same suggested default, when a spouse exists', () => {
     renderTab({ hasSpouse: true })
-    const field = screen.getByLabelText(/spouse.*medicare/i) as HTMLInputElement
+    const field = screen.getByLabelText(/medicare part b \(spouse\)/i) as HTMLInputElement
     expect(field.value).toBe('$2,434.8')
+  })
+
+  it('uses a consistent "(you)"/"(spouse)" parenthetical pattern for both Medicare labels', () => {
+    renderTab({ hasSpouse: true })
+    expect(screen.getByLabelText(/medicare part b \(you\)/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/medicare part b \(spouse\)/i)).toBeInTheDocument()
   })
 
   it('calls onChange with an explicit override when the primary Medicare field is edited', async () => {
@@ -140,6 +146,60 @@ describe('RetirementSpendingTab — Medicare lines', () => {
 
     const lastCall = onChange.mock.calls.at(-1)?.[0] as RetirementSpendingValues
     expect(lastCall.primaryMedicareAnnualAmount).toBe(3000)
+  })
+})
+
+describe('RetirementSpendingTab — Medicare suggested-amount info + reset (FIN-135 review feedback)', () => {
+  it('surfaces the CMS suggested annual amount via an accessible info affordance', () => {
+    renderTab({ hasSpouse: false })
+    const trigger = screen.getByRole('button', { name: /why this medicare part b amount/i })
+    expect(trigger).toBeInTheDocument()
+    fireEvent.click(trigger)
+    // `formatCurrency` (src/ui/utils/format.ts) rounds to whole dollars, so CMS's $2,434.80/yr
+    // premium renders as "$2,435/yr" here — matching the same formatting this tab's other
+    // dollar figures (StatTiles, etc.) use, not a separately-formatted cents figure.
+    expect(screen.getByText(/\$2,435\/yr/)).toBeInTheDocument()
+  })
+
+  it('does not show a reset action when the primary Medicare field is still at the default (no override)', () => {
+    renderTab({ values: DEFAULT_RETIREMENT_SPENDING_VALUES, hasSpouse: false })
+    expect(screen.queryByRole('button', { name: /reset to suggested amount/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a reset action once the primary Medicare field is overridden, and clears the override on click', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <RetirementSpendingTab
+        values={{ primaryMedicareAnnualAmount: 3000 }}
+        onChange={onChange}
+        assumptions={BASE_ASSUMPTIONS}
+        rows={NO_ROWS}
+        hasSpouse={false}
+      />,
+    )
+
+    const resetButton = screen.getByRole('button', { name: /reset to suggested amount/i })
+    await user.click(resetButton)
+
+    const lastCall = onChange.mock.calls.at(-1)?.[0] as RetirementSpendingValues
+    expect(lastCall.primaryMedicareAnnualAmount).toBeUndefined()
+
+    // Simulate the parent applying that onChange back down as props, and confirm the field
+    // reverts to the default suggested amount (same re-render pattern this file already uses
+    // elsewhere for prop-driven round-trips).
+    rerender(
+      <RetirementSpendingTab
+        values={lastCall}
+        onChange={onChange}
+        assumptions={BASE_ASSUMPTIONS}
+        rows={NO_ROWS}
+        hasSpouse={false}
+      />,
+    )
+    const field = screen.getByLabelText(/medicare part b \(you\)/i) as HTMLInputElement
+    expect(field.value).toBe('$2,434.8')
+    expect(screen.queryByRole('button', { name: /reset to suggested amount/i })).not.toBeInTheDocument()
   })
 })
 

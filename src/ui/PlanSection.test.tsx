@@ -590,7 +590,7 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
       await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const nav = screen.getByRole('navigation', { name: 'Profile sections' })
       await user.click(within(nav).getByRole('button', { name: 'Retirement Spending' }))
-      const field = screen.getByLabelText(/household spending goal/i)
+      const field = screen.getByLabelText(/expected household expenses/i)
       await user.clear(field)
       await user.type(field, '5000')
 
@@ -606,7 +606,7 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
       await user.click(screen.getByRole('button', { name: 'Reset' }))
       await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Retirement Spending' }))
 
-      expect((screen.getByLabelText(/household spending goal/i) as HTMLInputElement).value).toBe('$0')
+      expect((screen.getByLabelText(/expected household expenses/i) as HTMLInputElement).value).toBe('$0')
     } finally {
       vi.unstubAllGlobals()
     }
@@ -762,7 +762,7 @@ describe('PlanSection Retirement Spending tab (FIN-135)', () => {
     await openRetirementSpendingTab(user)
 
     expect(screen.getByRole('heading', { name: 'Retirement Spending', level: 3 })).toBeInTheDocument()
-    expect(screen.getByLabelText(/household spending goal/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/expected household expenses/i)).toBeInTheDocument()
   })
 
   it('does not duplicate inflation rate, return rate, or life expectancy inputs on this tab', async () => {
@@ -781,7 +781,7 @@ describe('PlanSection Retirement Spending tab (FIN-135)', () => {
     const user = userEvent.setup()
     await openRetirementSpendingTab(user)
 
-    const field = screen.getByLabelText(/household spending goal/i)
+    const field = screen.getByLabelText(/expected household expenses/i)
     await user.clear(field)
     await user.type(field, '5000')
 
@@ -911,7 +911,7 @@ describe('PlanSection persistence (FIN-43)', () => {
 
     const toggle = within(screen.getByRole('radiogroup', { name: /frequency/i })).getByRole('radio', { name: 'Annual' })
     await user.click(toggle)
-    const field = screen.getByLabelText(/household spending goal/i)
+    const field = screen.getByLabelText(/expected household expenses/i)
     await user.clear(field)
     await user.type(field, '60000')
 
@@ -926,7 +926,7 @@ describe('PlanSection persistence (FIN-43)', () => {
     await user.click(screen.getByRole('tab', { name: 'Profile' }))
     await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Retirement Spending' }))
 
-    const restoredField = screen.getByLabelText(/household spending goal/i) as HTMLInputElement
+    const restoredField = screen.getByLabelText(/expected household expenses/i) as HTMLInputElement
     expect(restoredField.value).toBe('$60,000')
     expect(within(screen.getByRole('radiogroup', { name: /frequency/i })).getByRole('radio', { name: 'Annual' })).toBeChecked()
   })
