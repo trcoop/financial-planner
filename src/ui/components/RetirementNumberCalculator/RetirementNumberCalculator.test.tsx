@@ -199,6 +199,57 @@ describe('RetirementNumberCalculator', () => {
     expect(localStorage.getItem(STORAGE_KEY)).toEqual(persistedBefore)
   })
 
+  it('"Pull from my plan" prefills annualContribution as the dollar sum of every account\'s own contribution, across every owner (percentage mode against that owner\'s own salary, fixed mode as-is)', async () => {
+    const user = userEvent.setup()
+    const primary: Person = {
+      id: 'primary',
+      name: 'You',
+      age: 42,
+      retirementAge: 67,
+      salary: 100_000,
+      isPrimary: true,
+    }
+    const spouse: Person = {
+      id: 'spouse-1',
+      name: 'Spouse',
+      age: 40,
+      retirementAge: 65,
+      salary: 80_000,
+      isPrimary: false,
+    }
+    // Primary: 10% of $100,000 = $10,000.
+    const primaryPercentageAccount = {
+      ...createAccount('primary'),
+      contributionMode: 'percentage' as const,
+      contributionPercentage: 10,
+    }
+    // Primary: fixed $5,000.
+    const primaryFixedAccount = {
+      ...createAccount('primary'),
+      contributionMode: 'fixed' as const,
+      contributionFixed: 5_000,
+    }
+    // Spouse: 5% of $80,000 = $4,000.
+    const spousePercentageAccount = {
+      ...createAccount('spouse-1'),
+      contributionMode: 'percentage' as const,
+      contributionPercentage: 5,
+    }
+    // Total: 10,000 + 5,000 + 4,000 = $19,000.
+    saveAssumptions(
+      DEFAULT_CORE_VALUES,
+      DEFAULT_ADVANCED_VALUES,
+      [primary, spouse],
+      [primaryPercentageAccount, primaryFixedAccount, spousePercentageAccount],
+    )
+
+    render(<RetirementNumberCalculator />)
+
+    await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
+
+    expect(screen.getByLabelText(/annual investment\/contribution amount/i)).toHaveValue('$19,000')
+  })
+
   it('"Pull from my plan" clears the pulled fields\' required-blank state, so Calculate works immediately without re-touching them', async () => {
     const user = userEvent.setup()
     const primary: Person = {

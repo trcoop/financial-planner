@@ -5,7 +5,8 @@ import {
   type RetirementNumberResult,
 } from '../../../engine/retirementNumber'
 import { loadAssumptions } from '../../../storage'
-import { primaryPerson } from '../PeopleTab/Person'
+import { primaryPerson, type Person } from '../PeopleTab/Person'
+import type { Account } from '../AccountsTab/Account'
 import { formatCurrency } from '../../utils/format'
 import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
@@ -160,6 +161,22 @@ function validateForm(values: FormValues, blankFields: ReadonlySet<RequiredField
   return errors
 }
 
+/** An account's own annual contribution in dollars: `fixed`-mode reads `contributionFixed`
+ * directly, `percentage`-mode is a share of the *owning Person's* salary (not the primary's) —
+ * a spouse-owned percentage-mode account contributes against the spouse's own salary. If the
+ * account's `ownerId` doesn't resolve to a real Person (shouldn't normally happen), the account
+ * contributes $0 rather than throwing. Used only by `handlePullFromPlan` below — unlike
+ * `useProjectionState.ts`'s per-mode sums (which the engine needs split by mode/owner for
+ * `AdditionalIncome`/`primaryContributionRate` wiring), this calculator only needs one flat
+ * total across every account, so that shape isn't reused here. */
+function accountAnnualContribution(account: Account, people: Person[]): number {
+  const owner = people.find((person) => person.id === account.ownerId)
+  if (!owner) return 0
+  return account.contributionMode === 'fixed'
+    ? account.contributionFixed
+    : (account.contributionPercentage / 100) * owner.salary
+}
+
 /** The exactly-one headline the AC requires — never a probability/percentage. */
 function describeResult(result: RetirementNumberResult): string {
   switch (result.status) {
@@ -250,21 +267,27 @@ export function RetirementNumberCalculator() {
   // Read-only, one-time prefill (never a live binding, never writes back to `people`/`accounts`/
   // `assumptions` — ERD §5/§12): currentAge/retirementAge from the primary Person, currentBalance
   // from summing every account's balance (mirrors `PlanSection.tsx`'s `totalAccountBalance`
-  // pattern), lifeExpectancy from the app's planning-horizon constant. `desiredMonthlySpend` and
-  // `annualContribution` have no equivalent on the saved plan, so they're left for the user to
-  // enter either way.
+  // pattern), annualContribution from summing every account's own dollar contribution (across
+  // every owner, not just the primary — a spouse's accounts count too), lifeExpectancy from the
+  // app's planning-horizon constant. `desiredMonthlySpend` has no equivalent on the saved plan,
+  // so it's left for the user to enter either way.
   const handlePullFromPlan = () => {
     const persisted = loadAssumptions()
     if (!persisted) return
 
     const primary = primaryPerson(persisted.people)
     const totalBalance = persisted.accounts.reduce((sum, account) => sum + account.balance, 0)
+    const totalContribution = persisted.accounts.reduce(
+      (sum, account) => sum + accountAnnualContribution(account, persisted.people),
+      0,
+    )
 
     setValues((prev) => ({
       ...prev,
       currentAge: primary ? primary.age : prev.currentAge,
       retirementAge: primary ? primary.retirementAge : prev.retirementAge,
       currentBalance: totalBalance,
+      annualContribution: totalContribution,
       lifeExpectancy: PLANNING_HORIZON_END_AGE,
     }))
     setBlankFields((prev) => {
@@ -274,6 +297,7 @@ export function RetirementNumberCalculator() {
         next.delete('retirementAge')
       }
       next.delete('currentBalance')
+      next.delete('annualContribution')
       return next
     })
     setEngineError(null)
