@@ -7,6 +7,7 @@ import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
 import { DEFAULT_ADVANCED_VALUES } from '../AdvancedAssumptionsForm/defaults'
 import { createAccount } from '../AccountsTab/Account'
 import type { Person } from '../PeopleTab/Person'
+import { blendedPortfolioReturn } from '../../../engine'
 
 async function openAdvanced(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByText('Advanced assumptions'))
@@ -59,6 +60,32 @@ describe('RetirementNumberCalculator', () => {
     // NumberField's own contract is that a non-finite value renders as empty text.
     expect(screen.getByLabelText(/current age/i)).toHaveValue('')
     expect(screen.getByLabelText(/target retirement age/i)).toHaveValue('')
+  })
+
+  it("defaults Advanced assumptions' return/inflation rates to the blend of the app's shared DEFAULT_ADVANCED_VALUES", async () => {
+    // Guards against the two re-drifting apart (FIN-132 review fix): this calculator's defaults
+    // must be derived from the shared AdvancedAssumptionsForm defaults, not a second hardcoded
+    // 6.8/2.5 literal, so a future change to DEFAULT_ADVANCED_VALUES breaks this test unless
+    // RetirementNumberCalculator is updated in lockstep.
+    const user = userEvent.setup()
+    render(<RetirementNumberCalculator />)
+    await openAdvanced(user)
+
+    const expectedReturnPercent =
+      blendedPortfolioReturn(
+        {
+          stocksPercent: DEFAULT_ADVANCED_VALUES.stocksAllocationPercent,
+          bondsPercent: 100 - DEFAULT_ADVANCED_VALUES.stocksAllocationPercent,
+        },
+        DEFAULT_ADVANCED_VALUES.annualReturnPercent / 100,
+        DEFAULT_ADVANCED_VALUES.bondReturnPercent / 100,
+      ) * 100
+
+    expect(expectedReturnPercent).toBeCloseTo(6.8, 10)
+    expect(DEFAULT_ADVANCED_VALUES.inflationPercent).toBe(2.5)
+
+    expect(screen.getByLabelText(/expected annual return/i)).toHaveValue('6.8%')
+    expect(screen.getByLabelText(/inflation rate/i)).toHaveValue(`${DEFAULT_ADVANCED_VALUES.inflationPercent}%`)
   })
 
   it('shows a validation error per required field and no result when Calculate is clicked blank', async () => {

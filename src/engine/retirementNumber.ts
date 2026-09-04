@@ -19,14 +19,27 @@ export interface RetirementNumberInput {
   desiredMonthlySpend: number;
   currentBalance: number;
   annualContribution: number;
-  /** Decimal (e.g. 0.025 for 2.5%). Defaults to `0.025`. */
+  /**
+   * Decimal (e.g. 0.025 for 2.5%). Defaults to `0.025`. `RetirementNumberCalculator.tsx` (the
+   * only current caller) always passes this explicitly, derived from the UI's shared
+   * `AdvancedAssumptionsForm/defaults.ts` — this default is this standalone engine module's own
+   * fallback for a caller that omits it, kept in sync by eye rather than by import (this module
+   * has no dependency on `src/ui/`, per `architecture.md`'s layering).
+   */
   inflationRate?: number;
   /**
    * Decimal (e.g. 0.04 for 4%). Defaults to `0.04`. Calculator-only — has no bearing on
    * the main plan's own withdrawal logic.
    */
   safeWithdrawalRate?: number;
-  /** Decimal (e.g. 0.068 for 6.8%). Defaults to `0.068`. */
+  /**
+   * Decimal (e.g. 0.068 for 6.8%). Defaults to `0.068` — the blend of the UI's shared 8%
+   * stocks/4% bonds/70-30 defaults (`AdvancedAssumptionsForm/defaults.ts`'s
+   * `DEFAULT_ADVANCED_VALUES`, via `blendedPortfolioReturn`), same caveat as `inflationRate`
+   * above: this module cannot import that UI file, so this literal is a fallback kept in sync
+   * by eye, not by import — `RetirementNumberCalculator.tsx` always passes its own
+   * blend-derived value explicitly instead of relying on this default.
+   */
   annualReturnRate?: number;
   /** Decimal age. Defaults to `100`, matching this app's `PLANNING_HORIZON_END_AGE`. */
   lifeExpectancy?: number;

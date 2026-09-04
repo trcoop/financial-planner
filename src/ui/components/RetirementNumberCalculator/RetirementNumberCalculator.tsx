@@ -4,6 +4,7 @@ import {
   InvalidRetirementNumberInputError,
   type RetirementNumberResult,
 } from '../../../engine/retirementNumber'
+import { blendedPortfolioReturn } from '../../../engine'
 import { loadAssumptions } from '../../../storage'
 import { primaryPerson, type Person } from '../PeopleTab/Person'
 import type { Account } from '../AccountsTab/Account'
@@ -12,6 +13,7 @@ import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
 import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
 import { StatTile } from '../StatTile/StatTile'
+import { DEFAULT_ADVANCED_VALUES as SHARED_DEFAULT_ADVANCED_VALUES } from '../AdvancedAssumptionsForm/defaults'
 import styles from './RetirementNumberCalculator.module.css'
 
 /**
@@ -60,12 +62,33 @@ const BLANK_REQUIRED_VALUES: RequiredValues = {
   annualContribution: NaN,
 }
 
-/** Matches `retirementNumber.ts`'s own defaults exactly, so leaving the Advanced section untouched
- * reproduces the engine's own default behavior. */
+/**
+ * Derived from the app's real shared defaults (`AdvancedAssumptionsForm/defaults.ts`'s
+ * `DEFAULT_ADVANCED_VALUES`, imported here as `SHARED_DEFAULT_ADVANCED_VALUES`) rather than a
+ * second hardcoded 6.8/2.5 — those two numbers are themselves just the blend of that file's
+ * 8%/4%/70/30 stocks/bonds split (`blendedPortfolioReturn`, `src/engine/monteCarlo.ts`), so
+ * hand-copying them here risked silently drifting from the shared defaults if that file ever
+ * changes (FIN-132 review fix). `retirementNumber.ts`'s own `DEFAULT_ANNUAL_RETURN_RATE`/
+ * `DEFAULT_INFLATION_RATE` are today's identical values for the same reason — see that file's
+ * doc comment — but this component always passes its own value explicitly below, so the
+ * engine's defaults never actually apply here; they exist only as that module's own standalone
+ * fallback for other/future callers. */
 const DEFAULT_ADVANCED_VALUES: AdvancedValues = {
-  inflationPercent: 2.5,
+  inflationPercent: SHARED_DEFAULT_ADVANCED_VALUES.inflationPercent,
+  // Calculator-only rate (see `RetirementNumberInput.safeWithdrawalRate`'s doc comment in
+  // `retirementNumber.ts`) — deliberately NOT derived from the shared
+  // `withdrawalRatePercent` (3.9%), which is the main Plan's own, differently-calibrated
+  // withdrawal rate; matches `retirementNumber.ts`'s own `DEFAULT_SAFE_WITHDRAWAL_RATE` (4%).
   safeWithdrawalRatePercent: 4,
-  annualReturnPercent: 6.8,
+  annualReturnPercent:
+    blendedPortfolioReturn(
+      {
+        stocksPercent: SHARED_DEFAULT_ADVANCED_VALUES.stocksAllocationPercent,
+        bondsPercent: 100 - SHARED_DEFAULT_ADVANCED_VALUES.stocksAllocationPercent,
+      },
+      SHARED_DEFAULT_ADVANCED_VALUES.annualReturnPercent / 100,
+      SHARED_DEFAULT_ADVANCED_VALUES.bondReturnPercent / 100,
+    ) * 100,
   lifeExpectancy: PLANNING_HORIZON_END_AGE,
 }
 
