@@ -169,7 +169,7 @@ describe('PlanSection', () => {
     // test rather than the whole block, to keep this a one-test fix.
     vi.stubGlobal('localStorage', createFakeStorage())
     const user = userEvent.setup()
-    render(<PlanSection />)
+    const { unmount } = render(<PlanSection />)
 
     expect(screen.queryByTestId('percentile-chart-spouse-medicare-marker')).not.toBeInTheDocument()
 
@@ -179,6 +179,15 @@ describe('PlanSection', () => {
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
 
     await waitFor(() => expect(screen.getByTestId('percentile-chart-spouse-medicare-marker')).toBeInTheDocument())
+    // FIN-132: PlanSection now also flushes pending state to `localStorage` on unmount (from its
+    // mount-only effect's cleanup). If that unmount happens after `vi.unstubAllGlobals()` below —
+    // e.g. via this describe block's `afterEach(() => cleanup())` — the flush writes to the REAL
+    // (jsdom-backed) `localStorage` instead of this test's fake, leaking this test's 2-person
+    // state into every later test in the file that doesn't stub its own storage (they'd load 2
+    // people on mount instead of 1, e.g. duplicate "Retirement age" fields). Unmounting explicitly
+    // here, while the fake is still the active global, ensures the flush lands in the fake (which
+    // is thrown away) rather than bleeding into real storage.
+    unmount()
     vi.unstubAllGlobals()
   })
 
@@ -472,7 +481,7 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     // account into every later test in this file.
     vi.stubGlobal('localStorage', createFakeStorage())
     const user = userEvent.setup()
-    render(<PlanSection />)
+    const { unmount } = render(<PlanSection />)
 
     await user.click(screen.getByRole('tab', { name: 'Profile' }))
     await user.click(within(screen.getByRole('navigation', { name: 'Profile sections' })).getByRole('button', { name: 'Accounts' }))
@@ -491,6 +500,10 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
+    // FIN-132: unmount while the fake storage is still active — see the comment on "shows a
+    // spouse Medicare-start marker" above for why (the unmount-flush effect would otherwise leak
+    // this test's 2-account state into real localStorage and bleed into later tests).
+    unmount()
     vi.unstubAllGlobals()
   })
 
@@ -499,7 +512,7 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     // on "shows a spouse Medicare-start marker" warns about.
     vi.stubGlobal('localStorage', createFakeStorage())
     const user = userEvent.setup()
-    render(<PlanSection />)
+    const { unmount } = render(<PlanSection />)
 
     await user.click(screen.getByRole('tab', { name: 'Profile' }))
     const nav = screen.getByRole('navigation', { name: 'Profile sections' })
@@ -522,6 +535,9 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
 
     await user.click(screen.getByRole('tab', { name: 'Projection' }))
     expect(screen.getByRole('region', { name: 'Current investment balance' })).toHaveTextContent('$500,000')
+    // FIN-132: unmount while the fake storage is still active — see the comment on "shows a
+    // spouse Medicare-start marker" above for why.
+    unmount()
     vi.unstubAllGlobals()
   })
 
@@ -540,8 +556,9 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
     vi.stubGlobal('localStorage', createFakeStorage())
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    let unmount: (() => void) | undefined
     try {
-      render(<PlanSection />)
+      ;({ unmount } = render(<PlanSection />))
       await user.click(screen.getByRole('tab', { name: 'Profile' }))
       const ageInput = screen.getByLabelText('Current age')
       await user.clear(ageInput)
@@ -555,6 +572,9 @@ describe('PlanSection Profile tab (FIN-98/FIN-88: replaces the Drawer)', () => {
       expect(screen.getByLabelText('Current age')).toHaveValue('35')
       expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull()
     } finally {
+      // FIN-132: unmount while the fake storage is still active — see the comment on "shows a
+      // spouse Medicare-start marker" above for why.
+      unmount?.()
       vi.useRealTimers()
       vi.unstubAllGlobals()
     }
@@ -746,6 +766,28 @@ describe('PlanSection persistence (FIN-43)', () => {
     await user.click(screen.getByRole('tab', { name: 'Profile' }))
 
     expect(screen.getByLabelText('Current age')).toHaveValue('42')
+  })
+
+  it('flushes an in-flight edit to storage on unmount, even before the save debounce settles (FIN-132)', async () => {
+    // Reproduces the real "Pull from my plan" bug: App.tsx unmounts PlanSection (ternary render,
+    // not CSS-hide) when the user navigates from Plan to Calculators. `useDebouncedValue`'s
+    // pending setTimeout is cancelled by its own useEffect cleanup on unmount, so without an
+    // unmount-time flush, an edit made within the ~300ms save-debounce window is silently lost
+    // and never reaches localStorage — confirmed live via a real Accounts-tab edit (contribution
+    // % change) followed by an immediate navigation to Calculators, before adding this fix.
+    const user = userEvent.setup()
+    const { unmount } = render(<PlanSection />)
+    await user.click(screen.getByRole('tab', { name: 'Profile' }))
+    const ageInput = screen.getByLabelText('Current age')
+    await user.clear(ageInput)
+    await user.type(ageInput, '51')
+
+    // Unmount immediately — no waitFor, no advancing timers — so the debounce has not settled.
+    unmount()
+
+    const raw = localStorage.getItem(STORAGE_KEY)
+    expect(raw).not.toBeNull()
+    expect(JSON.parse(raw as string).core.currentAge).toBe(51)
   })
 
   it('saves exactly once per settled (debounced) change, not per keystroke', async () => {
