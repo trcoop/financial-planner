@@ -246,12 +246,19 @@ export function PlanSection(_props: PlanSectionProps) {
     advanced: advancedValues,
     people,
     accounts,
+    retirementSpending: retirementSpendingValues,
   })
-  latestForFlushRef.current = { core: effectiveCoreValues, advanced: advancedValues, people, accounts }
+  latestForFlushRef.current = {
+    core: effectiveCoreValues,
+    advanced: advancedValues,
+    people,
+    accounts,
+    retirementSpending: retirementSpendingValues,
+  }
   useEffect(() => {
     return () => {
       const latest = latestForFlushRef.current
-      saveAssumptions(latest.core, latest.advanced, latest.people, latest.accounts)
+      saveAssumptions(latest.core, latest.advanced, latest.people, latest.accounts, latest.retirementSpending)
     }
   }, [])
 
