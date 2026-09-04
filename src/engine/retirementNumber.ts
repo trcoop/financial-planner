@@ -46,6 +46,18 @@ export type RetirementNumberResult =
        * planning horizon.
        */
       onTrackAge?: number;
+      /**
+       * The additional annual contribution (on top of the existing `annualContribution`)
+       * needed to close `shortfallAmount` by the requested `retirementAge`, holding every
+       * other input fixed. Computed by re-running the same accumulation loop with
+       * `annualContribution + 1` and taking the resulting balance-at-retirement delta as the
+       * per-dollar sensitivity (`contributionMultiplier`), then dividing the shortfall by it —
+       * this stays consistent with the loop's exact growth/contribution timing without
+       * re-deriving it as a closed-form sum. Omitted when there are no accumulation years
+       * left to contribute in (`retirementAge === currentAge`), since no amount of additional
+       * annual contribution can close the gap in that case.
+       */
+      requiredExtraAnnualContribution?: number;
     }
   | { status: 'couldRetireEarlier'; targetBalance: number; projectedBalance: number; earliestAge: number };
 
@@ -255,11 +267,33 @@ export const calculateRetirementNumber = (input: RetirementNumberInput): Retirem
 
   const onTrackAge = earliestOnTrackAge !== undefined && earliestOnTrackAge > retirementAge ? earliestOnTrackAge : undefined;
 
+  const shortfallAmount = targetBalanceAtRetirement - balanceAtRetirementAge;
+
+  let requiredExtraAnnualContribution: number | undefined;
+  if (retirementAge > currentAge) {
+    let marginalBalance = validated.currentBalance;
+    let marginalBalanceAtRetirementAge = marginalBalance;
+    for (let age = currentAge; age <= retirementAge; age += 1) {
+      if (age === retirementAge) {
+        marginalBalanceAtRetirementAge = marginalBalance;
+        break;
+      }
+      const yearsFromNow = age - currentAge;
+      const contributionInYear = (annualContribution + 1) * (1 + inflationRate) ** yearsFromNow;
+      marginalBalance = marginalBalance * (1 + annualReturnRate) + contributionInYear;
+    }
+    const contributionMultiplier = marginalBalanceAtRetirementAge - balanceAtRetirementAge;
+    if (contributionMultiplier > 0) {
+      requiredExtraAnnualContribution = shortfallAmount / contributionMultiplier;
+    }
+  }
+
   return {
     status: 'shortBy',
     targetBalance: targetBalanceAtRetirement,
     projectedBalance: balanceAtRetirementAge,
-    shortfallAmount: targetBalanceAtRetirement - balanceAtRetirementAge,
+    shortfallAmount,
     ...(onTrackAge !== undefined ? { onTrackAge } : {}),
+    requiredExtraAnnualContribution,
   };
 };

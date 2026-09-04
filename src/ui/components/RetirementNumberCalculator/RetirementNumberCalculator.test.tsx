@@ -163,6 +163,44 @@ describe('RetirementNumberCalculator', () => {
     expect(screen.queryByText(/could retire/i)).not.toBeInTheDocument()
   })
 
+  it('shows the extra annual contribution needed to close the gap when shortBy with accumulation years remaining', async () => {
+    const user = userEvent.setup()
+    render(<RetirementNumberCalculator />)
+
+    await fillRequiredFields(user, {
+      currentAge: '50',
+      retirementAge: '60',
+      desiredMonthlySpend: '5000',
+      currentBalance: '50000',
+      annualContribution: '5000',
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Calculate' }))
+
+    expect(screen.getByText(/short by/i)).toBeInTheDocument()
+    expect(screen.getByText(/extra needed per year to close the gap/i)).toBeInTheDocument()
+  })
+
+  it('omits the extra-contribution stat when shortBy with no accumulation years remaining (already retired)', async () => {
+    const user = userEvent.setup()
+    render(<RetirementNumberCalculator />)
+
+    await fillRequiredFields(user, {
+      currentAge: '65',
+      retirementAge: '65',
+      desiredMonthlySpend: '5000',
+      currentBalance: '10000',
+      annualContribution: '0',
+    })
+    await openAdvanced(user)
+    await setField(user, /life expectancy/i, '65')
+
+    await user.click(screen.getByRole('button', { name: 'Calculate' }))
+
+    expect(screen.getByText(/short by/i)).toBeInTheDocument()
+    expect(screen.queryByText(/extra needed per year to close the gap/i)).not.toBeInTheDocument()
+  })
+
   it('shows "could retire at age Y" when an earlier age is on-track but the requested age is not', async () => {
     const user = userEvent.setup()
     render(<RetirementNumberCalculator />)

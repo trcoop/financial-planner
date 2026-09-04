@@ -456,6 +456,12 @@ export function RetirementNumberCalculator() {
           <div className={styles.statRow}>
             <StatTile label="Your number" value={formatCurrency(result.targetBalance)} />
             <StatTile label="Projected balance" value={formatCurrency(result.projectedBalance)} />
+            {result.status === 'shortBy' && result.requiredExtraAnnualContribution !== undefined && (
+              <StatTile
+                label="Extra needed per year to close the gap"
+                value={formatCurrency(result.requiredExtraAnnualContribution)}
+              />
+            )}
           </div>
         </div>
       )}

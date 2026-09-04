@@ -94,6 +94,48 @@ describe('calculateRetirementNumber — shortBy (general reference scenario)', (
     expect(result.projectedBalance).toBeCloseTo(172_186.28222708646, 2);
     expect(result.shortfallAmount).toBeCloseTo(1_747_940.53, 2);
   });
+
+  it('reports a requiredExtraAnnualContribution that closes the gap by the same retirementAge', () => {
+    const baseInput = input({
+      currentAge: 50,
+      retirementAge: 60,
+      desiredMonthlySpend: 5000,
+      currentBalance: 50_000,
+      annualContribution: 5_000,
+    });
+
+    const result = calculateRetirementNumber(baseInput);
+    expect(result.status).toBe('shortBy');
+    if (result.status !== 'shortBy') throw new Error('unreachable');
+    expect(result.requiredExtraAnnualContribution).toBeDefined();
+
+    const boosted = calculateRetirementNumber({
+      ...baseInput,
+      annualContribution: baseInput.annualContribution + result.requiredExtraAnnualContribution!,
+    });
+
+    expect(boosted.status).toBe('onTrack');
+    // Should land right at (or extremely close to) the target, not wildly over/under.
+    if (boosted.status === 'onTrack') {
+      expect(boosted.projectedBalance).toBeCloseTo(boosted.targetBalance, 2);
+    }
+  });
+
+  it('omits requiredExtraAnnualContribution when there are no accumulation years left (already retired)', () => {
+    const result = calculateRetirementNumber(
+      input({
+        currentAge: 65,
+        retirementAge: 65,
+        desiredMonthlySpend: 5000,
+        currentBalance: 100_000,
+        annualContribution: 5_000,
+      }),
+    );
+
+    expect(result.status).toBe('shortBy');
+    if (result.status !== 'shortBy') throw new Error('unreachable');
+    expect(result.requiredExtraAnnualContribution).toBeUndefined();
+  });
 });
 
 describe('calculateRetirementNumber — couldRetireEarlier', () => {
