@@ -77,10 +77,18 @@ export const MEDICARE_PART_B_EVENT: Omit<MedicarePartBEvent, 'growthRate'> = {
  * function; it only ever sees this rate as that branch's own gap-year fallback (a year outside
  * the historical table), by the same `eventGrowthOverrides?.get(id) ?? event.growthRate`
  * mechanism the deterministic branch also uses (WP-1b, `pipeline.ts`).
+ *
+ * `annualAmountOverride` (FIN-136): the Retirement Spending tab's editable Medicare line lets a
+ * user overwrite the suggested first-year cost. When given, it replaces
+ * `MEDICARE_PART_B_EVENT.annualAmount` as this event's starting `annualAmount` — the shared
+ * constant is only ever the fallback default from here on, not a second source of truth.
+ * `growthRate`'s derivation is unaffected: escalation continues from whichever first-year value
+ * this event actually starts at.
  */
-export function medicarePartBEvent(generalInflationRate: number): MedicarePartBEvent {
+export function medicarePartBEvent(generalInflationRate: number, annualAmountOverride?: number): MedicarePartBEvent {
   return {
     ...MEDICARE_PART_B_EVENT,
+    annualAmount: annualAmountOverride ?? MEDICARE_PART_B_EVENT.annualAmount,
     growthRate: generalInflationRate + medicalInflationSpread(),
   }
 }
@@ -100,17 +108,23 @@ export function medicarePartBEvent(generalInflationRate: number): MedicarePartBE
  * Same cost assumption and `growthRate` derivation as {@link medicarePartBEvent} — there is no
  * separate cost basis for a spouse's Part B premium, since CMS sets the same standard premium
  * per beneficiary regardless of whose plan they're attached to.
+ *
+ * `annualAmountOverride` (FIN-136): same mechanism as {@link medicarePartBEvent}'s own param —
+ * the spouse's line on the Retirement Spending tab overrides independently of the primary's, so
+ * each person's Medicare event now has its own first-year-amount field rather than sharing one.
  */
 export function spouseMedicarePartBEvent(
   currentAge: number,
   spouseAge: number,
   generalInflationRate: number,
+  annualAmountOverride?: number,
 ): MedicarePartBEvent {
   return {
     ...MEDICARE_PART_B_EVENT,
     id: 'medicareSpousePartB',
     label: "Spouse's Medicare Part B",
     startAge: currentAge + (65 - spouseAge),
+    annualAmount: annualAmountOverride ?? MEDICARE_PART_B_EVENT.annualAmount,
     growthRate: generalInflationRate + medicalInflationSpread(),
   }
 }

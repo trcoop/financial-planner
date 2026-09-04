@@ -195,6 +195,16 @@ export function PlanSection(_props: PlanSectionProps) {
     retirementSpendingGoalAnnualAmount(retirementSpendingValues),
     RECALCULATION_DEBOUNCE_MS,
   )
+  // FIN-136: same debounce cadence as `retirementSpendingGoalAmount` above — these are live-typed
+  // NumberFields too, so the projection shouldn't recompute on every keystroke.
+  const primaryMedicareAmount = useDebouncedValue(
+    retirementSpendingValues.primaryMedicareAnnualAmount,
+    RECALCULATION_DEBOUNCE_MS,
+  )
+  const spouseMedicareAmount = useDebouncedValue(
+    retirementSpendingValues.spouseMedicareAnnualAmount,
+    RECALCULATION_DEBOUNCE_MS,
+  )
 
   // Fields update immediately for typing/validation feedback; the projection recalculation
   // itself is debounced ~300ms per FIN-9's notes, and "pauses" — keeps showing the last valid
@@ -207,6 +217,8 @@ export function PlanSection(_props: PlanSectionProps) {
       people,
       accounts,
       retirementSpendingGoalAmount,
+      primaryMedicareAmount,
+      spouseMedicareAmount,
     )
 
   // Persists once per settled (debounced) change, riding useProjectionState's existing ~300ms
@@ -448,6 +460,7 @@ export function PlanSection(_props: PlanSectionProps) {
                     }}
                     onSuccessRateChange={setSuccessRate}
                     onStaleChange={setIsStressTestStale}
+                    primaryMedicareAnnualAmount={primaryMedicareAmount}
                   />
                 </Card>
               </section>
