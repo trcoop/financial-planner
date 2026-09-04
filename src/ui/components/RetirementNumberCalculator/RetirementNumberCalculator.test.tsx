@@ -250,6 +250,30 @@ describe('RetirementNumberCalculator', () => {
     expect(screen.getByLabelText(/annual investment\/contribution amount/i)).toHaveValue('$19,000')
   })
 
+  it('"Pull from my plan" prefills a finite annualContribution (not blank) even when a persisted Person is missing salary — unlike `Account.ts`\'s `normalizeAccount`, `seedPeople` does not repair a persisted Person\'s fields, so a schema-drifted record can reach this component with `salary: undefined`', async () => {
+    const user = userEvent.setup()
+    // Written directly as raw, untrusted JSON (rather than via `saveAssumptions`/typed `Person`)
+    // to reproduce the real shape a schema-drifted or partially-migrated persisted record can
+    // actually have — `salary` missing entirely, as a pre-salary-field Person record would.
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        core: DEFAULT_CORE_VALUES,
+        advanced: DEFAULT_ADVANCED_VALUES,
+        people: [{ id: 'primary', name: 'You', age: 42, retirementAge: 67, isPrimary: true }],
+        accounts: [{ ...createAccount('primary'), contributionMode: 'percentage', contributionPercentage: 10 }],
+      }),
+    )
+
+    render(<RetirementNumberCalculator />)
+
+    await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
+
+    // Falls back to $0 rather than leaving the field blank (NaN) — a blank field after clicking
+    // "Pull from my plan" is indistinguishable from the pull silently doing nothing.
+    expect(screen.getByLabelText(/annual investment\/contribution amount/i)).toHaveValue('$0')
+  })
+
   it('"Pull from my plan" clears the pulled fields\' required-blank state, so Calculate works immediately without re-touching them', async () => {
     const user = userEvent.setup()
     const primary: Person = {

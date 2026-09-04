@@ -165,16 +165,23 @@ function validateForm(values: FormValues, blankFields: ReadonlySet<RequiredField
  * directly, `percentage`-mode is a share of the *owning Person's* salary (not the primary's) —
  * a spouse-owned percentage-mode account contributes against the spouse's own salary. If the
  * account's `ownerId` doesn't resolve to a real Person (shouldn't normally happen), the account
- * contributes $0 rather than throwing. Used only by `handlePullFromPlan` below — unlike
- * `useProjectionState.ts`'s per-mode sums (which the engine needs split by mode/owner for
- * `AdditionalIncome`/`primaryContributionRate` wiring), this calculator only needs one flat
- * total across every account, so that shape isn't reused here. */
+ * contributes $0 rather than throwing. Also guards against a non-finite result — unlike
+ * `Account.ts`'s own `normalizeAccount`, `seedPeople` (`Person.ts`) does *not* repair a
+ * persisted `Person`'s individual fields, so a schema-drifted or partially-migrated record
+ * (e.g. a spouse saved before `salary` existed) can still reach here with `salary: undefined`;
+ * without this guard that silently turns the sum into `NaN`, which `NumberField` then renders
+ * as a blank field — indistinguishable from "pull" doing nothing at all. Used only by
+ * `handlePullFromPlan` below — unlike `useProjectionState.ts`'s per-mode sums (which the engine
+ * needs split by mode/owner for `AdditionalIncome`/`primaryContributionRate` wiring), this
+ * calculator only needs one flat total across every account, so that shape isn't reused here. */
 function accountAnnualContribution(account: Account, people: Person[]): number {
   const owner = people.find((person) => person.id === account.ownerId)
   if (!owner) return 0
-  return account.contributionMode === 'fixed'
-    ? account.contributionFixed
-    : (account.contributionPercentage / 100) * owner.salary
+  const amount =
+    account.contributionMode === 'fixed'
+      ? account.contributionFixed
+      : (account.contributionPercentage / 100) * owner.salary
+  return Number.isFinite(amount) ? amount : 0
 }
 
 /** The exactly-one headline the AC requires — never a probability/percentage. */
