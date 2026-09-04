@@ -97,12 +97,14 @@ describe('RetirementNumberCalculator', () => {
     // $300,000 target decades before age 65 -- that made the test implicitly rely on the old,
     // broken control flow (which never checked for an earlier on-track age once retirementAge
     // itself passed). With default rates, $100,000 start + $10,000/yr contribution reaches
-    // ~$2,575,349.11 by age 64 and ~$2,773,626.08 by age 65, so a $2,700,000 target (desired
-    // monthly spend $9,000) is only first cleared exactly at the requested retirementAge.
+    // ~$2,575,349.11 by age 64 and ~$2,773,626.08 by age 65. The target is now inflated forward
+    // to the requested age, so desiredMonthlySpend is hand-picked (via reference script) so that
+    // the today's-dollars target, inflated by (1.025)^35 to age 65, exactly equals $2,773,626.08
+    // -- only first cleared exactly at the requested retirementAge.
     await fillRequiredFields(user, {
       currentAge: '30',
       retirementAge: '65',
-      desiredMonthlySpend: '9000',
+      desiredMonthlySpend: '3895.752590667486',
       currentBalance: '100000',
       annualContribution: '10000',
     })
@@ -170,7 +172,7 @@ describe('RetirementNumberCalculator', () => {
 
     // With default (positive) return/contribution, the projected balance grows monotonically
     // with age, so the requested retirementAge (65) is itself on-track too -- but the target is
-    // actually first reached at age 40. Before the engine fix, the "check retirementAge first,
+    // actually first reached earlier. Before the engine fix, the "check retirementAge first,
     // short-circuit to onTrack" control flow made this path unreachable end-to-end: it would
     // have shown "On track" without ever surfacing the earlier age.
     await fillRequiredFields(user, {
@@ -182,8 +184,10 @@ describe('RetirementNumberCalculator', () => {
     })
     await user.click(screen.getByRole('button', { name: 'Calculate' }))
 
-    // targetBalance = (2000*12)/0.04 = 600,000, first reached at age 40 (~$605,214.29).
-    expect(screen.getByText(/could retire at age 40/i)).toBeInTheDocument()
+    // today's-dollars target = (2000*12)/0.04 = 600,000, inflated each year to age 65 (target
+    // fix) -- the balance now first clears its own year's inflated target at age 43 (not 40 as
+    // under the old static-target comparison).
+    expect(screen.getByText(/could retire at age 43/i)).toBeInTheDocument()
     expect(screen.queryByText(/short by/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/^on track$/i)).not.toBeInTheDocument()
   })

@@ -38,28 +38,29 @@ const expectRejection = (
 };
 
 describe('calculateRetirementNumber — target balance', () => {
-  it('computes targetBalance as (desiredMonthlySpend * 12) / safeWithdrawalRate', () => {
-    // 4000 * 12 = 48000; 48000 / 0.04 = 1,200,000
+  it('computes targetBalance as (desiredMonthlySpend * 12) / safeWithdrawalRate inflated forward to retirementAge', () => {
+    // today's-dollars target: 4000 * 12 = 48000; 48000 / 0.04 = 1,200,000. The returned
+    // targetBalance is that figure inflated by (1.025)^35 (35 years from currentAge 30 to
+    // retirementAge 65) = 1,200,000 * 2.373205... ~= 2,847,846.22, since "Your number" is
+    // the dollar amount actually needed at the requested retirement age, not today's-dollars.
     const result = calculateRetirementNumber(input());
-    expect(result.targetBalance).toBeCloseTo(1_200_000, 6);
+    expect(result.targetBalance).toBeCloseTo(2_847_846.22, 2);
   });
 });
 
 describe('calculateRetirementNumber — onTrack', () => {
-  it('reports onTrack when the target is first reached exactly at the requested retirementAge', () => {
-    // NOTE: with $10,000/yr contribution and $100,000 starting balance, a $4,000/mo target
-    // (as this scenario originally used) is cleared years before age 65 -- that made the old
-    // "check retirementAge first, short-circuit to onTrack" test implicitly rely on the old,
-    // broken control flow (which never checked for an earlier on-track age once retirementAge
-    // itself passed). Hand-computed via reference script instead: target is set to the exact
-    // projected balance at age 65 (35 years of growth-then-inflated-contribution from 100,000
-    // at 6.8% with a $10,000 today's-dollars contribution inflated at 2.5%/yr), so age 65 is
-    // genuinely the earliest on-track age -- age 64's balance (~2,575,349.11) still falls short.
+  it('reports onTrack when the inflated target is first reached exactly at the requested retirementAge', () => {
+    // desiredMonthlySpend is hand-picked (via reference script) so that the today's-dollars
+    // target, inflated by (1.025)^35 to age 65, exactly equals the projected balance at 65
+    // (~2,773,626.08 -- 35 years of growth-then-inflated-contribution from 100,000 at 6.8%
+    // with a $10,000 today's-dollars contribution inflated at 2.5%/yr). Age 64's balance
+    // (~2,575,349.11) is still short of age 64's own inflated target (~2,705,976.66), so age
+    // 65 is genuinely the earliest on-track age under the apples-to-apples comparison.
     const result = calculateRetirementNumber(
       input({
         currentAge: 30,
         retirementAge: 65,
-        desiredMonthlySpend: 9_245.420251803056,
+        desiredMonthlySpend: 3_895.752590667486,
         currentBalance: 100_000,
         annualContribution: 10_000,
       }),
@@ -84,13 +85,14 @@ describe('calculateRetirementNumber — shortBy (general reference scenario)', (
       }),
     );
 
-    // target = 5000*12/0.04 = 1,500,000; 10 years of accumulation from 50,000 at 6.8% with a
-    // $5,000 (today's-dollars) contribution inflated at 2.5%/yr -> proj ~= 172,186.28
+    // today's-dollars target = 5000*12/0.04 = 1,500,000, inflated by (1.025)^10 to age 60 ->
+    // ~= 1,920,126.82; 10 years of accumulation from 50,000 at 6.8% with a $5,000
+    // (today's-dollars) contribution inflated at 2.5%/yr -> proj ~= 172,186.28
     expect(result.status).toBe('shortBy');
     if (result.status !== 'shortBy') throw new Error('unreachable');
-    expect(result.targetBalance).toBeCloseTo(1_500_000, 6);
+    expect(result.targetBalance).toBeCloseTo(1_920_126.82, 2);
     expect(result.projectedBalance).toBeCloseTo(172_186.28222708646, 2);
-    expect(result.shortfallAmount).toBeCloseTo(1_327_813.7177729136, 2);
+    expect(result.shortfallAmount).toBeCloseTo(1_747_940.53, 2);
   });
 });
 
@@ -115,13 +117,15 @@ describe('calculateRetirementNumber — couldRetireEarlier', () => {
       }),
     );
 
-    // target = 2667*12/0.04 = 800,100. proj@70 (the requested retirementAge) = 667,607.97
-    // (fails); proj@50 (currentAge, 0 years elapsed) = currentBalance = 1,000,000 (passes) --
-    // the earliest, and only, passing age in range given the monotonic decay. `projectedBalance`
-    // is still the balance at the *requested* retirementAge (70), not at earliestAge (50).
+    // today's-dollars target = 2667*12/0.04 = 800,100, inflated by (1.025)^20 to age 70 ->
+    // ~= 1,311,057.01 (the returned targetBalance). At currentAge=50 (0 years elapsed) the
+    // year-0 inflated target equals the today's-dollars figure exactly (800,100), and
+    // currentBalance = 1,000,000 clears it -- the earliest, and only, passing age in range
+    // given the monotonic decay. `projectedBalance` is still the balance at the *requested*
+    // retirementAge (70), not at earliestAge (50).
     expect(result.status).toBe('couldRetireEarlier');
     if (result.status !== 'couldRetireEarlier') throw new Error('unreachable');
-    expect(result.targetBalance).toBeCloseTo(800_100, 6);
+    expect(result.targetBalance).toBeCloseTo(1_311_057.01, 2);
     expect(result.earliestAge).toBe(50);
     expect(result.projectedBalance).toBeCloseTo(667_607.9717550945, 6);
   });
@@ -144,11 +148,14 @@ describe('calculateRetirementNumber — couldRetireEarlier', () => {
       }),
     );
 
-    // target = 2000*12/0.04 = 600,000. Balance crosses it at age 40 (~605,214.29).
+    // today's-dollars target = 2000*12/0.04 = 600,000, inflated by (1.025)^35 to age 65 ->
+    // ~= 1,423,923.11 (the returned targetBalance). Balance now crosses its own year's
+    // inflated target at age 43 (not 40 as under the old, static-target comparison), since
+    // the bar it must clear keeps rising with inflation each year.
     expect(result.status).toBe('couldRetireEarlier');
     if (result.status !== 'couldRetireEarlier') throw new Error('unreachable');
-    expect(result.targetBalance).toBeCloseTo(600_000, 6);
-    expect(result.earliestAge).toBe(40);
+    expect(result.targetBalance).toBeCloseTo(1_423_923.11, 2);
+    expect(result.earliestAge).toBe(43);
   });
 });
 
@@ -164,13 +171,15 @@ describe('calculateRetirementNumber — on-track only at a later age', () => {
       }),
     );
 
-    // target = 3000*12/0.04 = 900,000. On-track fails at requested age 60 (proj ~= 201,188.88)
-    // but the linear scan finds age 74 on-track within [55, 100] — must still be shortBy at 60.
+    // today's-dollars target = 3000*12/0.04 = 900,000, inflated by (1.025)^5 to age 60 ->
+    // ~= 1,018,267.39 (the returned targetBalance). On-track fails at requested age 60
+    // (proj ~= 201,188.88) but the linear scan finds age 82 on-track within [55, 100] against
+    // its own year's ever-rising inflated target — must still be shortBy at 60.
     expect(result.status).toBe('shortBy');
     if (result.status !== 'shortBy') throw new Error('unreachable');
-    expect(result.targetBalance).toBeCloseTo(900_000, 6);
+    expect(result.targetBalance).toBeCloseTo(1_018_267.39, 2);
     expect(result.projectedBalance).toBeCloseTo(201_188.88001960047, 2);
-    expect(result.shortfallAmount).toBeCloseTo(900_000 - 201_188.88001960047, 2);
+    expect(result.shortfallAmount).toBeCloseTo(1_018_267.39 - 201_188.88001960047, 2);
   });
 });
 
@@ -187,10 +196,12 @@ describe('calculateRetirementNumber — no on-track age anywhere in range', () =
       }),
     );
 
-    // target = 10000*12/0.04 = 3,000,000 — never reachable in this scenario within the range.
+    // today's-dollars target = 10000*12/0.04 = 3,000,000, inflated by (1.025)^5 to age 65 ->
+    // ~= 3,394,224.64 (the returned targetBalance) — never reachable in this scenario within
+    // the range, since the balance decays relative to its own year's ever-rising target.
     expect(result.status).toBe('shortBy');
     if (result.status !== 'shortBy') throw new Error('unreachable');
-    expect(result.targetBalance).toBeCloseTo(3_000_000, 6);
+    expect(result.targetBalance).toBeCloseTo(3_394_224.64, 2);
     expect(result.projectedBalance).toBeCloseTo(39_793.782356873366, 2);
   });
 });
@@ -231,18 +242,61 @@ describe('calculateRetirementNumber — annualContribution inflation adjustment 
     // With annualContribution inflation-adjusted (spec-correct): projectedBalance ~= 1,633,613.09
     // With annualContribution held flat-nominal (the bug this regression test guards against):
     // projectedBalance ~= 1,207,243.93
-    // desiredMonthlySpend of 5,333.33 sets targetBalance to 1,600,000, comfortably between age
-    // 64's inflation-adjusted balance (~1,514,883.56, still short) and age 65's
-    // (~1,633,613.09, passes) but strictly above the flat-nominal figure -- so the two
-    // implementations disagree on-track/short-by for the same inputs, and the earliest
-    // on-track age under the (correct) inflation-adjusted balance lands exactly at the
-    // requested retirementAge rather than an earlier one.
+    // With the target-balance-inflation fix, the today's-dollars target (1,600,000) is now
+    // inflated by (1.025)^40 to age 65 -> ~= 4,296,099.46, which the inflation-adjusted
+    // balance no longer reaches by 65 (earliest on-track age is 86 instead) -- confirming the
+    // fix requires MORE saved / a LATER age than the old static-target comparison, which
+    // reported onTrack here.
     const result = calculateRetirementNumber(input({ ...params, desiredMonthlySpend: 5_333.33 }));
 
-    expect(result.status).toBe('onTrack');
-    if (result.status !== 'onTrack') throw new Error('unreachable');
-    expect(result.targetBalance).toBeCloseTo(1_599_999, 2);
+    expect(result.status).toBe('shortBy');
+    if (result.status !== 'shortBy') throw new Error('unreachable');
+    expect(result.targetBalance).toBeCloseTo(4_296_099.46, 2);
     expect(result.projectedBalance).toBeCloseTo(1_633_613.0942569003, 2);
+  });
+});
+
+describe('calculateRetirementNumber — target-balance inflation (regression)', () => {
+  it('requires MORE saved / a LATER on-track age than a static, un-inflated target would', () => {
+    // Same inputs as the base scenario (30 -> 65, $4,000/mo, $100,000 starting, $10,000/yr
+    // contribution). The OLD (buggy) logic compared the running nominal balance against a
+    // flat today's-dollars targetBalance (desiredMonthlySpend*12/safeWithdrawalRate =
+    // 1,200,000) computed once and never inflated -- so it would report onTrack/
+    // couldRetireEarlier as soon as the nominal balance first crossed 1,200,000.
+    const scenario = input({
+      currentAge: 30,
+      retirementAge: 65,
+      desiredMonthlySpend: 4_000,
+      currentBalance: 100_000,
+      annualContribution: 10_000,
+    });
+    const staticTargetBalance = (scenario.desiredMonthlySpend * 12) / (scenario.safeWithdrawalRate ?? 0.04);
+
+    // Reconstruct the OLD, buggy earliest-on-track age: first age whose nominal balance
+    // (same growth/contribution trajectory this engine computes) reaches the flat,
+    // never-inflated staticTargetBalance.
+    let balance = scenario.currentBalance;
+    let oldEarliestOnTrackAge: number | undefined;
+    for (let age = scenario.currentAge; age <= (scenario.lifeExpectancy ?? 100); age += 1) {
+      if (oldEarliestOnTrackAge === undefined && balance >= staticTargetBalance) {
+        oldEarliestOnTrackAge = age;
+      }
+      if (age === (scenario.lifeExpectancy ?? 100)) break;
+      const yearsFromNow = age - scenario.currentAge;
+      const contributionInYear =
+        scenario.annualContribution * (1 + (scenario.inflationRate ?? 0.025)) ** yearsFromNow;
+      balance = balance * (1 + (scenario.annualReturnRate ?? 0.068)) + contributionInYear;
+    }
+
+    const result = calculateRetirementNumber(scenario);
+
+    // Fixed engine: targetBalance is inflated to retirementAge, so it is strictly larger
+    // than the old static figure, and the fixed engine's earliest-on-track age is strictly
+    // later than the old buggy logic's (or, as here, the old logic wrongly reported the
+    // requested age itself as on-track while the fixed engine reports shortBy at that age).
+    expect(result.targetBalance).toBeGreaterThan(staticTargetBalance);
+    expect(oldEarliestOnTrackAge).toBeLessThanOrEqual(scenario.retirementAge);
+    expect(result.status).toBe('shortBy');
   });
 });
 

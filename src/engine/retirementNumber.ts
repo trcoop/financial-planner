@@ -170,34 +170,49 @@ const validate = (input: RetirementNumberInput): Required<RetirementNumberInput>
  * Computes the household's target balance (the "number") and, given the requested
  * `retirementAge`, whether the household is on track, short, or could retire earlier.
  *
- * Single incremental pass (O(n) in the `currentAge`..`lifeExpectancy` range), since
- * `targetBalance` does not depend on the candidate age being checked: walk the balance
- * forward one year at a time — growth applied to the beginning balance first, then that
- * year's contribution added (`balance = balance * (1 + annualReturnRate) +
+ * Single incremental pass (O(n) in the `currentAge`..`lifeExpectancy` range): walk the
+ * balance forward one year at a time — growth applied to the beginning balance first, then
+ * that year's contribution added (`balance = balance * (1 + annualReturnRate) +
  * contributionInYear`), with the flat `annualContribution` inflated by the number of
  * accumulation years already elapsed before being added each year (`annualContribution *
- * (1 + inflationRate) ** yearsFromNow`, `yearsFromNow` 0-indexed from `currentAge`) —
- * recording the first age at which the balance reaches `targetBalance`
- * (`earliestOnTrackAge`) and the balance at the requested `retirementAge` along the way.
+ * (1 + inflationRate) ** yearsFromNow`, `yearsFromNow` 0-indexed from `currentAge`).
+ *
+ * `targetBalance` is computed once, in today's dollars (`(desiredMonthlySpend * 12) /
+ * safeWithdrawalRate`), but `balance` is nominal (its growth rate already embeds
+ * inflation), so the two are not directly comparable at any age but the starting one.
+ * Each iteration therefore compares `balance` against `targetBalance` inflated forward by
+ * the same `(1 + inflationRate) ** yearsFromNow` convention used for contributions, giving
+ * an apples-to-apples "inflated target for this year" — recording the first age at which
+ * `balance` reaches its own year's inflated target (`earliestOnTrackAge`) and the balance
+ * at the requested `retirementAge` along the way.
  *
  * Classification from `earliestOnTrackAge` vs. `retirementAge`:
  * - Strictly before `retirementAge` → `couldRetireEarlier`, `earliestAge` set to it.
  * - At (or, if never reached, effectively never before) `retirementAge` → `onTrack`.
  * - Never reached by `lifeExpectancy`, or only reached after `retirementAge` → `shortBy`.
+ *
+ * The `targetBalance` returned to callers (and shown as "Your number" in the UI) is the
+ * today's-dollars figure inflated forward specifically to `retirementAge` — the single
+ * dollar amount that means "what you actually need saved by the age you plan to retire",
+ * which is the only inflated target a user asking "what's my number" can act on. `shortBy`'s
+ * `shortfallAmount` uses that same retirement-age-inflated target minus the balance
+ * projected at `retirementAge`, so it is consistent with the returned `targetBalance`.
  */
 export const calculateRetirementNumber = (input: RetirementNumberInput): RetirementNumberResult => {
   const validated = validate(input);
   const { currentAge, retirementAge, desiredMonthlySpend, annualContribution, inflationRate, annualReturnRate, safeWithdrawalRate, lifeExpectancy } =
     validated;
 
-  const targetBalance = (desiredMonthlySpend * 12) / safeWithdrawalRate;
+  const targetBalanceToday = (desiredMonthlySpend * 12) / safeWithdrawalRate;
+  const inflatedTargetAt = (age: number): number => targetBalanceToday * (1 + inflationRate) ** (age - currentAge);
+  const targetBalanceAtRetirement = inflatedTargetAt(retirementAge);
 
   let balance = validated.currentBalance;
   let earliestOnTrackAge: number | undefined;
   let balanceAtRetirementAge = balance;
 
   for (let age = currentAge; age <= lifeExpectancy; age += 1) {
-    if (earliestOnTrackAge === undefined && balance >= targetBalance) {
+    if (earliestOnTrackAge === undefined && balance >= inflatedTargetAt(age)) {
       earliestOnTrackAge = age;
     }
     if (age === retirementAge) {
@@ -214,20 +229,20 @@ export const calculateRetirementNumber = (input: RetirementNumberInput): Retirem
   if (earliestOnTrackAge !== undefined && earliestOnTrackAge < retirementAge) {
     return {
       status: 'couldRetireEarlier',
-      targetBalance,
+      targetBalance: targetBalanceAtRetirement,
       projectedBalance: balanceAtRetirementAge,
       earliestAge: earliestOnTrackAge,
     };
   }
 
   if (earliestOnTrackAge !== undefined && earliestOnTrackAge <= retirementAge) {
-    return { status: 'onTrack', targetBalance, projectedBalance: balanceAtRetirementAge };
+    return { status: 'onTrack', targetBalance: targetBalanceAtRetirement, projectedBalance: balanceAtRetirementAge };
   }
 
   return {
     status: 'shortBy',
-    targetBalance,
+    targetBalance: targetBalanceAtRetirement,
     projectedBalance: balanceAtRetirementAge,
-    shortfallAmount: targetBalance - balanceAtRetirementAge,
+    shortfallAmount: targetBalanceAtRetirement - balanceAtRetirementAge,
   };
 };
