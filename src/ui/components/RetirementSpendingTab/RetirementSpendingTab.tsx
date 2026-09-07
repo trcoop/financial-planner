@@ -2,7 +2,6 @@ import type { PlanAssumptions, ProjectionRow } from '../../../engine'
 import { InvalidRetirementNumberInputError, calculateRetirementNumber, type RetirementNumberResult } from '../../../engine/retirementNumber'
 import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
 import { formatCurrency } from '../../utils/format'
-import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
 import { StatTile } from '../StatTile/StatTile'
 import { Tooltip } from '../Tooltip/Tooltip'
@@ -149,17 +148,6 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
                 </Tooltip>
               }
             />
-            {values.primaryMedicareAnnualAmount !== undefined && (
-              <div className={styles.medicareFieldActions}>
-                <Button
-                  variant="secondary"
-                  className={styles.resetButton}
-                  onClick={() => onChange({ ...values, primaryMedicareAnnualAmount: undefined })}
-                >
-                  Reset to suggested amount
-                </Button>
-              </div>
-            )}
           </div>
           {hasSpouse && (
             <div className={styles.medicareField}>
@@ -177,17 +165,6 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
                   </Tooltip>
                 }
               />
-              {values.spouseMedicareAnnualAmount !== undefined && (
-                <div className={styles.medicareFieldActions}>
-                  <Button
-                    variant="secondary"
-                    className={styles.resetButton}
-                    onClick={() => onChange({ ...values, spouseMedicareAnnualAmount: undefined })}
-                  >
-                    Reset to suggested amount
-                  </Button>
-                </div>
-              )}
             </div>
           )}
         </div>
