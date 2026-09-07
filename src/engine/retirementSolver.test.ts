@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { runProjection } from './projection';
 import { computeDepletionGuidance } from './retirementSolver';
 import type { PlanAssumptions } from './types';
 
@@ -74,6 +75,47 @@ describe('computeDepletionGuidance', () => {
       expect(result.extraContribution.extraMonthlyContribution).toBeGreaterThan(0);
       // Rounded to the documented $10 precision.
       expect(result.extraContribution.extraMonthlyContribution % 10).toBe(0);
+    }
+  });
+
+  it('extra-years suggestion holds up against an independent ground-truth re-run (regression: FIN-142 bug report)', () => {
+    // Ground-truth check, not another assertion against the solver's own internal logic: solve
+    // for N, then independently call `runProjection` with `retirementAge` bumped by exactly N —
+    // the same thing the real UI form does when a user manually edits their retirement age —
+    // and assert THAT re-run doesn't deplete before the horizon. A prior investigation (Travis
+    // manually bumping retirementAge by the suggested N in the running app, then seeing a large
+    // "Short by $X" figure) turned out to be a different, pre-existing readout (the separate
+    // `retirementNumber.ts`-driven "Your number" stat tile, a simplified accumulation model
+    // unrelated to `runProjection`) rather than an actual disagreement between the solver and
+    // the projection engine — but this test pins the real invariant so a future regression in
+    // the solver's own re-run logic (not just that other stat tile) gets caught here.
+    const assumptions = baseAssumptions({
+      currentAge: 35,
+      retirementAge: 65,
+      initialBalance: 250_000,
+      currentAnnualIncome: 85_000,
+      annualContributionRate: 0.15,
+      annualRaiseRate: 0.03,
+      annualReturnRate: 0.08,
+      withdrawalRateInRetirement: 0.039,
+      planningHorizonEndAge: 100,
+      retirementSpendingGoal: { annualAmount: 150_000 },
+    });
+
+    const result = computeDepletionGuidance({ assumptions });
+
+    expect(result.depletedAtAge).toBeDefined();
+    expect(result.extraYears?.status).toBe('found');
+    if (result.extraYears?.status === 'found') {
+      const groundTruthAssumptions: PlanAssumptions = {
+        ...assumptions,
+        retirementAge: assumptions.retirementAge + result.extraYears.extraYears,
+      };
+      const groundTruthRows = runProjection(groundTruthAssumptions, []);
+      const groundTruthDepletes = groundTruthRows.some(
+        (row) => row.endingBalance === 0 && row.age < groundTruthAssumptions.planningHorizonEndAge,
+      );
+      expect(groundTruthDepletes).toBe(false);
     }
   });
 
