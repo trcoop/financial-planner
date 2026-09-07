@@ -1,18 +1,9 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PlanAssumptions, PlanEvent, ProjectionRow } from '../../../engine'
-import * as retirementNumberModule from '../../../engine/retirementNumber'
+import type { PlanAssumptions, PlanEvent, PortfolioAllocation, ProjectionRow } from '../../../engine'
 import { RetirementSpendingTab } from './RetirementSpendingTab'
 import { DEFAULT_RETIREMENT_SPENDING_VALUES, type RetirementSpendingValues } from './RetirementSpendingGoal'
-
-// Spied (not mocked) so the real calculation still runs — this only lets a test assert whether
-// it was called at all, distinguishing "no goal set, so no calculation was attempted" from
-// "a calculation was attempted and happened to be caught/hidden" (mutation-testing finding: the
-// `goalAnnualAmount !== undefined` gate's own tests didn't kill a mutant that removed the gate,
-// because an ungated call with `desiredMonthlySpend: undefined / 12` throws NON_FINITE_INPUT and
-// the component's catch block hides it identically — same rendered output, wrong reason).
-const calculateRetirementNumberSpy = vi.spyOn(retirementNumberModule, 'calculateRetirementNumber')
 
 afterEach(() => cleanup())
 
@@ -33,6 +24,7 @@ const BASE_ASSUMPTIONS: PlanAssumptions = {
 }
 
 const NO_ROWS: ProjectionRow[] = []
+const ALLOCATION: PortfolioAllocation = { stocksPercent: 70, bondsPercent: 30 }
 
 function renderTab(
   overrides: {
@@ -41,10 +33,15 @@ function renderTab(
     assumptions?: PlanAssumptions
     rows?: ProjectionRow[]
     events?: PlanEvent[]
+    allocation?: PortfolioAllocation
+    successRate?: number | null
+    isStressTestStale?: boolean
+    onRunStressTest?: () => void
     hasSpouse?: boolean
   } = {},
 ) {
   const onChange = overrides.onChange ?? vi.fn()
+  const onRunStressTest = overrides.onRunStressTest ?? vi.fn()
   render(
     <RetirementSpendingTab
       values={overrides.values ?? DEFAULT_RETIREMENT_SPENDING_VALUES}
@@ -52,10 +49,14 @@ function renderTab(
       assumptions={overrides.assumptions ?? BASE_ASSUMPTIONS}
       rows={overrides.rows ?? NO_ROWS}
       events={overrides.events ?? []}
+      allocation={overrides.allocation ?? ALLOCATION}
+      successRate={overrides.successRate ?? null}
+      isStressTestStale={overrides.isStressTestStale ?? false}
+      onRunStressTest={onRunStressTest}
       hasSpouse={overrides.hasSpouse ?? false}
     />,
   )
-  return { onChange }
+  return { onChange, onRunStressTest }
 }
 
 describe('RetirementSpendingTab — general spending goal (FIN-135)', () => {
@@ -174,56 +175,43 @@ describe('RetirementSpendingTab — Medicare suggested-amount info (FIN-135 revi
   })
 })
 
-describe('RetirementSpendingTab — on-track readout (shared retirementNumber module)', () => {
-  it('shows a placeholder, not a readout, when no goal is set — and never even calls calculateRetirementNumber', () => {
-    calculateRetirementNumberSpy.mockClear()
+describe('RetirementSpendingTab — on-track readout (FIN-142 redesign: shared Monte Carlo success rate)', () => {
+  it('shows a placeholder tile, not a readout, when no goal is set', () => {
     renderTab({ values: DEFAULT_RETIREMENT_SPENDING_VALUES })
     expect(screen.getByText(/set a spending goal/i)).toBeInTheDocument()
-    expect(calculateRetirementNumberSpy).not.toHaveBeenCalled()
   })
 
-  it('reports on track when the projected balance covers the target (goal well within reach)', () => {
-    // desiredMonthlySpend $4,000 -> targetBalance = 4,000*12/0.04 = 1,200,000 <= 2,000,000 balance.
-    renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' } })
-    expect(screen.getByText(/on track/i)).toBeInTheDocument()
-    expect(screen.getByText('$1,200,000')).toBeInTheDocument()
+  it('shows the "Run a stress test to see this" placeholder when a goal is set but successRate is null (never run)', () => {
+    renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' }, successRate: null })
+    expect(screen.getByText('Chance of success')).toBeInTheDocument()
+    expect(screen.getByText(/run a stress test to see this/i)).toBeInTheDocument()
   })
 
-  it('labels the number/balance tiles as future dollars at the plan\'s retirement age, not today\'s dollars', () => {
-    renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' } })
-    expect(screen.getByText(/your number.*future dollars.*age 65/i)).toBeInTheDocument()
-    expect(screen.getByText(/projected balance.*future dollars.*age 65/i)).toBeInTheDocument()
+  it('renders the lifted successRate figure directly, not a separately-computed one', () => {
+    renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' }, successRate: 87 })
+    expect(screen.getByText('87%')).toBeInTheDocument()
   })
 
-  it('reports a shortfall amount when the projected balance falls short of the target', () => {
-    // desiredMonthlySpend $10,000 -> targetBalance = 10,000*12/0.04 = 3,000,000 > 2,000,000 balance.
-    // shortfallAmount = 3,000,000 - 2,000,000 = 1,000,000.
-    renderTab({ values: { generalAmount: 10_000, generalAmountUnit: 'monthly' } })
-    expect(screen.getByText('Short by $1,000,000')).toBeInTheDocument()
+  it('shows a "Re-run stress test" action only when successRate is stale and present, and wires it to onRunStressTest', async () => {
+    const user = userEvent.setup()
+    const { onRunStressTest } = renderTab({
+      values: { generalAmount: 4_000, generalAmountUnit: 'monthly' },
+      successRate: 55,
+      isStressTestStale: true,
+    })
+    const action = screen.getByRole('button', { name: /re-run stress test/i })
+    await user.click(action)
+    expect(onRunStressTest).toHaveBeenCalledTimes(1)
   })
 
-  it('reports an earlier possible retirement age when accumulation gets there before the requested age', () => {
-    const assumptions: PlanAssumptions = {
-      ...BASE_ASSUMPTIONS,
-      currentAge: 40,
-      retirementAge: 65,
-      initialBalance: 3_000_000,
-      annualReturnRate: 0.068,
-    }
-    // desiredMonthlySpend $1,000 -> targetBalance = 1,000*12/0.04 = 300,000, already well below
-    // the $3,000,000 starting balance at age 40 — the engine finds this on track from age 40
-    // itself (25 years before the requested retirementAge 65), so it reports couldRetireEarlier
-    // at age 40 rather than onTrack at 65.
-    renderTab({ values: { generalAmount: 1_000, generalAmountUnit: 'monthly' }, assumptions })
-    expect(screen.getByText('Could retire at age 40')).toBeInTheDocument()
+  it('does not show the "Re-run stress test" action when successRate is null even if isStressTestStale is true', () => {
+    renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' }, successRate: null, isStressTestStale: true })
+    expect(screen.queryByRole('button', { name: /re-run stress test/i })).not.toBeInTheDocument()
   })
 
-  it('does not crash and falls back to the placeholder for a malformed plan (retirementAge before currentAge)', () => {
-    const assumptions: PlanAssumptions = { ...BASE_ASSUMPTIONS, currentAge: 70, retirementAge: 65 }
-    renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' }, assumptions })
-    expect(screen.getByText("Set a spending goal above to see whether you're on track.")).toBeInTheDocument()
-    expect(screen.queryByText(/your number/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/short by/i)).not.toBeInTheDocument()
+  it('does not show the "Re-run stress test" action when successRate is fresh', () => {
+    renderTab({ values: { generalAmount: 4_000, generalAmountUnit: 'monthly' }, successRate: 90, isStressTestStale: false })
+    expect(screen.queryByRole('button', { name: /re-run stress test/i })).not.toBeInTheDocument()
   })
 })
 
@@ -234,16 +222,6 @@ describe('RetirementSpendingTab — plan depleted callout (ERD §5/§11, inline 
     ]
     renderTab({ rows })
     expect(screen.queryByText(/depleted/i)).not.toBeInTheDocument()
-  })
-
-  it('shows "Plan depleted at age X" for the first zeroed row at/after retirement age', () => {
-    const rows: ProjectionRow[] = [
-      { age: 65, year: 0, beginningBalance: 100, annualContribution: 0, investmentReturn: 5, annualWithdrawal: 4, endingBalance: 50, eventCosts: [] },
-      { age: 66, year: 1, beginningBalance: 50, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 50, endingBalance: 0, eventCosts: [] },
-      { age: 67, year: 2, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
-    ]
-    renderTab({ rows })
-    expect(screen.getByText(/plan depleted at age 66/i)).toBeInTheDocument()
   })
 
   it('ignores a pre-retirement zero balance (defensive age >= retirementAge guard)', () => {
@@ -257,10 +235,11 @@ describe('RetirementSpendingTab — plan depleted callout (ERD §5/§11, inline 
   })
 })
 
-describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142)', () => {
-  // Depletes at the baseline retirement age via `runProjection` itself (not just the mocked
-  // `rows` prop) so `computeDepletionGuidance` — which re-runs the real engine — actually finds
-  // something to suggest. Mirrors `retirementSolver.test.ts`'s own depleted fixture.
+describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142, Monte Carlo redesign)', () => {
+  // Below the 80% Monte Carlo success-rate bar at the baseline retirement age, but resolves with
+  // a few extra years of work — mirrors `retirementSolver.test.ts`'s own fixture, so
+  // `computeDepletionGuidance` (which re-runs the real engine, not a mock) actually finds
+  // something to suggest.
   const DEPLETED_ASSUMPTIONS: PlanAssumptions = {
     currentAge: 55,
     retirementAge: 60,
@@ -290,6 +269,11 @@ describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142)', 
   it('shows no suggestions when the plan is not depleted', () => {
     renderTab()
     expect(screen.queryByText(/with your current savings rate/i)).not.toBeInTheDocument()
+  })
+
+  it('shows "This plan isn\'t on track" when guidance is needed but no zeroed row is present in `rows` (Monte Carlo says below bar, deterministic rows didn\'t hit zero)', () => {
+    renderTab({ assumptions: DEPLETED_ASSUMPTIONS, rows: NO_ROWS })
+    expect(screen.getByText(/this plan isn't on track/i)).toBeInTheDocument()
   })
 
   it('shows an extra-monthly-contribution suggestion when a household spending goal makes the corpus size matter', () => {

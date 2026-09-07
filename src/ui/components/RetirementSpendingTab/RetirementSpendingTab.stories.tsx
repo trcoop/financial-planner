@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Story, StoryDefault } from '@ladle/react'
-import type { PlanAssumptions, ProjectionRow } from '../../../engine'
+import type { PlanAssumptions, PortfolioAllocation, ProjectionRow } from '../../../engine'
 import { RetirementSpendingTab } from './RetirementSpendingTab'
 import { DEFAULT_RETIREMENT_SPENDING_VALUES, type RetirementSpendingValues } from './RetirementSpendingGoal'
 
@@ -14,11 +14,38 @@ const GOAL_VALUES: RetirementSpendingValues = {
   generalAmountUnit: 'monthly',
 }
 
+const ALLOCATION: PortfolioAllocation = { stocksPercent: 70, bondsPercent: 30 }
+
 /** Wraps `RetirementSpendingTab` with local `values` state — Ladle stories render the real,
- * controlled component rather than a static snapshot of its output. */
-function Wrapper({ assumptions, rows }: { assumptions: PlanAssumptions; rows: ProjectionRow[] }) {
+ * controlled component rather than a static snapshot of its output. `successRate`/`isStressTestStale`
+ * mirror the `PlanSection.tsx`-lifted state this component actually receives in the app: a story can
+ * pass `successRate={null}` for the "never run a stress test yet" placeholder state, or a number
+ * (optionally with `isStressTestStale`) for the "Chance of success" readout states. */
+function Wrapper({
+  assumptions,
+  rows,
+  successRate = null,
+  isStressTestStale = false,
+}: {
+  assumptions: PlanAssumptions
+  rows: ProjectionRow[]
+  successRate?: number | null
+  isStressTestStale?: boolean
+}) {
   const [values, setValues] = useState<RetirementSpendingValues>(GOAL_VALUES)
-  return <RetirementSpendingTab values={values} onChange={setValues} assumptions={assumptions} rows={rows} hasSpouse={false} />
+  return (
+    <RetirementSpendingTab
+      values={values}
+      onChange={setValues}
+      assumptions={assumptions}
+      rows={rows}
+      allocation={ALLOCATION}
+      successRate={successRate}
+      isStressTestStale={isStressTestStale}
+      onRunStressTest={() => {}}
+      hasSpouse={false}
+    />
+  )
 }
 
 const ON_TRACK_ASSUMPTIONS: PlanAssumptions = {
@@ -75,12 +102,33 @@ const depletedRow = (age: number): ProjectionRow[] => [
   { age, year: age, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 0, eventCosts: [] },
 ]
 
-export const OnTrack: Story = () => <Wrapper assumptions={ON_TRACK_ASSUMPTIONS} rows={[]} />
+export const OnTrack: Story = () => <Wrapper assumptions={ON_TRACK_ASSUMPTIONS} rows={[]} successRate={92} />
 
 export const DepletedBothSuggestions: Story = () => (
-  <Wrapper assumptions={DEPLETED_BOTH_ASSUMPTIONS} rows={depletedRow(DEPLETED_BOTH_ASSUMPTIONS.retirementAge)} />
+  <Wrapper assumptions={DEPLETED_BOTH_ASSUMPTIONS} rows={depletedRow(DEPLETED_BOTH_ASSUMPTIONS.retirementAge)} successRate={41} />
 )
 
 export const DepletedExtraYearsOnly: Story = () => (
-  <Wrapper assumptions={DEPLETED_YEARS_ONLY_ASSUMPTIONS} rows={depletedRow(DEPLETED_YEARS_ONLY_ASSUMPTIONS.retirementAge)} />
+  <Wrapper assumptions={DEPLETED_YEARS_ONLY_ASSUMPTIONS} rows={depletedRow(DEPLETED_YEARS_ONLY_ASSUMPTIONS.retirementAge)} successRate={58} />
+)
+
+// The user has never run a stress test this session — `successRate` is `null`, so the "Chance of
+// success" tile falls back to its placeholder value (same pattern as the Projection tab's tile),
+// while the depletion guidance callout below it still resolves independently (FIN-142: the
+// guidance solver runs its own low-precision Monte Carlo search regardless of whether a full
+// stress test has ever been run).
+export const StressTestNeverRun: Story = () => (
+  <Wrapper assumptions={DEPLETED_YEARS_ONLY_ASSUMPTIONS} rows={depletedRow(DEPLETED_YEARS_ONLY_ASSUMPTIONS.retirementAge)} successRate={null} />
+)
+
+// `successRate` was computed against an earlier version of the plan's inputs and is now stale —
+// the "Chance of success" tile shows a "Re-run stress test" action, same affordance as the
+// Projection tab's own tile.
+export const StressTestStale: Story = () => (
+  <Wrapper
+    assumptions={DEPLETED_YEARS_ONLY_ASSUMPTIONS}
+    rows={depletedRow(DEPLETED_YEARS_ONLY_ASSUMPTIONS.retirementAge)}
+    successRate={58}
+    isStressTestStale
+  />
 )

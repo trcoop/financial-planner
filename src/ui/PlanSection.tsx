@@ -563,6 +563,13 @@ export function PlanSection(_props: PlanSectionProps) {
                         assumptions={assumptions}
                         rows={rows}
                         events={events}
+                        allocation={{
+                          stocksPercent: debouncedAdvanced.stocksAllocationPercent,
+                          bondsPercent: 100 - debouncedAdvanced.stocksAllocationPercent,
+                        }}
+                        successRate={successRate}
+                        isStressTestStale={isStressTestStale}
+                        onRunStressTest={() => stressTestRef.current?.runStressTest()}
                         hasSpouse={hasSpouse}
                       />
                     ) : null}
