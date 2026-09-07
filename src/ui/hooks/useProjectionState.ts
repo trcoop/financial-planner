@@ -105,6 +105,16 @@ export function useProjectionState(
    * rate-driven behavior unchanged.
    */
   retirementSpendingGoalAnnualAmount?: number,
+  /**
+   * FIN-136: the Retirement Spending tab's editable Medicare Part B lines, already debounced by
+   * the caller the same way `retirementSpendingGoalAnnualAmount` above is. `undefined` means
+   * "use the suggested default" (`MEDICARE_PART_B_EVENT.annualAmount`) — passed straight through
+   * to `medicarePartBEvent`/`spouseMedicarePartBEvent`'s own `annualAmountOverride` param.
+   */
+  primaryMedicareAnnualAmount?: number,
+  /** Spouse's own override, same terms as `primaryMedicareAnnualAmount` above — only consulted
+   * when a spouse is present in `people` (see `events` below). */
+  spouseMedicareAnnualAmount?: number,
 ): ProjectionState {
   const debouncedCoreValues = useDebouncedValue(coreValues, debounceMs)
   const debouncedAdvancedValues = useDebouncedValue(advancedValues, debounceMs)
@@ -225,12 +235,22 @@ export function useProjectionState(
     // FIN-73: Medicare Part B is applied unconditionally, no UI opt-in/opt-out (ERD §9).
     // FIN-77: growthRate is this plan's own inflation assumption plus the historical
     // medical-vs-general-inflation spread, not a flat hardcoded rate.
-    const base: PlanEvent[] = [medicarePartBEvent(assumptions.inflationRate)]
+    // FIN-136: an editable first-year override from the Retirement Spending tab, when set.
+    const base: PlanEvent[] = [medicarePartBEvent(assumptions.inflationRate, primaryMedicareAnnualAmount)]
     if (!spouse) return base
     // FIN-114: spouse's Medicare Part B, expressed on the primary's age axis (see
     // `spouseMedicarePartBEvent`'s doc comment for the offset math).
-    return [...base, spouseMedicarePartBEvent(debouncedCoreValues.currentAge, spouse.age, assumptions.inflationRate)]
-  }, [assumptions.inflationRate, debouncedCoreValues.currentAge, spouse])
+    return [
+      ...base,
+      spouseMedicarePartBEvent(debouncedCoreValues.currentAge, spouse.age, assumptions.inflationRate, spouseMedicareAnnualAmount),
+    ]
+  }, [
+    assumptions.inflationRate,
+    debouncedCoreValues.currentAge,
+    spouse,
+    primaryMedicareAnnualAmount,
+    spouseMedicareAnnualAmount,
+  ])
 
   const { rows, error } = useMemo((): ProjectionResult => {
     if (!isCoreInputValid(debouncedCoreValues) || !isAdvancedInputValid(debouncedAdvancedValues)) {

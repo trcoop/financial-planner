@@ -799,6 +799,33 @@ describe('PlanSection Retirement Spending tab (FIN-135)', () => {
       expect(lastCall?.[5]).toBeUndefined()
     })
   })
+
+  // FIN-136: wires this tab's per-person Medicare Part B overrides into the `useProjectionState`
+  // call site (7th and 8th positional args, i.e. indices 6 and 7) so an edited amount actually
+  // takes effect.
+  it('wires an edited primary Medicare Part B override into useProjectionState (7th positional arg)', async () => {
+    const user = userEvent.setup()
+    await openRetirementSpendingTab(user)
+
+    const field = screen.getByLabelText('Medicare Part B (you)')
+    await user.clear(field)
+    await user.type(field, '2500')
+
+    await waitFor(() => {
+      const lastCall = vi.mocked(useProjectionStateModule.useProjectionState).mock.calls.at(-1)
+      expect(lastCall?.[6]).toBe(2_500)
+    })
+  })
+
+  it('passes undefined for both Medicare override args to useProjectionState when the tab has never been touched', async () => {
+    render(<PlanSection />)
+
+    await waitFor(() => {
+      const lastCall = vi.mocked(useProjectionStateModule.useProjectionState).mock.calls.at(-1)
+      expect(lastCall?.[6]).toBeUndefined()
+      expect(lastCall?.[7]).toBeUndefined()
+    })
+  })
 })
 
 describe('PlanSection focus management (FIN-98: mount-triggers-focus on internal tab switch)', () => {

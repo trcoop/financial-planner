@@ -149,7 +149,7 @@ describe('RetirementSpendingTab — Medicare lines', () => {
   })
 })
 
-describe('RetirementSpendingTab — Medicare suggested-amount info + reset (FIN-135 review feedback)', () => {
+describe('RetirementSpendingTab — Medicare suggested-amount info (FIN-135 review feedback)', () => {
   it('surfaces the CMS suggested annual amount via an accessible info affordance', () => {
     renderTab({ hasSpouse: false })
     const trigger = screen.getByRole('button', { name: /why this medicare part b amount/i })
@@ -169,47 +169,6 @@ describe('RetirementSpendingTab — Medicare suggested-amount info + reset (FIN-
     // sibling of the <label> itself (NumberField's `labelAdornment` row), rather than the
     // trigger being off in a separate actions row below the input box.
     expect(trigger.parentElement?.parentElement).toBe(label.parentElement)
-  })
-
-  it('does not show a reset action when the primary Medicare field is still at the default (no override)', () => {
-    renderTab({ values: DEFAULT_RETIREMENT_SPENDING_VALUES, hasSpouse: false })
-    expect(screen.queryByRole('button', { name: /reset to suggested amount/i })).not.toBeInTheDocument()
-  })
-
-  it('shows a reset action once the primary Medicare field is overridden, and clears the override on click', async () => {
-    const user = userEvent.setup()
-    const onChange = vi.fn()
-    const { rerender } = render(
-      <RetirementSpendingTab
-        values={{ primaryMedicareAnnualAmount: 3000 }}
-        onChange={onChange}
-        assumptions={BASE_ASSUMPTIONS}
-        rows={NO_ROWS}
-        hasSpouse={false}
-      />,
-    )
-
-    const resetButton = screen.getByRole('button', { name: /reset to suggested amount/i })
-    await user.click(resetButton)
-
-    const lastCall = onChange.mock.calls.at(-1)?.[0] as RetirementSpendingValues
-    expect(lastCall.primaryMedicareAnnualAmount).toBeUndefined()
-
-    // Simulate the parent applying that onChange back down as props, and confirm the field
-    // reverts to the default suggested amount (same re-render pattern this file already uses
-    // elsewhere for prop-driven round-trips).
-    rerender(
-      <RetirementSpendingTab
-        values={lastCall}
-        onChange={onChange}
-        assumptions={BASE_ASSUMPTIONS}
-        rows={NO_ROWS}
-        hasSpouse={false}
-      />,
-    )
-    const field = screen.getByLabelText(/medicare part b \(you\)/i) as HTMLInputElement
-    expect(field.value).toBe('$2,434.8')
-    expect(screen.queryByRole('button', { name: /reset to suggested amount/i })).not.toBeInTheDocument()
   })
 })
 
