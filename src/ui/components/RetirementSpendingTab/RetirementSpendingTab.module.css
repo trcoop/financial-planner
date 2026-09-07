@@ -44,6 +44,17 @@
   gap: var(--space-1);
 }
 
+/* FIN-142 review follow-up: this tab only ever shows ONE stat tile, but `.statTiles` (App.css) is
+ * a `repeat(auto-fit, minmax(180px, 1fr))` grid sized for the Projection tab's 3-4-tile row — with
+ * a single child, `auto-fit` collapses to one full-width column, reading as an oversized, mostly-
+ * empty box. Wrapping the tile in a fixed-width container instead of `.statTiles` keeps it sized
+ * like a single tile elsewhere in the app. The width is set explicitly (not left to the "Re-run
+ * stress test" button's own natural width) specifically so the tile is the SAME width whether or
+ * not that button is present — Travis's specific ask was that the two states not visibly resize. */
+.statTileWrap {
+  width: 220px;
+}
+
 .depletedCallout {
   display: flex;
   flex-direction: column;
@@ -65,5 +76,16 @@
 .depletedSuggestion {
   margin: 0;
   color: var(--color-text);
+  font-weight: 400;
+}
+
+/* FIN-142 review follow-up: the "Chance of success" tile above (a possibly-stale, lifted
+ * Monte-Carlo-only figure) and this callout (always freshly computed, and gated on Monte Carlo
+ * AND the deterministic projection together) can legitimately show numbers that look
+ * inconsistent at a glance. Smaller/muted so it reads as a footnote, not another warning line. */
+.reconciliationNote {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
   font-weight: 400;
 }

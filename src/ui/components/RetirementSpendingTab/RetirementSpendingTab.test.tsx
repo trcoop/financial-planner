@@ -175,6 +175,56 @@ describe('RetirementSpendingTab — Medicare suggested-amount info (FIN-135 revi
   })
 })
 
+describe('RetirementSpendingTab — stat tile sizing (FIN-142 review follow-up: Travis width-stability ask)', () => {
+  it('renders the "Chance of success" tile outside the full-width .statTiles grid, and its wrapper width does not depend on whether the "Re-run stress test" action is present', () => {
+    render(
+      <RetirementSpendingTab
+        values={{ generalAmount: 4_000, generalAmountUnit: 'monthly' }}
+        onChange={vi.fn()}
+        assumptions={BASE_ASSUMPTIONS}
+        rows={NO_ROWS}
+        events={[]}
+        allocation={ALLOCATION}
+        successRate={90}
+        isStressTestStale={false}
+        onRunStressTest={vi.fn()}
+        hasSpouse={false}
+      />,
+    )
+    const labelWithoutAction = screen.getByText('Chance of success')
+    expect(screen.queryByRole('button', { name: /re-run stress test/i })).not.toBeInTheDocument()
+    // The StatTile's own card div is `labelWithoutAction.closest('div')`; its parent is the
+    // wrapper this component renders around it.
+    const wrapClassWithoutAction = labelWithoutAction.closest('div')?.parentElement?.className
+    cleanup()
+
+    render(
+      <RetirementSpendingTab
+        values={{ generalAmount: 4_000, generalAmountUnit: 'monthly' }}
+        onChange={vi.fn()}
+        assumptions={BASE_ASSUMPTIONS}
+        rows={NO_ROWS}
+        events={[]}
+        allocation={ALLOCATION}
+        successRate={55}
+        isStressTestStale
+        onRunStressTest={vi.fn()}
+        hasSpouse={false}
+      />,
+    )
+    const labelWithAction = screen.getByText('Chance of success')
+    expect(screen.getByRole('button', { name: /re-run stress test/i })).toBeInTheDocument()
+    const wrapClassWithAction = labelWithAction.closest('div')?.parentElement?.className
+
+    // Same wrapper class name in both states — its width is fixed by that class in CSS, not
+    // derived from the button's own natural width, so the button's presence can't change it.
+    expect(wrapClassWithoutAction).toBeTruthy()
+    expect(wrapClassWithoutAction).toBe(wrapClassWithAction)
+    // And it must not be the shared, full-width `.statTiles` app grid class used elsewhere.
+    expect(wrapClassWithoutAction).not.toBe('statTiles')
+  })
+})
+
 describe('RetirementSpendingTab — on-track readout (FIN-142 redesign: shared Monte Carlo success rate)', () => {
   it('shows a placeholder tile, not a readout, when no goal is set', () => {
     renderTab({ values: DEFAULT_RETIREMENT_SPENDING_VALUES })
@@ -266,9 +316,15 @@ describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142, Mo
     expect(screen.getByText(/you need to work.*more year.*with your current savings rate/i)).toBeInTheDocument()
   })
 
-  it('shows no suggestions when the plan is not depleted', () => {
+  it('renders no depletion callout at all for an on-track plan (review finding: mutation-tested {guidance.needsGuidance && ...} -> {true && ...} passed unmodified without this)', () => {
     renderTab()
+    // Not just "the suggestion strings are absent" (which the mutation above still passes,
+    // since `guidance.extraYears`/`extraContribution` stay `undefined` either way) — the
+    // headline text the callout always renders when mounted must be absent too, since that's
+    // what actually proves the callout itself isn't in the DOM.
     expect(screen.queryByText(/with your current savings rate/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/plan depleted/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/this plan isn't on track/i)).not.toBeInTheDocument()
   })
 
   it('shows "This plan isn\'t on track" when guidance is needed but no zeroed row is present in `rows` (Monte Carlo says below bar, deterministic rows didn\'t hit zero)', () => {
@@ -289,5 +345,50 @@ describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142, Mo
     ]
     renderTab({ assumptions, rows })
     expect(screen.getByText(/save \$\d+(,\d{3})* more per month to stay on track to retire at 62/i)).toBeInTheDocument()
+  })
+})
+
+describe('RetirementSpendingTab — reconciling the stat tile with the guidance callout (FIN-142 review follow-up)', () => {
+  // Below the Monte Carlo bar AND the deterministic projection depletes — no disagreement to
+  // reconcile, since the callout's own conditions and the tile's successRate prop both read
+  // "not on track" the same way. Reuses the module-level DEPLETED_ASSUMPTIONS-shaped fixture.
+  const NEEDS_GUIDANCE_ASSUMPTIONS: PlanAssumptions = {
+    currentAge: 55,
+    retirementAge: 60,
+    initialBalance: 100_000,
+    currentAnnualIncome: 90_000,
+    annualContributionRate: 0.06,
+    annualRaiseRate: 0.02,
+    annualReturnRate: 0.05,
+    inflationRate: 0.025,
+    withdrawalRateInRetirement: 0.06,
+    planningHorizonEndAge: 90,
+  }
+  const NEEDS_GUIDANCE_ROWS: ProjectionRow[] = [
+    { age: 60, year: 5, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 0, eventCosts: [] },
+  ]
+
+  it('shows no reconciliation note when the tile successRate itself is below 80 (no disagreement)', () => {
+    renderTab({ assumptions: NEEDS_GUIDANCE_ASSUMPTIONS, rows: NEEDS_GUIDANCE_ROWS, successRate: 40 })
+    expect(screen.queryByText(/chance of success figure above/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/still isn't on track because/i)).not.toBeInTheDocument()
+  })
+
+  it('shows no reconciliation note when the tile has never been run (successRate null)', () => {
+    renderTab({ assumptions: NEEDS_GUIDANCE_ASSUMPTIONS, rows: NEEDS_GUIDANCE_ROWS, successRate: null })
+    expect(screen.queryByText(/chance of success figure above/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/still isn't on track because/i)).not.toBeInTheDocument()
+  })
+
+  it('explains the fresh-but-disagreeing case when the tile reads >= 80 and is not stale', () => {
+    renderTab({ assumptions: NEEDS_GUIDANCE_ASSUMPTIONS, rows: NEEDS_GUIDANCE_ROWS, successRate: 83, isStressTestStale: false })
+    expect(screen.getByText(/still isn't on track because your plan's baseline projection/i)).toBeInTheDocument()
+    expect(screen.queryByText(/chance of success figure above hasn't been updated/i)).not.toBeInTheDocument()
+  })
+
+  it('points at staleness instead when the tile reads >= 80 but is stale', () => {
+    renderTab({ assumptions: NEEDS_GUIDANCE_ASSUMPTIONS, rows: NEEDS_GUIDANCE_ROWS, successRate: 83, isStressTestStale: true })
+    expect(screen.getByText(/chance of success figure above hasn't been updated/i)).toBeInTheDocument()
+    expect(screen.queryByText(/still isn't on track because your plan's baseline projection/i)).not.toBeInTheDocument()
   })
 })

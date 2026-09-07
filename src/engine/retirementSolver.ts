@@ -9,15 +9,33 @@
  * `primaryFixedContribution`) and inspecting the results. It does not modify either engine's math
  * or exported signatures.
  *
- * "On track" here means the same thing it means everywhere else in this app (`StressTestSection`,
- * the Projection tab's "Chance of success" tile): a Monte Carlo `successRate` at or above
- * {@link SUCCESS_RATE_THRESHOLD}, not a single deterministic path clearing $0. An earlier version
- * of this module gated on a deterministic `runProjection` depletion check — that produced a
- * mismatch a real user hit (FIN-142 bug report): the deterministic check said "3 more years"
- * fixes a plan whose Monte Carlo success rate was still far below what the rest of the app calls
- * "on track," because a single deterministic path and a probability-of-success threshold are
- * different questions. Solving for the same threshold the rest of the app already uses is the
- * actual fix, not a tuning tweak.
+ * "On track" here means BOTH of two things:
+ * 1. A Monte Carlo `successRate` at or above {@link SUCCESS_RATE_THRESHOLD} — the same bar
+ *    `StressTestSection`/the Projection tab's "Chance of success" tile use. An earlier version of
+ *    this module gated on a deterministic `runProjection` depletion check ALONE — that produced a
+ *    mismatch a real user hit (FIN-142 bug report): the deterministic check said "3 more years"
+ *    fixes a plan whose Monte Carlo success rate was still far below what the rest of the app
+ *    calls "on track," because a single deterministic path and a probability-of-success threshold
+ *    are different questions.
+ * 2. The single deterministic `runProjection` path (`findDepletedAtAge`) not running out before
+ *    `assumptions.planningHorizonEndAge`.
+ *
+ * Why both, rather than Monte Carlo alone (the first fix for the bug above): a second real case
+ * surfaced a plan with `successRate` at 83% (clears the 80% bar) whose deterministic path still
+ * depleted at age 95, inside the horizon. Root-caused: `runMonteCarloTrials` prices each asset
+ * class from `DEFAULT_RETURN_ASSUMPTIONS` (fixed capital-market assumptions the user doesn't
+ * enter), NOT from `assumptions.annualReturnRate` — a deliberate, pre-existing decoupling (see
+ * `monteCarlo.ts`'s `DEFAULT_RETURN_ASSUMPTIONS` doc comment; `StressTestSection` has the same
+ * `returnAssumptions` prop, unwired to `annualReturnRate` today, for the same reason). Withdrawal
+ * logic and inflation compounding are otherwise consistent between the two engines (both engines'
+ * `computeWithdrawals`/pipeline stage). So when a user's own `annualReturnRate` assumption is more
+ * conservative than the allocation-implied blend of `DEFAULT_RETURN_ASSUMPTIONS`, Monte Carlo can
+ * legitimately clear 80% while the single fixed-return deterministic path still runs dry — this is
+ * expected variance from two intentionally different modeling assumptions, not a bug in either
+ * engine, and reconciling the two return models is a separate, larger decision (it would change
+ * `StressTestSection`'s existing behavior app-wide, not just this tab) that's out of scope here.
+ * Requiring both conditions is the pragmatic fix: it means "on track" here can never show a green
+ * result the user's own deterministic numbers elsewhere on this tab would contradict.
  */
 
 import { runProjection } from './projection';
@@ -89,16 +107,18 @@ export interface RetirementGuidanceResult {
   /** This plan's own Monte Carlo success rate (0-100), under its own unmodified assumptions —
    * the same figure the Chance of Success tile would show for these assumptions. */
   successRate: number;
-  /** `true` when `successRate` is below {@link SUCCESS_RATE_THRESHOLD} — the gate for whether
-   * suggestions below are computed at all. */
+  /** `true` when the plan isn't on track by EITHER measure — `successRate` below
+   * {@link SUCCESS_RATE_THRESHOLD}, OR the deterministic path (`depletedAtAge`) runs out before
+   * `planningHorizonEndAge` — the gate for whether suggestions below are computed at all. See this
+   * module's doc comment for why both conditions are required. */
   needsGuidance: boolean;
   /** The age the plan's original assumptions deplete at along ONE deterministic path (same
    * derivation the tab used before this module existed), or `undefined` if that single path
-   * doesn't hit zero before `planningHorizonEndAge`. Informational only now — a headline detail
-   * alongside the Monte Carlo-driven `needsGuidance` determination above, not what gates it: a
-   * plan can need guidance (`successRate` below threshold) even when this one path never
-   * technically hits zero, because sequence-of-returns risk shows up across paths, not in the
-   * single average-return path this figure comes from. */
+   * doesn't hit zero before `planningHorizonEndAge`. No longer purely informational: a defined
+   * value here also means `needsGuidance` is `true` regardless of `successRate` (see this
+   * module's doc comment) — but it's exposed on its own too since a plan can need guidance from
+   * `successRate` alone while this stays `undefined` (Monte Carlo sequence-of-returns risk that a
+   * single average-return path never surfaces). */
   depletedAtAge: number | undefined;
   /** `undefined` when `needsGuidance` is `false` — no suggestions are computed in that case. */
   extraYears: ExtraYearsSuggestion | undefined;
@@ -130,18 +150,35 @@ const successRateFor = (
     seed,
   }).successRate;
 
-/** Finds the depletion age of the plan as given (unmodified assumptions/events), along the single
- * deterministic path `runProjection` produces — same derivation `RetirementSpendingTab` used
- * inline before this module existed. Informational only; see {@link RetirementGuidanceResult.depletedAtAge}. */
+/** Finds the depletion age of the given assumptions/events, along the single deterministic path
+ * `runProjection` produces — same derivation `RetirementSpendingTab` used inline before this
+ * module existed. Used both as the informational headline (see
+ * {@link RetirementGuidanceResult.depletedAtAge}) AND, per this module's doc comment, as one half
+ * of the "on track" gate every candidate in the searches below must also clear. */
 const findDepletedAtAge = (assumptions: PlanAssumptions, events: PlanEvent[]): number | undefined => {
   const rows = runProjection(assumptions, events);
   return rows.find((row) => row.endingBalance === 0 && row.age >= assumptions.retirementAge)?.age;
 };
 
+/** A candidate is "on track" only when BOTH its Monte Carlo success rate clears
+ * {@link SUCCESS_RATE_THRESHOLD} AND its own deterministic path doesn't deplete before
+ * `planningHorizonEndAge` — see this module's doc comment for why Monte Carlo alone isn't enough
+ * (the two engines use intentionally different return assumptions, so a plan can clear the
+ * Monte Carlo bar while its fixed-return deterministic path still runs dry). */
+const isOnTrack = (
+  assumptions: PlanAssumptions,
+  events: PlanEvent[],
+  allocation: PortfolioAllocation,
+  volatilityAssumptions: VolatilityAssumptions,
+  seed: number,
+): boolean =>
+  successRateFor(assumptions, events, allocation, volatilityAssumptions, seed) >= SUCCESS_RATE_THRESHOLD &&
+  findDepletedAtAge(assumptions, events) === undefined;
+
 /** Forward integer scan for the smallest `retirementAge` (> the plan's current one) at which the
- * plan's Monte Carlo success rate reaches {@link SUCCESS_RATE_THRESHOLD}. Ages are integers, so a
- * simple scan is sufficient — no need for true bisection. Bounded by `planningHorizonEndAge` and
- * `MAX_EXTRA_YEARS_SCANNED`, whichever is tighter. */
+ * plan is on track (see {@link isOnTrack}). Ages are integers, so a simple scan is sufficient — no
+ * need for true bisection. Bounded by `planningHorizonEndAge` and `MAX_EXTRA_YEARS_SCANNED`,
+ * whichever is tighter. */
 const findExtraYearsSuggestion = (
   assumptions: PlanAssumptions,
   events: PlanEvent[],
@@ -153,7 +190,7 @@ const findExtraYearsSuggestion = (
 
   for (let candidateAge = assumptions.retirementAge + 1; candidateAge <= upperBound; candidateAge += 1) {
     const candidateAssumptions: PlanAssumptions = { ...assumptions, retirementAge: candidateAge };
-    if (successRateFor(candidateAssumptions, events, allocation, volatilityAssumptions, seed) >= SUCCESS_RATE_THRESHOLD) {
+    if (isOnTrack(candidateAssumptions, events, allocation, volatilityAssumptions, seed)) {
       return { status: 'found', retirementAge: candidateAge, extraYears: candidateAge - assumptions.retirementAge };
     }
   }
@@ -163,8 +200,8 @@ const findExtraYearsSuggestion = (
 
 /** Binary search over an extra monthly contribution (converted to an annual
  * `primaryFixedContribution` addition for each Monte Carlo re-run) for the smallest amount,
- * rounded up to `CONTRIBUTION_SEARCH_PRECISION`, whose success rate reaches
- * {@link SUCCESS_RATE_THRESHOLD}. Bounded by `MAX_MONTHLY_CONTRIBUTION_SEARCH` and
+ * rounded up to `CONTRIBUTION_SEARCH_PRECISION`, at which the plan is on track (see
+ * {@link isOnTrack}). Bounded by `MAX_MONTHLY_CONTRIBUTION_SEARCH` and
  * `MAX_CONTRIBUTION_SEARCH_ITERATIONS`. */
 const findExtraContributionSuggestion = (
   assumptions: PlanAssumptions,
@@ -178,7 +215,7 @@ const findExtraContributionSuggestion = (
       ...assumptions,
       primaryFixedContribution: (assumptions.primaryFixedContribution ?? 0) + extraMonthly * 12,
     };
-    return successRateFor(candidateAssumptions, events, allocation, volatilityAssumptions, seed) >= SUCCESS_RATE_THRESHOLD;
+    return isOnTrack(candidateAssumptions, events, allocation, volatilityAssumptions, seed);
   };
 
   if (!resolvesAt(MAX_MONTHLY_CONTRIBUTION_SEARCH)) {
@@ -221,8 +258,9 @@ export const computeDepletionGuidance = ({
   const sharedSeed = resolveSeed(seed);
   const successRate = successRateFor(assumptions, events, allocation, volatilityAssumptions, sharedSeed);
   const depletedAtAge = findDepletedAtAge(assumptions, events);
+  const onTrack = successRate >= SUCCESS_RATE_THRESHOLD && depletedAtAge === undefined;
 
-  if (successRate >= SUCCESS_RATE_THRESHOLD) {
+  if (onTrack) {
     return { successRate, needsGuidance: false, depletedAtAge: undefined, extraYears: undefined, extraContribution: undefined };
   }
 

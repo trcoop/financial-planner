@@ -52,10 +52,13 @@ interface RetirementSpendingTabProps {
   allocation: PortfolioAllocation
   /** The plan's Monte Carlo success rate (0-100), lifted from `StressTestSection` at the
    * `PlanSection.tsx` call site (`onSuccessRateChange`) — `null` until the user has run a stress
-   * test at least once this session. FIN-142's redesign: this tab's on-track readout shows this
-   * SAME figure (not a separate, simplified accumulation-model calculation) so it can never
-   * disagree with the guidance callout below, which is solved against this same Monte Carlo
-   * threshold. */
+   * test at least once this session. FIN-142's redesign: this tab's stat tile shows this SAME
+   * figure (not a separate, simplified accumulation-model calculation) rather than computing a
+   * third independent number. It is NOT, by itself, the full "on track" determination the
+   * guidance callout below uses (that also requires the deterministic projection not to deplete —
+   * see `retirementSolver.ts`'s doc comment) and it can be stale, so it CAN visibly disagree with
+   * the callout — that disagreement is surfaced via the callout's own reconciliation note rather
+   * than papered over. */
   successRate: number | null
   /** Whether `successRate` is stale relative to the plan's current inputs (lifted from
    * `StressTestSection` via `onStaleChange`, same as `successRate` above) — drives the "Re-run
@@ -189,19 +192,24 @@ export function RetirementSpendingTab({
         </div>
       </div>
 
-      {/* `statTiles` is the app-global grid class (App.css) the Projection tab's own StatTile
-        * row already uses — reused here rather than duplicating its responsive grid rules in
-        * this component's own CSS module. */}
-      <div className="statTiles">
+      {/* FIN-142 review follow-up: deliberately NOT the app-global `.statTiles` grid (App.css) —
+        * that grid is sized for the Projection tab's 3-4-tile row, and with only one child here
+        * `auto-fit` stretches it to the full row width. `.statTileWrap` pins a fixed width
+        * instead, so the tile reads as one small data point and — the specific ask — stays the
+        * same width whether or not the "Re-run stress test" action below is present. */}
+      <div className={styles.statTileWrap}>
         {goalAnnualAmount !== undefined ? (
           // FIN-142 (redesign): reuses the SAME `successRate` figure `StressTestSection`
           // computes (lifted up through `PlanSection.tsx`, same as the Projection tab's own
           // "Chance of success" tile) rather than a second, independent Monte Carlo run or the
-          // old `retirementNumber.ts`-driven "Short by $X" readout — one on-track computation
-          // path, reused, so this tile and the guidance callout below can never disagree (ERD
-          // reuse principle; CLAUDE.md component/logic reuse). Same "not yet run"/stale handling
-          // as the Projection tab tile: a placeholder value until the user runs a stress test at
-          // least once, then a "Re-run stress test" action when inputs have since changed.
+          // old `retirementNumber.ts`-driven "Short by $X" readout. Note this tile shows Monte
+          // Carlo alone and can be stale; the guidance callout below is always freshly computed
+          // and gated on Monte Carlo AND the deterministic projection together (see
+          // `retirementSolver.ts`'s doc comment) — the two CAN disagree at a glance, which is why
+          // the callout below carries its own reconciliation note rather than this tile silently
+          // claiming to always agree with it. Same "not yet run"/stale handling as the Projection
+          // tab tile: a placeholder value until the user runs a stress test at least once, then a
+          // "Re-run stress test" action when inputs have since changed.
           <StatTile
             label="Chance of success"
             value={successRate === null ? 'Run a stress test to see this' : formatPercent(successRate)}
@@ -234,6 +242,19 @@ export function RetirementSpendingTab({
             <p className={styles.depletedSuggestion}>
               Save {formatCurrency(guidance.extraContribution.extraMonthlyContribution)} more per month to stay on track to
               retire at {assumptions.retirementAge}.
+            </p>
+          )}
+          {/* FIN-142 review follow-up: this callout is always freshly computed off the plan's
+            * current inputs and requires BOTH a Monte Carlo success rate >= 80% and a
+            * non-depleting deterministic projection (see `retirementSolver.ts`). The "Chance of
+            * success" tile above only shows the Monte Carlo half, and can be stale — so it can
+            * read as "on track" (>= 80%, not yet re-run) right above this callout. Rather than
+            * let that look like a bug, name it. */}
+          {successRate !== null && successRate >= 80 && (
+            <p className={styles.reconciliationNote}>
+              {isStressTestStale
+                ? "The Chance of success figure above hasn't been updated for your latest changes yet — re-run the stress test to refresh it."
+                : "This still isn't on track because your plan's baseline projection (using your assumed return rate, not simulated market variation) runs out before the end of your horizon, even though Chance of success above is at or above 80%."}
             </p>
           )}
         </div>

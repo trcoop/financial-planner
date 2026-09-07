@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { runMonteCarloTrials } from './monteCarlo';
 import type { PortfolioAllocation } from './monteCarlo';
+import { runProjection } from './projection';
 import { computeDepletionGuidance } from './retirementSolver';
 import type { PlanAssumptions } from './types';
 
@@ -50,6 +51,34 @@ describe('computeDepletionGuidance', () => {
     expect(result.extraContribution).toBeUndefined();
   });
 
+  it('needs guidance when Monte Carlo clears the bar but the deterministic path still depletes within the horizon (Travis live finding: successRate 83%, deterministic depletion at 95)', () => {
+    // Root cause (see retirementSolver.ts's module doc comment): `runMonteCarloTrials` prices
+    // each asset class from `DEFAULT_RETURN_ASSUMPTIONS` (fixed capital-market assumptions),
+    // NOT from `assumptions.annualReturnRate` — a deliberate, pre-existing decoupling shared with
+    // `StressTestSection`. A conservative `annualReturnRate` well below the allocation-implied
+    // blend of `DEFAULT_RETURN_ASSUMPTIONS` reproduces exactly that gap: Monte Carlo comfortably
+    // clears 80% while the single fixed-return deterministic path still runs dry before the
+    // horizon ends. This is the case the combined gate (Monte Carlo AND deterministic) exists to
+    // catch — Monte Carlo alone would have called this plan "on track".
+    const assumptions = baseAssumptions({
+      currentAge: 40,
+      retirementAge: 65,
+      initialBalance: 300_000,
+      currentAnnualIncome: 120_000,
+      annualContributionRate: 0.1,
+      annualReturnRate: 0.03,
+      withdrawalRateInRetirement: 0.045,
+      planningHorizonEndAge: 95,
+    });
+    const stockHeavyAllocation: PortfolioAllocation = { stocksPercent: 90, bondsPercent: 10 };
+
+    const result = computeDepletionGuidance({ assumptions, allocation: stockHeavyAllocation, seed });
+
+    expect(result.successRate).toBeGreaterThanOrEqual(80);
+    expect(result.depletedAtAge).toBeDefined();
+    expect(result.needsGuidance).toBe(true);
+  });
+
   it('finds a resolving extra-years suggestion for a plan below the success-rate bar', () => {
     const assumptions = baseAssumptions();
 
@@ -86,6 +115,55 @@ describe('computeDepletionGuidance', () => {
       expect(result.extraContribution.extraMonthlyContribution).toBeGreaterThan(0);
       // Rounded to the documented $10 precision.
       expect(result.extraContribution.extraMonthlyContribution % 10).toBe(0);
+    }
+  });
+
+  it('extra-contribution suggestion holds up against an independent ground-truth Monte Carlo re-run and a deterministic re-run (review finding: mutation-tested Math.ceil -> Math.floor at the rounding step passed unmodified without this)', () => {
+    // Same ground-truth pattern as the extra-years regression test below, applied to the
+    // contribution suggestion — a reviewer found that swapping the rounding direction
+    // (`Math.ceil` -> `Math.floor` in `findExtraContributionSuggestion`) passed every existing
+    // test unmodified, because nothing re-verified the suggested dollar figure actually resolves
+    // the plan; only that it's positive and a multiple of $10. A `Math.floor` bug would round the
+    // suggestion DOWN below the amount the search actually found necessary, silently under-
+    // suggesting. This test would catch that: the ground-truth batch must actually clear the bar
+    // at the suggested (rounded) amount, not just at the search's own unrounded internal value.
+    const assumptions = baseAssumptions({
+      currentAge: 35,
+      retirementAge: 62,
+      initialBalance: 150_000,
+      retirementSpendingGoal: { annualAmount: 60_000 },
+    });
+
+    const result = computeDepletionGuidance({ assumptions, allocation, seed });
+
+    expect(result.extraContribution?.status).toBe('found');
+    if (result.extraContribution?.status === 'found') {
+      const groundTruthAssumptions: PlanAssumptions = {
+        ...assumptions,
+        primaryFixedContribution:
+          (assumptions.primaryFixedContribution ?? 0) + result.extraContribution.extraMonthlyContribution * 12,
+      };
+
+      const groundTruth = runMonteCarloTrials(groundTruthAssumptions, allocation, undefined, [], {
+        simulationCount: 2000,
+        seed: 777,
+      });
+      // Same generous, noise-tolerant floor as the extra-years regression test — see that test's
+      // comment for why an exact `>= 80` isn't the right assertion at a threshold boundary. What
+      // this guards against is a suggestion that, under independent re-verification, is nowhere
+      // close to resolving (the `Math.floor` mutation's failure mode), not ordinary sampling
+      // noise right at 80%.
+      expect(groundTruth.successRate).toBeGreaterThan(result.successRate + 15);
+      expect(groundTruth.successRate).toBeGreaterThanOrEqual(70);
+
+      // The combined on-track gate (FIN-142 follow-up) also requires the deterministic path not
+      // to deplete before the horizon — verify the suggested amount clears THAT independently too,
+      // not just the Monte Carlo half.
+      const groundTruthRows = runProjection(groundTruthAssumptions, []);
+      const groundTruthDepletedAtAge = groundTruthRows.find(
+        (row) => row.endingBalance === 0 && row.age >= groundTruthAssumptions.retirementAge,
+      )?.age;
+      expect(groundTruthDepletedAtAge).toBeUndefined();
     }
   });
 
@@ -142,6 +220,15 @@ describe('computeDepletionGuidance', () => {
       // threshold boundary.
       expect(groundTruth.successRate).toBeGreaterThan(result.successRate + 15);
       expect(groundTruth.successRate).toBeGreaterThanOrEqual(70);
+
+      // The combined on-track gate (FIN-142 follow-up: Monte Carlo AND the deterministic
+      // projection) also requires the suggested retirement age's own deterministic path not to
+      // deplete before the horizon — verify that independently too.
+      const groundTruthRows = runProjection(groundTruthAssumptions, []);
+      const groundTruthDepletedAtAge = groundTruthRows.find(
+        (row) => row.endingBalance === 0 && row.age >= groundTruthAssumptions.retirementAge,
+      )?.age;
+      expect(groundTruthDepletedAtAge).toBeUndefined();
     }
   });
 
