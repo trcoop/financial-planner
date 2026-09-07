@@ -30,3 +30,8 @@ jobs:
           name: visual-baselines
           path: tests/visual/**/*-snapshots/*.png
           retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ladle-build-debug
+          path: .ladle-build/assets/RetirementSpendingTab.stories-*.js
+          retention-days: 1
