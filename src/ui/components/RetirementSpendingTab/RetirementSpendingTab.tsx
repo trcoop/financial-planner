@@ -1,7 +1,9 @@
-import type { PlanAssumptions, ProjectionRow } from '../../../engine'
-import { InvalidRetirementNumberInputError, calculateRetirementNumber, type RetirementNumberResult } from '../../../engine/retirementNumber'
+import { useMemo } from 'react'
+import type { PlanAssumptions, PlanEvent, PortfolioAllocation, ProjectionRow } from '../../../engine'
+import { computeDepletionGuidance } from '../../../engine/retirementSolver'
 import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
-import { formatCurrency } from '../../utils/format'
+import { formatCurrency, formatPercent } from '../../utils/format'
+import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
 import { StatTile } from '../StatTile/StatTile'
 import { Tooltip } from '../Tooltip/Tooltip'
@@ -26,18 +28,6 @@ function roundToCents(value: number): number {
   return Math.round(value * 100) / 100
 }
 
-/** Turns a `RetirementNumberResult` into the tab's one-line status text. */
-function statusText(result: RetirementNumberResult): string {
-  switch (result.status) {
-    case 'onTrack':
-      return 'On track'
-    case 'shortBy':
-      return `Short by ${formatCurrency(result.shortfallAmount)}`
-    case 'couldRetireEarlier':
-      return `Could retire at age ${result.earliestAge}`
-  }
-}
-
 interface RetirementSpendingTabProps {
   values: RetirementSpendingValues
   onChange: (values: RetirementSpendingValues) => void
@@ -51,6 +41,35 @@ interface RetirementSpendingTabProps {
    * the "Plan depleted at age X" callout's inline derivation (ERD §5/§11: no new engine field, no
    * standalone helper file). */
   rows: ProjectionRow[]
+  /** The same plan events `PlanSection.tsx` passes to `runProjection` for `rows` above (FIN-118
+   * Medicare et al.) — threaded through so the FIN-142 depletion guidance below re-runs the real
+   * plan engine with the same events, not a simplified/eventless re-derivation. Defaults to `[]`
+   * for callers (and existing tests) that don't set any. */
+  events?: PlanEvent[]
+  /** The plan's stock/bond allocation, same shape `StressTestSection` takes — threaded through so
+   * the FIN-142 guidance solver's own Monte Carlo re-runs simulate the same portfolio the rest of
+   * the app does, not a hardcoded default. */
+  allocation: PortfolioAllocation
+  /** The plan's Monte Carlo success rate (0-100), lifted from `StressTestSection` at the
+   * `PlanSection.tsx` call site (`onSuccessRateChange`) — `null` until the user has run a stress
+   * test at least once this session. FIN-142's redesign: this tab's stat tile shows this SAME
+   * figure (not a separate, simplified accumulation-model calculation) rather than computing a
+   * third independent number. It is NOT, by itself, the full "on track" determination the
+   * guidance callout below uses (that also requires the deterministic projection not to deplete —
+   * see `retirementSolver.ts`'s doc comment) and it can be stale, so it CAN visibly disagree with
+   * the callout. No screen in the app states an explicit success-rate benchmark to the user, so
+   * the callout doesn't try to explain that disagreement — it just states the plan's own
+   * depletion fact, which stands on its own regardless of what this tile shows. */
+  successRate: number | null
+  /** Whether `successRate` is stale relative to the plan's current inputs (lifted from
+   * `StressTestSection` via `onStaleChange`, same as `successRate` above) — drives the "Re-run
+   * stress test" action on the on-track stat tile, same affordance the Projection tab's own
+   * "Chance of success" tile already has. */
+  isStressTestStale: boolean
+  /** Triggers a stress test re-run (imperative handle on `StressTestSection`, same call
+   * `PlanSection.tsx`'s own "Re-run stress test" action makes) — wired to the stat tile's action
+   * below when `isStressTestStale` is true. */
+  onRunStressTest: () => void
   /** Whether a spouse `Person` currently exists — gates the spouse Medicare field's presence in
    * the DOM entirely (not disabled/greyed), matching the PRD's per-person exception. */
   hasSpouse: boolean
@@ -66,7 +85,18 @@ interface RetirementSpendingTabProps {
  * No inflation rate / return rate / life expectancy inputs here — those are read from
  * `assumptions` (sourced from the Rates tab), never re-collected (AC).
  */
-export function RetirementSpendingTab({ values, onChange, assumptions, rows, hasSpouse }: RetirementSpendingTabProps) {
+export function RetirementSpendingTab({
+  values,
+  onChange,
+  assumptions,
+  rows,
+  events = [],
+  allocation,
+  successRate,
+  isStressTestStale,
+  onRunStressTest,
+  hasSpouse,
+}: RetirementSpendingTabProps) {
   const unit = values.generalAmountUnit ?? 'monthly'
   const amount = values.generalAmount ?? 0
 
@@ -85,33 +115,26 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
 
   const goalAnnualAmount = retirementSpendingGoalAnnualAmount(values)
 
-  let retirementNumberResult: RetirementNumberResult | undefined
-  if (goalAnnualAmount !== undefined) {
-    try {
-      retirementNumberResult = calculateRetirementNumber({
-        currentAge: assumptions.currentAge,
-        retirementAge: assumptions.retirementAge,
-        desiredMonthlySpend: goalAnnualAmount / 12,
-        currentBalance: assumptions.initialBalance,
-        // Mirrors `computeIncome`'s (pipeline.ts) own pre-retirement contribution formula — the
-        // plan's actual current savings rate, not a re-collected input.
-        annualContribution: assumptions.currentAnnualIncome * assumptions.annualContributionRate + (assumptions.primaryFixedContribution ?? 0),
-        inflationRate: assumptions.inflationRate,
-        annualReturnRate: assumptions.annualReturnRate,
-        lifeExpectancy: assumptions.planningHorizonEndAge,
-      })
-    } catch (error) {
-      // Defensive only: a malformed plan (e.g. retirementAge before currentAge) shouldn't crash
-      // this tab — it silently shows no readout instead of surfacing an engine error here.
-      if (!(error instanceof InvalidRetirementNumberInputError)) throw error
-      retirementNumberResult = undefined
-    }
-  }
-
-  // ERD §5/§11: inline derivation, no new engine field, no standalone helper file. The latch in
-  // `clampRuin` guarantees this is the FIRST such row once found; the age >= retirementAge guard
-  // is defensive-but-harmless (a pre-retirement endingBalance of exactly 0 isn't realistic here).
+  // ERD §5/§11: inline derivation, no new engine field, no standalone helper file. Informational
+  // only (see `retirementSolver.ts`'s `depletedAtAge` doc comment) — a single deterministic
+  // path's depletion age, shown alongside the Monte Carlo-driven guidance below, not the thing
+  // that gates it. The latch in `clampRuin` guarantees this is the FIRST such row once found; the
+  // age >= retirementAge guard is defensive-but-harmless (a pre-retirement endingBalance of
+  // exactly 0 isn't realistic here).
   const depletedAtAge = rows.find((row) => row.endingBalance === 0 && row.age >= assumptions.retirementAge)?.age
+
+  // FIN-142 (redesign): "on track" here means the same Monte Carlo success-rate bar as the rest
+  // of the app (`StressTestSection`, the Projection tab's "Chance of success" tile) — see
+  // `retirementSolver.ts`'s module doc comment for why a deterministic depletion check isn't the
+  // same question. Runs its own low-precision Monte Carlo search independently of whether the
+  // user has run a full stress test yet (`successRate`/`isStressTestStale` below are a SEPARATE,
+  // reused figure for the stat tile, not an input to this search) — memoized on the plan's
+  // (already-debounced, per `useProjectionState`) `assumptions`/`events`/`allocation` so it's not
+  // recomputed on every keystroke.
+  const guidance = useMemo(
+    () => computeDepletionGuidance({ assumptions, events, allocation }),
+    [assumptions, events, allocation],
+  )
 
   return (
     <div className={styles.tab}>
@@ -170,29 +193,60 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
         </div>
       </div>
 
-      {/* `statTiles` is the app-global grid class (App.css) the Projection tab's own StatTile
-        * row already uses — reused here rather than duplicating its responsive grid rules in
-        * this component's own CSS module. */}
-      <div className="statTiles">
-        {retirementNumberResult ? (
-          <>
-            <StatTile
-              label={`Your number (future dollars, age ${assumptions.retirementAge})`}
-              value={formatCurrency(retirementNumberResult.targetBalance)}
-            />
-            <StatTile
-              label={`Projected balance (future dollars, age ${assumptions.retirementAge})`}
-              value={formatCurrency(retirementNumberResult.projectedBalance)}
-            />
-            <StatTile label="Status" value={statusText(retirementNumberResult)} />
-          </>
+      {/* FIN-142 review follow-up: deliberately NOT the app-global `.statTiles` grid (App.css) —
+        * that grid is sized for the Projection tab's 3-4-tile row, and with only one child here
+        * `auto-fit` stretches it to the full row width. `.statTileWrap` pins a fixed width
+        * instead, so the tile reads as one small data point and — the specific ask — stays the
+        * same width whether or not the "Re-run stress test" action below is present. */}
+      <div className={styles.statTileWrap}>
+        {goalAnnualAmount !== undefined ? (
+          // FIN-142 (redesign): reuses the SAME `successRate` figure `StressTestSection`
+          // computes (lifted up through `PlanSection.tsx`, same as the Projection tab's own
+          // "Chance of success" tile) rather than a second, independent Monte Carlo run or the
+          // old `retirementNumber.ts`-driven "Short by $X" readout. Note this tile shows Monte
+          // Carlo alone and can be stale; the guidance callout below is always freshly computed
+          // and gated on Monte Carlo AND the deterministic projection together (see
+          // `retirementSolver.ts`'s doc comment) — the two CAN disagree at a glance. The callout
+          // doesn't try to reconcile that against this tile's number (no screen in the app states
+          // an explicit success-rate benchmark to explain it against); it just states its own
+          // depletion fact. Same "not yet run"/stale handling as the Projection tab tile: a
+          // placeholder value until the user runs a stress test at least once, then a "Re-run
+          // stress test" action when inputs have since changed.
+          <StatTile
+            label="Chance of success"
+            value={successRate === null ? 'Run a stress test to see this' : formatPercent(successRate)}
+            isPlaceholder={successRate === null}
+            action={
+              isStressTestStale && successRate !== null ? (
+                <Button variant="secondary" onClick={onRunStressTest}>
+                  Re-run stress test
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
           <StatTile label="Status" value="Set a spending goal above to see whether you're on track." isPlaceholder />
         )}
       </div>
 
-      {depletedAtAge !== undefined && (
-        <p className={styles.depletedCallout}>Plan depleted at age {depletedAtAge}</p>
+      {guidance.needsGuidance && (
+        <div className={styles.depletedCallout}>
+          <p className={styles.depletedHeadline}>
+            {depletedAtAge !== undefined ? `Plan depleted at age ${depletedAtAge}` : "This plan isn't on track"}
+          </p>
+          {guidance.extraYears?.status === 'found' && (
+            <p className={styles.depletedSuggestion}>
+              You need to work {guidance.extraYears.extraYears} more year{guidance.extraYears.extraYears === 1 ? '' : 's'} (to
+              age {guidance.extraYears.retirementAge}) with your current savings rate.
+            </p>
+          )}
+          {guidance.extraContribution?.status === 'found' && (
+            <p className={styles.depletedSuggestion}>
+              Save {formatCurrency(guidance.extraContribution.extraMonthlyContribution)} more per month to stay on track to
+              retire at {assumptions.retirementAge}.
+            </p>
+          )}
+        </div>
       )}
     </div>
   )
