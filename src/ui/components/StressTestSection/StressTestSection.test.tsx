@@ -131,6 +131,21 @@ describe('StressTestSection', () => {
     expect(eventsArg).toEqual([medicarePartBEvent(baseAssumptions.inflationRate)])
   })
 
+  it('threads a caller-supplied primaryMedicareAnnualAmount into medicarePartBEvent for the Monte Carlo run (FIN-136)', () => {
+    const orchestrator = new FakeOrchestrator()
+    render(
+      <StressTestSection
+        assumptions={baseAssumptions}
+        rows={baseRows}
+        orchestrator={orchestrator}
+        primaryMedicareAnnualAmount={2_500}
+      />,
+    )
+
+    const [, , , eventsArg] = orchestrator.runCalls[0]
+    expect(eventsArg).toEqual([medicarePartBEvent(baseAssumptions.inflationRate, 2_500)])
+  })
+
   it('runs against a caller-supplied allocation instead of the 70/30 default (FIN-56)', () => {
     const orchestrator = new FakeOrchestrator()
     render(
