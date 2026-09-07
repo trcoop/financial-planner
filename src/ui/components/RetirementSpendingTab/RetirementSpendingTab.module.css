@@ -78,14 +78,3 @@
   color: var(--color-text);
   font-weight: 400;
 }
-
-/* FIN-142 review follow-up: the "Chance of success" tile above (a possibly-stale, lifted
- * Monte-Carlo-only figure) and this callout (always freshly computed, and gated on Monte Carlo
- * AND the deterministic projection together) can legitimately show numbers that look
- * inconsistent at a glance. Smaller/muted so it reads as a footnote, not another warning line. */
-.reconciliationNote {
-  margin: 0;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
-  font-weight: 400;
-}

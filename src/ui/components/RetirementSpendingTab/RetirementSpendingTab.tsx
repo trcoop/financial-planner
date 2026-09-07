@@ -57,8 +57,9 @@ interface RetirementSpendingTabProps {
    * third independent number. It is NOT, by itself, the full "on track" determination the
    * guidance callout below uses (that also requires the deterministic projection not to deplete —
    * see `retirementSolver.ts`'s doc comment) and it can be stale, so it CAN visibly disagree with
-   * the callout — that disagreement is surfaced via the callout's own reconciliation note rather
-   * than papered over. */
+   * the callout. No screen in the app states an explicit success-rate benchmark to the user, so
+   * the callout doesn't try to explain that disagreement — it just states the plan's own
+   * depletion fact, which stands on its own regardless of what this tile shows. */
   successRate: number | null
   /** Whether `successRate` is stale relative to the plan's current inputs (lifted from
    * `StressTestSection` via `onStaleChange`, same as `successRate` above) — drives the "Re-run
@@ -205,11 +206,12 @@ export function RetirementSpendingTab({
           // old `retirementNumber.ts`-driven "Short by $X" readout. Note this tile shows Monte
           // Carlo alone and can be stale; the guidance callout below is always freshly computed
           // and gated on Monte Carlo AND the deterministic projection together (see
-          // `retirementSolver.ts`'s doc comment) — the two CAN disagree at a glance, which is why
-          // the callout below carries its own reconciliation note rather than this tile silently
-          // claiming to always agree with it. Same "not yet run"/stale handling as the Projection
-          // tab tile: a placeholder value until the user runs a stress test at least once, then a
-          // "Re-run stress test" action when inputs have since changed.
+          // `retirementSolver.ts`'s doc comment) — the two CAN disagree at a glance. The callout
+          // doesn't try to reconcile that against this tile's number (no screen in the app states
+          // an explicit success-rate benchmark to explain it against); it just states its own
+          // depletion fact. Same "not yet run"/stale handling as the Projection tab tile: a
+          // placeholder value until the user runs a stress test at least once, then a "Re-run
+          // stress test" action when inputs have since changed.
           <StatTile
             label="Chance of success"
             value={successRate === null ? 'Run a stress test to see this' : formatPercent(successRate)}
@@ -242,19 +244,6 @@ export function RetirementSpendingTab({
             <p className={styles.depletedSuggestion}>
               Save {formatCurrency(guidance.extraContribution.extraMonthlyContribution)} more per month to stay on track to
               retire at {assumptions.retirementAge}.
-            </p>
-          )}
-          {/* FIN-142 review follow-up: this callout is always freshly computed off the plan's
-            * current inputs and requires BOTH a Monte Carlo success rate >= 80% and a
-            * non-depleting deterministic projection (see `retirementSolver.ts`). The "Chance of
-            * success" tile above only shows the Monte Carlo half, and can be stale — so it can
-            * read as "on track" (>= 80%, not yet re-run) right above this callout. Rather than
-            * let that look like a bug, name it. */}
-          {successRate !== null && successRate >= 80 && (
-            <p className={styles.reconciliationNote}>
-              {isStressTestStale
-                ? "The Chance of success figure above hasn't been updated for your latest changes yet — re-run the stress test to refresh it."
-                : "This still isn't on track because your plan's baseline projection (using your assumed return rate, not simulated market variation) runs out before the end of your horizon, even though Chance of success above is at or above 80%."}
             </p>
           )}
         </div>
