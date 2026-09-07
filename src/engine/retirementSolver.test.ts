@@ -268,7 +268,11 @@ describe('computeDepletionGuidance', () => {
 
     expect(result.needsGuidance).toBe(true);
     expect(result.extraYears).toEqual({ status: 'found', retirementAge: 105, extraYears: 40 });
-  });
+    // Scans all 40 candidate ages with a real Monte Carlo re-run each — legitimately expensive.
+    // CI's runner is slower than local dev machines (observed ~26s vs. under vitest's 15s
+    // default), so this needs an explicit longer timeout, same pattern as monteCarlo.test.ts's
+    // own slow oracle-agreement test.
+  }, 60000);
 
   it('reports noSolutionFound for extra contribution when even the search ceiling cannot resolve the plan', () => {
     // An extreme withdrawal rate against a near-zero balance and income — no realistic monthly
