@@ -562,6 +562,7 @@ export function PlanSection(_props: PlanSectionProps) {
                         onChange={setRetirementSpendingValues}
                         assumptions={assumptions}
                         rows={rows}
+                        events={events}
                         hasSpouse={hasSpouse}
                       />
                     ) : null}

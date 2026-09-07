@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { PlanAssumptions, ProjectionRow } from '../../../engine'
+import type { PlanAssumptions, PlanEvent, ProjectionRow } from '../../../engine'
 import * as retirementNumberModule from '../../../engine/retirementNumber'
 import { RetirementSpendingTab } from './RetirementSpendingTab'
 import { DEFAULT_RETIREMENT_SPENDING_VALUES, type RetirementSpendingValues } from './RetirementSpendingGoal'
@@ -40,6 +40,7 @@ function renderTab(
     onChange?: ReturnType<typeof vi.fn<(values: RetirementSpendingValues) => void>>
     assumptions?: PlanAssumptions
     rows?: ProjectionRow[]
+    events?: PlanEvent[]
     hasSpouse?: boolean
   } = {},
 ) {
@@ -50,6 +51,7 @@ function renderTab(
       onChange={onChange}
       assumptions={overrides.assumptions ?? BASE_ASSUMPTIONS}
       rows={overrides.rows ?? NO_ROWS}
+      events={overrides.events ?? []}
       hasSpouse={overrides.hasSpouse ?? false}
     />,
   )
@@ -252,5 +254,56 @@ describe('RetirementSpendingTab — plan depleted callout (ERD §5/§11, inline 
     ]
     renderTab({ assumptions, rows })
     expect(screen.queryByText(/depleted/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142)', () => {
+  // Depletes at the baseline retirement age via `runProjection` itself (not just the mocked
+  // `rows` prop) so `computeDepletionGuidance` — which re-runs the real engine — actually finds
+  // something to suggest. Mirrors `retirementSolver.test.ts`'s own depleted fixture.
+  const DEPLETED_ASSUMPTIONS: PlanAssumptions = {
+    currentAge: 55,
+    retirementAge: 60,
+    initialBalance: 100_000,
+    currentAnnualIncome: 90_000,
+    annualContributionRate: 0.06,
+    annualRaiseRate: 0.02,
+    annualReturnRate: 0.05,
+    inflationRate: 0.025,
+    withdrawalRateInRetirement: 0.06,
+    planningHorizonEndAge: 90,
+  }
+
+  // The rows prop still drives the bare "Plan depleted at age X" callout (unchanged inline
+  // derivation) — give it a row consistent with the assumptions above so both the callout and
+  // the new suggestions render together, the way `PlanSection.tsx` threads the real `rows`.
+  const DEPLETED_ROWS: ProjectionRow[] = [
+    { age: 60, year: 5, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 0, eventCosts: [] },
+  ]
+
+  it('shows an extra-years suggestion alongside the bare depleted callout', () => {
+    renderTab({ assumptions: DEPLETED_ASSUMPTIONS, rows: DEPLETED_ROWS })
+    expect(screen.getByText(/plan depleted at age 60/i)).toBeInTheDocument()
+    expect(screen.getByText(/more year.*would make this plan last the full horizon/i)).toBeInTheDocument()
+  })
+
+  it('shows no suggestions when the plan is not depleted', () => {
+    renderTab()
+    expect(screen.queryByText(/would make this plan last the full horizon/i)).not.toBeInTheDocument()
+  })
+
+  it('shows an extra-monthly-contribution suggestion when a household spending goal makes the corpus size matter', () => {
+    const assumptions: PlanAssumptions = {
+      ...DEPLETED_ASSUMPTIONS,
+      currentAge: 35,
+      retirementAge: 62,
+      initialBalance: 150_000,
+      retirementSpendingGoal: { annualAmount: 60_000 },
+    }
+    const rows: ProjectionRow[] = [
+      { age: 62, year: 27, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 0, eventCosts: [] },
+    ]
+    renderTab({ assumptions, rows })
+    expect(screen.getByText(/extra \$\d+(,\d{3})*\/month in contributions would make this plan last the full horizon/i)).toBeInTheDocument()
   })
 })

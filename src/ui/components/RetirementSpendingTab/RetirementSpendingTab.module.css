@@ -45,10 +45,25 @@
 }
 
 .depletedCallout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   margin: 0;
   padding: var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-warning);
+}
+
+.depletedHeadline {
+  margin: 0;
   font-weight: 600;
+}
+
+/* FIN-142: the actionable-guidance lines read as normal-weight body copy, not a repeat of the
+ * bold warning line above them. */
+.depletedSuggestion {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 400;
 }

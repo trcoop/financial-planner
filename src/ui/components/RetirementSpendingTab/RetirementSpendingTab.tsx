@@ -1,5 +1,7 @@
-import type { PlanAssumptions, ProjectionRow } from '../../../engine'
+import { useMemo } from 'react'
+import type { PlanAssumptions, PlanEvent, ProjectionRow } from '../../../engine'
 import { InvalidRetirementNumberInputError, calculateRetirementNumber, type RetirementNumberResult } from '../../../engine/retirementNumber'
+import { computeDepletionGuidance } from '../../../engine/retirementSolver'
 import { MEDICARE_PART_B_EVENT } from '../../medicareEvent'
 import { formatCurrency } from '../../utils/format'
 import { NumberField } from '../NumberField/NumberField'
@@ -51,6 +53,11 @@ interface RetirementSpendingTabProps {
    * the "Plan depleted at age X" callout's inline derivation (ERD §5/§11: no new engine field, no
    * standalone helper file). */
   rows: ProjectionRow[]
+  /** The same plan events `PlanSection.tsx` passes to `runProjection` for `rows` above (FIN-118
+   * Medicare et al.) — threaded through so the FIN-142 depletion guidance below re-runs the real
+   * plan engine with the same events, not a simplified/eventless re-derivation. Defaults to `[]`
+   * for callers (and existing tests) that don't set any. */
+  events?: PlanEvent[]
   /** Whether a spouse `Person` currently exists — gates the spouse Medicare field's presence in
    * the DOM entirely (not disabled/greyed), matching the PRD's per-person exception. */
   hasSpouse: boolean
@@ -66,7 +73,7 @@ interface RetirementSpendingTabProps {
  * No inflation rate / return rate / life expectancy inputs here — those are read from
  * `assumptions` (sourced from the Rates tab), never re-collected (AC).
  */
-export function RetirementSpendingTab({ values, onChange, assumptions, rows, hasSpouse }: RetirementSpendingTabProps) {
+export function RetirementSpendingTab({ values, onChange, assumptions, rows, events = [], hasSpouse }: RetirementSpendingTabProps) {
   const unit = values.generalAmountUnit ?? 'monthly'
   const amount = values.generalAmount ?? 0
 
@@ -112,6 +119,16 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
   // `clampRuin` guarantees this is the FIRST such row once found; the age >= retirementAge guard
   // is defensive-but-harmless (a pre-retirement endingBalance of exactly 0 isn't realistic here).
   const depletedAtAge = rows.find((row) => row.endingBalance === 0 && row.age >= assumptions.retirementAge)?.age
+
+  // FIN-142: actionable guidance alongside the bare callout above. A separate computation (new
+  // `retirementSolver.ts` engine module, re-running `runProjection` under varied assumptions) —
+  // not a replacement for `depletedAtAge`'s own inline derivation, which still drives the "Plan
+  // depleted at age X" line itself. Only computed when that callout is showing, since the
+  // suggestions are meaningless otherwise.
+  const guidance = useMemo(
+    () => (depletedAtAge !== undefined ? computeDepletionGuidance({ assumptions, events }) : undefined),
+    [depletedAtAge, assumptions, events],
+  )
 
   return (
     <div className={styles.tab}>
@@ -192,7 +209,21 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, has
       </div>
 
       {depletedAtAge !== undefined && (
-        <p className={styles.depletedCallout}>Plan depleted at age {depletedAtAge}</p>
+        <div className={styles.depletedCallout}>
+          <p className={styles.depletedHeadline}>Plan depleted at age {depletedAtAge}</p>
+          {guidance?.extraYears?.status === 'found' && (
+            <p className={styles.depletedSuggestion}>
+              Working {guidance.extraYears.extraYears} more year{guidance.extraYears.extraYears === 1 ? '' : 's'} (to age{' '}
+              {guidance.extraYears.retirementAge}) would make this plan last the full horizon.
+            </p>
+          )}
+          {guidance?.extraContribution?.status === 'found' && (
+            <p className={styles.depletedSuggestion}>
+              An extra {formatCurrency(guidance.extraContribution.extraMonthlyContribution)}/month in contributions would make
+              this plan last the full horizon.
+            </p>
+          )}
+        </div>
       )}
     </div>
   )
