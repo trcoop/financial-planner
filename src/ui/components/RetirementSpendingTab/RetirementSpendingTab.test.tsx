@@ -284,12 +284,12 @@ describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142)', 
   it('shows an extra-years suggestion alongside the bare depleted callout', () => {
     renderTab({ assumptions: DEPLETED_ASSUMPTIONS, rows: DEPLETED_ROWS })
     expect(screen.getByText(/plan depleted at age 60/i)).toBeInTheDocument()
-    expect(screen.getByText(/more year.*would make this plan last the full horizon/i)).toBeInTheDocument()
+    expect(screen.getByText(/you need to work.*more year.*with your current savings rate/i)).toBeInTheDocument()
   })
 
   it('shows no suggestions when the plan is not depleted', () => {
     renderTab()
-    expect(screen.queryByText(/would make this plan last the full horizon/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/with your current savings rate/i)).not.toBeInTheDocument()
   })
 
   it('shows an extra-monthly-contribution suggestion when a household spending goal makes the corpus size matter', () => {
@@ -304,6 +304,6 @@ describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142)', 
       { age: 62, year: 27, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 0, eventCosts: [] },
     ]
     renderTab({ assumptions, rows })
-    expect(screen.getByText(/extra \$\d+(,\d{3})*\/month in contributions would make this plan last the full horizon/i)).toBeInTheDocument()
+    expect(screen.getByText(/save \$\d+(,\d{3})* more per month to stay on track to retire at 62/i)).toBeInTheDocument()
   })
 })

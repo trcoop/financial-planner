@@ -213,14 +213,14 @@ export function RetirementSpendingTab({ values, onChange, assumptions, rows, eve
           <p className={styles.depletedHeadline}>Plan depleted at age {depletedAtAge}</p>
           {guidance?.extraYears?.status === 'found' && (
             <p className={styles.depletedSuggestion}>
-              Working {guidance.extraYears.extraYears} more year{guidance.extraYears.extraYears === 1 ? '' : 's'} (to age{' '}
-              {guidance.extraYears.retirementAge}) would make this plan last the full horizon.
+              You need to work {guidance.extraYears.extraYears} more year{guidance.extraYears.extraYears === 1 ? '' : 's'} (to
+              age {guidance.extraYears.retirementAge}) with your current savings rate.
             </p>
           )}
           {guidance?.extraContribution?.status === 'found' && (
             <p className={styles.depletedSuggestion}>
-              An extra {formatCurrency(guidance.extraContribution.extraMonthlyContribution)}/month in contributions would make
-              this plan last the full horizon.
+              Save {formatCurrency(guidance.extraContribution.extraMonthlyContribution)} more per month to stay on track to
+              retire at {assumptions.retirementAge}.
             </p>
           )}
         </div>
