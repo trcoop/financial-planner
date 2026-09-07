@@ -243,6 +243,33 @@ describe('computeDepletionGuidance', () => {
     }
   });
 
+  it('finds an extra-years suggestion whose only resolving age is exactly the MAX_EXTRA_YEARS_SCANNED upper bound (review finding: the search loop\'s `candidateAge <= upperBound` inclusivity has no pinning test — mutating it to `<` silently drops this exact candidate and would report noSolutionFound instead)', () => {
+    // A fixed-dollar spending goal (not a % withdrawal rate, which is scale-invariant against
+    // extra working years — see the "extra-monthly-contribution" test above) with no ongoing
+    // contribution and a large enough goal that only working all the way out to
+    // `retirementAge + 40` (`MAX_EXTRA_YEARS_SCANNED`, the tighter of the two upper bounds here
+    // since `planningHorizonEndAge` is set far beyond it) resolves the plan — one year short, at
+    // age 104, still fails. Probed directly against the real engine (not asserted from a
+    // theoretical model) to land exactly on this boundary.
+    const assumptions = baseAssumptions({
+      currentAge: 35,
+      retirementAge: 65,
+      initialBalance: 250_000,
+      currentAnnualIncome: 85_000,
+      annualContributionRate: 0,
+      annualRaiseRate: 0.03,
+      annualReturnRate: 0.08,
+      withdrawalRateInRetirement: 0.039,
+      planningHorizonEndAge: 200,
+      retirementSpendingGoal: { annualAmount: 420_000 },
+    });
+
+    const result = computeDepletionGuidance({ assumptions, allocation, seed });
+
+    expect(result.needsGuidance).toBe(true);
+    expect(result.extraYears).toEqual({ status: 'found', retirementAge: 105, extraYears: 40 });
+  });
+
   it('reports noSolutionFound for extra contribution when even the search ceiling cannot resolve the plan', () => {
     // An extreme withdrawal rate against a near-zero balance and income — no realistic monthly
     // top-up within the bounded search ceiling closes this gap.
