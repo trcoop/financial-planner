@@ -430,6 +430,57 @@ describe('useProjectionState Medicare wiring (FIN-73)', () => {
   })
 })
 
+describe('useProjectionState Medicare first-year overrides (FIN-136)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.mocked(runProjection).mockClear()
+  })
+
+  it('uses the given primaryMedicareAnnualAmount as the primary event annualAmount, growthRate unchanged', () => {
+    vi.mocked(runProjection).mockClear()
+    const { result } = renderHook(() =>
+      useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], [], undefined, 3_500),
+    )
+    const plan = toAssumptions(CORE, ADVANCED)
+    const expected = medicarePartBEvent(plan.inflationRate, 3_500)
+
+    expect(result.current.events).toContainEqual(expected)
+    expect(result.current.events.find((event) => 'id' in event && event.id === 'medicarePartB')).toMatchObject({
+      annualAmount: 3_500,
+      growthRate: expected.growthRate,
+    })
+  })
+
+  it('falls back to the suggested default when primaryMedicareAnnualAmount is undefined', () => {
+    vi.mocked(runProjection).mockClear()
+    renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON], [], undefined, undefined))
+    const plan = toAssumptions(CORE, ADVANCED)
+
+    expect(runProjection).toHaveBeenCalledWith(expect.anything(), [medicarePartBEvent(plan.inflationRate)])
+  })
+
+  it('uses the given spouseMedicareAnnualAmount independently of the primary override', () => {
+    vi.mocked(runProjection).mockClear()
+    const { result } = renderHook(() =>
+      useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, [PRIMARY_PERSON, SPOUSE_PERSON], [], undefined, 3_500, 4_800),
+    )
+    const plan = toAssumptions(CORE, ADVANCED)
+    const expectedSpouse = spouseMedicarePartBEvent(CORE.currentAge, SPOUSE_PERSON.age, plan.inflationRate, 4_800)
+
+    expect(result.current.events).toContainEqual(expectedSpouse)
+    expect(
+      result.current.events.find((event) => 'id' in event && event.id === 'medicareSpousePartB'),
+    ).toMatchObject({ annualAmount: 4_800 })
+    expect(
+      result.current.events.find((event) => 'id' in event && event.id === 'medicarePartB'),
+    ).toMatchObject({ annualAmount: 3_500 })
+  })
+})
+
 /**
  * FIN-114: supersedes FIN-113's `hasSpouse`/`spouseAge` plan (never wired up) — spouse presence
  * and age now come from the Profile People list's non-primary `Person`, not any field on

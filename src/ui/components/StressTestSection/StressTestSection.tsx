@@ -82,6 +82,14 @@ interface StressTestSectionProps {
    * for a "Re-run stress test" CTA. Optional and additive.
    */
   onStaleChange?: (isStale: boolean) => void
+  /**
+   * FIN-136: the primary's editable Medicare Part B first-year override from the Retirement
+   * Spending tab, threaded through to the same call this component makes to
+   * `medicarePartBEvent` — otherwise a Medicare edit would be reflected on the Plan tab but not
+   * here, silently reintroducing two sources of truth for the same event. `undefined` (the
+   * default) reproduces today's behavior exactly.
+   */
+  primaryMedicareAnnualAmount?: number
 }
 
 /** Imperative handle (FIN-48): lets a parent (`App.tsx`) trigger a re-run — e.g. from the
@@ -102,6 +110,7 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
     onSuccessRateChange,
     onPercentilesChange,
     onStaleChange,
+    primaryMedicareAnnualAmount,
   },
   ref,
 ) {
@@ -175,7 +184,7 @@ export const StressTestSection = forwardRef<StressTestSectionHandle, StressTestS
         assumptions,
         allocation,
         DEFAULT_VOLATILITY_ASSUMPTIONS,
-        [medicarePartBEvent(assumptions.inflationRate)],
+        [medicarePartBEvent(assumptions.inflationRate, primaryMedicareAnnualAmount)],
         returnAssumptions,
       )
       .catch(() => {
