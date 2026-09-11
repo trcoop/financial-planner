@@ -81,19 +81,10 @@ matching CSS is not the same as sharing a component, but near-identical
 components that only differ by context should collapse into one.
 
 All color/spacing/typography/radii/shadow values in `src/ui/**/*.module.css`
-must come from `theme.css` tokens (`var(--...)`). **That requirement is
-repo-wide; the automated enforcement is narrower than it — don't read a green
-`npm run stylelint` as proof a file is token-compliant.** What the rule in
-`stylelint.config.mjs` actually checks is four properties — `color`,
-`background`, `background-color`, `border-color` — across the whole
-`src/ui/**/*.module.css` glob (repo-wide in CI, not changed-files-only, so a
-hardcoded color anywhere in that tree fails the build, not just the file you
-touched). Deliberately **not** caught, each for a reason documented inline in
-that config: `box-shadow` (the `inset 0 0 0 1px var(--token)` shadow-as-border
-pattern would false-positive on its offset literals), and a `var()` pointing at
-a token that doesn't exist in `theme.css`. Spacing, typography, and radii have
-no automated check at all. Those gaps are a manual-review responsibility —
-check them by reading the CSS, not by running the linter.
+come from `theme.css` tokens (`var(--...)`) — Stylelint enforces this
+repo-wide in CI (`npm run stylelint`), not just on changed files, so a
+hardcoded value anywhere in that tree fails the build, not just the file you
+touched.
 
 Before building new UI, check the Ladle catalog (`npm run ladle`) first —
 it's the fastest way to see what already exists and how it's meant to be
