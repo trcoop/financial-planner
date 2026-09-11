@@ -112,7 +112,7 @@ describe('resolveIndexedAmount', () => {
       published: { 2026: 10_000 },
       // Same base, same published year, same rate — only the (irrelevant) lagYears differs.
       // A "fix" that computed n - lagYears would produce a different result here; it must not.
-      policy: { kind: 'average-wage-index', rounding: { kind: 'nearest', increment: 300 }, lagYears: 2 },
+      policy: { kind: 'average-wage-index', rounding: { kind: 'nearest', increment: 300 }, lagYears: 0 },
       source: 'test',
       confidence: 'confirmed',
     };
