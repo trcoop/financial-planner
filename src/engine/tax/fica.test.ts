@@ -1,0 +1,143 @@
+import { describe, expect, it } from 'vitest';
+import { computeFica } from './fica';
+import type { FicaParameters, FilingStatus, TaxPayer } from './types';
+
+/**
+ * Representative FICA parameters for a single test year. Values match the ERD §4.2 example
+ * figures ($200,000 single/hoh, $250,000 mfj, $125,000 mfs Additional Medicare thresholds) —
+ * fica.ts never hardcodes these itself, they're always caller-supplied via `FicaParameters`.
+ */
+const WAGE_BASE = 176_100;
+
+const THRESHOLD_BY_STATUS: Record<FilingStatus, number> = {
+  single: 200_000,
+  mfj: 250_000,
+  mfs: 125_000,
+  hoh: 200_000,
+};
+
+function paramsFor(filingStatus: FilingStatus): FicaParameters {
+  return {
+    socialSecurityRate: 0.062,
+    socialSecurityWageBase: WAGE_BASE,
+    medicareRate: 0.0145,
+    additionalMedicareRate: 0.009,
+    additionalMedicareThreshold: THRESHOLD_BY_STATUS[filingStatus],
+  };
+}
+
+function person(earnedIncome: number, age = 40): TaxPayer {
+  return { earnedIncome, age };
+}
+
+describe('computeFica', () => {
+  it('caps Social Security separately per person on a dual-earner joint return', () => {
+    const params = paramsFor('mfj');
+    const people = [person(300_000), person(250_000)];
+
+    const result = computeFica(params, people);
+
+    // Two full wage bases, not one combined wage base.
+    expect(result.socialSecurity).toBe(Math.round(2 * WAGE_BASE * params.socialSecurityRate));
+  });
+
+  it('applies Social Security exactly at, and on either side of, the wage base', () => {
+    const params = paramsFor('single');
+
+    const below = computeFica(params, [person(WAGE_BASE - 1)]);
+    const at = computeFica(params, [person(WAGE_BASE)]);
+    const above = computeFica(params, [person(WAGE_BASE + 1)]);
+
+    // Social Security is the largest raw component here (6.2% > 1.45% of the same base, and
+    // Additional Medicare is 0 below the threshold), so it's `allocateRounding`'s remainder
+    // recipient: total minus the independently-rounded Medicare component, not a plain
+    // Math.round of Social Security alone.
+    expect(below.socialSecurity).toBe(below.total - below.medicare);
+    expect(at.socialSecurity).toBe(at.total - at.medicare);
+    expect(above.socialSecurity).toBe(above.total - above.medicare);
+
+    // Capped at the wage base once earned income reaches it, and stays capped just above it —
+    // a $1 difference in raw uncapped Social Security can vanish under whole-dollar rounding,
+    // so the "not yet capped below the base" side is asserted with a income gap wide enough
+    // that no rounding tie can hide it.
+    const wellBelow = computeFica(params, [person(WAGE_BASE - 1_000)]);
+    expect(wellBelow.socialSecurity).toBeLessThan(at.socialSecurity);
+    expect(at.socialSecurity).toBe(above.socialSecurity);
+  });
+
+  it.each<FilingStatus>(['single', 'mfj', 'mfs', 'hoh'])(
+    'applies Additional Medicare exactly at, and on either side of, the %s threshold',
+    (filingStatus) => {
+      const params = paramsFor(filingStatus);
+      const threshold = THRESHOLD_BY_STATUS[filingStatus];
+
+      const below = computeFica(params, [person(threshold - 1)]);
+      const at = computeFica(params, [person(threshold)]);
+      const above = computeFica(params, [person(threshold + 1)]);
+
+      expect(below.additionalMedicare).toBe(0);
+      expect(at.additionalMedicare).toBe(0);
+      expect(above.additionalMedicare).toBe(Math.round(1 * params.additionalMedicareRate));
+    },
+  );
+
+  it('reports additionalMedicare === 0 at $50,007 combined earned income', () => {
+    const params = paramsFor('single');
+    const result = computeFica(params, [person(50_007)]);
+    expect(result.additionalMedicare).toBe(0);
+  });
+
+  it('reports additionalMedicare === 0 at $1,010 combined earned income', () => {
+    const params = paramsFor('mfs');
+    const result = computeFica(params, [person(1_010)]);
+    expect(result.additionalMedicare).toBe(0);
+  });
+
+  it('lets uncapped Medicare exceed capped Social Security at $1,000,000 of earned income', () => {
+    const params = paramsFor('single');
+    const result = computeFica(params, [person(1_000_000)]);
+
+    const expectedSs = Math.round(WAGE_BASE * params.socialSecurityRate);
+    const expectedMedicare = Math.round(1_000_000 * params.medicareRate);
+
+    expect(result.socialSecurity).toBe(expectedSs);
+    expect(result.medicare).toBe(expectedMedicare);
+    expect(result.medicare).toBeGreaterThan(result.socialSecurity);
+  });
+
+  it('never assigns the rounding remainder to additionalMedicare (P13, exact-sum property)', () => {
+    const cases: Array<{ filingStatus: FilingStatus; incomes: number[] }> = [
+      { filingStatus: 'single', incomes: [1] },
+      { filingStatus: 'single', incomes: [12_345.67] },
+      { filingStatus: 'mfj', incomes: [176_100.5, 176_100.5] },
+      { filingStatus: 'mfj', incomes: [300_000.33, 10_000.33] },
+      { filingStatus: 'mfs', incomes: [125_000.5] },
+      { filingStatus: 'hoh', incomes: [999_999.99] },
+      { filingStatus: 'single', incomes: [0] },
+      { filingStatus: 'mfj', incomes: [50_000.1, 60_000.2] },
+    ];
+
+    for (const { filingStatus, incomes } of cases) {
+      const params = paramsFor(filingStatus);
+      const people = incomes.map((income) => person(income));
+      const result = computeFica(params, people);
+
+      expect(result.socialSecurity + result.medicare + result.additionalMedicare).toBe(
+        result.total,
+      );
+      expect(Number.isInteger(result.socialSecurity)).toBe(true);
+      expect(Number.isInteger(result.medicare)).toBe(true);
+      expect(Number.isInteger(result.additionalMedicare)).toBe(true);
+      expect(Number.isInteger(result.total)).toBe(true);
+    }
+  });
+
+  it('sums per-person Medicare uncapped across a dual-earner joint return', () => {
+    const params = paramsFor('mfj');
+    const people = [person(300_000), person(250_000)];
+
+    const result = computeFica(params, people);
+
+    expect(result.medicare).toBe(Math.round(550_000 * params.medicareRate));
+  });
+});
