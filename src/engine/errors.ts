@@ -42,18 +42,34 @@ export type ProjectionErrorCode =
   | 'SIMULATION_COUNT_INVALID'
   /** Any numeric input field is `NaN`, `Infinity`, `-Infinity`, or not a number. */
   | 'NON_FINITE_INPUT'
-  /** `currentAge`, `retirementAge`, or `planningHorizonEndAge` is negative. */
+  /**
+   * `currentAge`, `retirementAge`, or `planningHorizonEndAge` is negative.
+   *
+   * The federal tax engine (`src/engine/tax/`) reuses this code for `people[i].age < 0`
+   * (ERD §7) — a taxpayer's age at year end is the same "negative age" invariant, not a
+   * distinct condition.
+   */
   | 'NEGATIVE_AGE'
   /**
    * `initialBalance < 0`. Scoped to the input boundary only — a *computed* balance is
    * allowed to go negative mid-projection, which is a legitimate plan-failure outcome.
    */
   | 'NEGATIVE_BALANCE_INPUT'
-  /** `currentAnnualIncome < 0`. */
+  /**
+   * `currentAnnualIncome < 0`.
+   *
+   * The federal tax engine (`src/engine/tax/`) reuses this code for `ordinaryIncome < 0`,
+   * `preferentialIncome < 0`, or any `people[i].earnedIncome < 0` (ERD §7) — same "income
+   * cannot be negative" invariant at a different input boundary.
+   */
   | 'NEGATIVE_INCOME'
   /**
    * `annualReturnRate`, `inflationRate`, or `annualRaiseRate` is below -1. Below -100%
    * flips the sign of balance/income through the engine's `x (1 + rate)` formulas.
+   *
+   * The federal tax engine (`src/engine/tax/`) reuses this code for
+   * `indexing.chainedCpiU < -1` or `indexing.averageWageIndex < -1` (ERD §7) — the same
+   * sign-flip hazard applies to its compounding formulas.
    */
   | 'RATE_BELOW_NEGATIVE_100_PERCENT'
   /** `annualContributionRate` outside [0, 1]. */
@@ -82,7 +98,46 @@ export type ProjectionErrorCode =
    * A `recurringCost` event's `growthRate < -1`, same rationale as
    * `RATE_BELOW_NEGATIVE_100_PERCENT`.
    */
-  | 'EVENT_GROWTH_RATE_BELOW_NEGATIVE_100_PERCENT';
+  | 'EVENT_GROWTH_RATE_BELOW_NEGATIVE_100_PERCENT'
+  /** The federal tax engine's `FederalTaxInput.year` is not an integer (ERD §7). */
+  | 'TAX_YEAR_NOT_INTEGER'
+  /** The federal tax engine's `FederalTaxInput.year` is outside `[2026, 2125]` inclusive (ERD
+   * §7). Out-of-range years throw rather than clamp — see the doc comment on
+   * `FederalTaxInput.year`. */
+  | 'TAX_YEAR_OUT_OF_RANGE'
+  /** The federal tax engine's `FederalTaxInput.filingStatus` is not one of `'single' | 'mfj' |
+   * 'mfs' | 'hoh'` (ERD §7). */
+  | 'TAX_FILING_STATUS_UNKNOWN'
+  /**
+   * The federal tax engine's `FederalTaxInput.people` is empty, or its length disagrees with
+   * `filingStatus` (`'mfj'` needs exactly 2; `'single'`, `'mfs'`, and `'hoh'` need exactly 1),
+   * or `people` is not an array at all (ERD §7, round-1 correction).
+   */
+  | 'TAX_FILING_STATUS_PEOPLE_MISMATCH'
+  /**
+   * The federal tax engine's `sum(people[i].earnedIncome)` exceeds `ordinaryIncome` (compared
+   * with a `1e-9` epsilon), which cannot happen if `earnedIncome` is genuinely a FICA-able
+   * subset tag of `ordinaryIncome` rather than an additional amount (ERD §7, §4.1).
+   */
+  | 'TAX_EARNED_INCOME_EXCEEDS_ORDINARY'
+  /**
+   * The federal tax engine was asked to compute MFS preferential (long-term capital gain /
+   * qualified dividend) tax, but the MFS preferential bracket thresholds could not be sourced
+   * from a primary document — `ResolvedYearTables.preferentialLadder` is `undefined`. Fires
+   * only when `filingStatus === 'mfs'` and `preferentialIncome > 0` (ERD §7). Never a guessed
+   * half-of-MFJ ladder.
+   */
+  | 'TAX_MFS_PREFERENTIAL_UNSUPPORTED'
+  /**
+   * The federal tax engine's `FederalTaxInput.filingStatus` is one of the four valid statuses,
+   * but this build has no verified ORDINARY bracket table for it against a primary source — the
+   * status is absent from `TAX_TABLES` and listed in `UNSUPPORTED_FILING_STATUSES` (ERD §7,
+   * round-3 correction). Distinct from `TAX_FILING_STATUS_UNKNOWN`: that code means the value
+   * isn't one of the four at all (a caller bug); this one means the value is valid but this
+   * build cannot compute for it (a property of the build). When a status could hit both this
+   * and `TAX_MFS_PREFERENTIAL_UNSUPPORTED`, this code fires first.
+   */
+  | 'TAX_FILING_STATUS_UNVERIFIED';
 
 /**
  * Thrown when caller-supplied engine input violates an invariant.
