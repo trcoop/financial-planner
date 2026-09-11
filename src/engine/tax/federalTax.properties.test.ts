@@ -497,10 +497,9 @@ describe('P15: effectiveRate and effectiveMarginalRate are 0 (never NaN) at zero
       });
       expect(result.effectiveRate, status).toBe(0);
       expect(Number.isNaN(result.effectiveRate), status).toBe(false);
-      // effectiveMarginalRate is the finite-difference bump from $0 to $1 of ordinary income —
-      // it is the first dollar's bracket rate (10% in every year/status), not necessarily 0, but
-      // it must never be NaN.
-      expect(Number.isNaN(result.effectiveMarginalRate), status).toBe(false);
+      // Per the ERD's property table and FederalTaxResult.effectiveMarginalRate doc comment,
+      // both rate fields must be exactly 0 (never NaN) at zero income.
+      expect(result.effectiveMarginalRate, status).toBe(0);
     }
   });
 });
