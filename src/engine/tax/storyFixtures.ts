@@ -17,7 +17,7 @@ import type { FederalTaxInput, IndexingRates } from './types';
  * literal is well-formed and the story author has one obvious value to reach for. */
 export const STORY_INDEXING: IndexingRates = {
   chainedCpiU: 0.025,
-  averageWageIndex: 0.03,
+  averageWageIndex: 0.036,
 };
 
 /** The six named scenarios §8.5 requires both chart components to render. */

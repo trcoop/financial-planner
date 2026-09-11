@@ -225,6 +225,25 @@ describe('validateFederalTaxInput', () => {
         validateFederalTaxInput(makeInput({ ordinaryIncome: 100000, people: [person(40, 100000)] })),
       ).not.toThrow();
     });
+
+    it('does not throw when earnedIncome exceeds ordinaryIncome by less than epsilon', () => {
+      expect(() =>
+        validateFederalTaxInput(
+          makeInput({ ordinaryIncome: 100000, people: [person(40, 100000 + 1e-10)] }),
+        ),
+      ).not.toThrow();
+    });
+
+    it('throws when earnedIncome exceeds ordinaryIncome by more than epsilon', () => {
+      try {
+        validateFederalTaxInput(
+          makeInput({ ordinaryIncome: 100000, people: [person(40, 100001)] }),
+        );
+        expect.fail('expected throw');
+      } catch (e) {
+        expect((e as { code: string }).code).toBe('TAX_EARNED_INCOME_EXCEEDS_ORDINARY');
+      }
+    });
   });
 
   describe('NEGATIVE_AGE', () => {
