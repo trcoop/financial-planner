@@ -102,24 +102,24 @@ describe('resolveIndexedAmount', () => {
   });
 
   it('lag-cancellation: the exponent is year - lastPublishedYear, never adjusted by lagYears', () => {
-    const noLag: IndexedAmount = {
+    // lagYears is type-pinned to the literal 2 for average-wage-index (ERD §5.5: it documents
+    // statutory provenance only, since the published actual already embeds its own lag) — it
+    // can never actually vary between fixtures. So the discriminator has to be an exact expected
+    // value: a mutant computing n = year - lastPublishedYear - lagYears (n=2 instead of n=4) would
+    // produce a different rounded result than the correct n = year - lastPublishedYear.
+    const entry: IndexedAmount = {
       published: { 2026: 10_000 },
       policy: { kind: 'average-wage-index', rounding: { kind: 'nearest', increment: 300 }, lagYears: 2 },
       source: 'test',
       confidence: 'confirmed',
     };
-    const differentLagMetadata: IndexedAmount = {
-      published: { 2026: 10_000 },
-      // Same base, same published year, same rate — only the (irrelevant) lagYears differs.
-      // A "fix" that computed n - lagYears would produce a different result here; it must not.
-      policy: { kind: 'average-wage-index', rounding: { kind: 'nearest', increment: 300 }, lagYears: 0 },
-      source: 'test',
-      confidence: 'confirmed',
-    };
-    const year = 2030; // n = 4
-    expect(resolveIndexedAmount(noLag, year, rates)).toBe(
-      resolveIndexedAmount(differentLagMetadata, year, rates),
-    );
+    const year = 2030; // correct n = 4; a "- lagYears" mutant would use n = 2
+    const correctRaw = 10_000 * Math.pow(1 + rates.averageWageIndex, 4);
+    const mutantRaw = 10_000 * Math.pow(1 + rates.averageWageIndex, 2);
+    const correctRounded = Math.round(correctRaw / 300) * 300;
+    const mutantRounded = Math.round(mutantRaw / 300) * 300;
+    expect(correctRounded).not.toBe(mutantRounded);
+    expect(resolveIndexedAmount(entry, year, rates)).toBe(correctRounded);
   });
 });
 
