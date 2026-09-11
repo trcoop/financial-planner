@@ -307,6 +307,8 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
     },
     // HOH shares the UNMARRIED senior-bonus threshold with 'single' (IRC §151(d)(5)(C)(ii) applies
     // to any unmarried taxpayer, not solely single filers) — same figures, same source.
+    // UNCONFIRMED: no primary/statutory source located for HOH's $75k/$175k
+    // senior-bonus phase-out thresholds (secondary sources agree). See FIN-143.
     seniorBonus: UNMARRIED_SENIOR_BONUS,
     additionalMedicareThreshold: {
       published: { 2026: 200_000 },

@@ -334,12 +334,29 @@ describe('§9.1: assertFilingStatusSupported', () => {
 
 describe('resolveTables', () => {
   it('calls assertFilingStatusSupported first: throws TAX_FILING_STATUS_UNVERIFIED for a status listed in UNSUPPORTED_FILING_STATUSES, before touching TAX_TABLES', () => {
-    // UNSUPPORTED_FILING_STATUSES is empty in this build (WP-0 verified all four), so this test
-    // exercises the guard's wiring directly rather than through resolveTables's own module
-    // constant — see the assertFilingStatusSupported describe block above for the throw itself.
-    // Here we confirm resolveTables is wired to call it as its first statement by checking that
-    // a supported status resolves cleanly (negative case covered above).
-    expect(() => resolveTables(2026, 'single', ZERO_INDEXING)).not.toThrow();
+    // UNSUPPORTED_FILING_STATUSES is empty in this build (WP-0 verified all four), so a test that
+    // only calls resolveTables with a supported status can't tell "the guard ran and passed" apart
+    // from "the guard was never called at all" — both leave the call clean. `resolveTables` reads
+    // the module-level UNSUPPORTED_FILING_STATUSES constant directly rather than taking it as a
+    // parameter, so to prove the wiring we temporarily mutate that exported (runtime-mutable,
+    // despite its Readonly<> type) object to mark a status unsupported, call resolveTables with
+    // that status, and assert it propagates the guard's throw — then restore the object so no
+    // other test observes the mutation.
+    const mutable = UNSUPPORTED_FILING_STATUSES as Record<string, string>;
+    expect(mutable.single).toBeUndefined();
+    mutable.single = 'temporarily marked unsupported to prove resolveTables invokes the guard';
+    try {
+      expect(() => resolveTables(2026, 'single', ZERO_INDEXING)).toThrow(InvalidProjectionInputError);
+      let thrown: unknown;
+      try {
+        resolveTables(2026, 'single', ZERO_INDEXING);
+      } catch (e) {
+        thrown = e;
+      }
+      expect((thrown as InvalidProjectionInputError).code).toBe('TAX_FILING_STATUS_UNVERIFIED');
+    } finally {
+      delete mutable.single;
+    }
   });
 
   it('resolves published 2026 figures exactly, for every filing status', () => {
