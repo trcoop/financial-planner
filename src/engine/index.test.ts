@@ -2,7 +2,21 @@ import { describe, expect, it } from 'vitest';
 
 import * as engine from './index';
 import type {
+  BracketOccupancy,
+  Confidence,
+  DeductionBreakdown,
   EventCostEntry,
+  FederalTaxInput,
+  FederalTaxResult,
+  FicaBreakdown,
+  FicaParameters,
+  FilingStatus,
+  IndexedAmount,
+  IndexedLadder,
+  IndexingPolicy,
+  IndexingRates,
+  Ladder,
+  LadderBand,
   MonteCarloOptions,
   MonteCarloResult,
   PathBalances,
@@ -15,13 +29,17 @@ import type {
   PortfolioValue,
   ProjectionErrorCode,
   ProjectionRow,
+  ResolvedYearTables,
   HistoricalYearInflation,
   HistoricalYearReturn,
   RandomSource,
   ReturnModel,
+  RoundingRule,
   RunPeriodInput,
+  SeniorBonusParameters,
   TaxCalculator,
   TaxContext,
+  TaxPayer,
   TaxResult,
   TrialConfig,
   VolatilityAssumptions,
@@ -62,6 +80,24 @@ type PublicTypeSurface = {
   historicalYearInflation: HistoricalYearInflation;
   historicalYearReturn: HistoricalYearReturn;
   returnModel: ReturnModel;
+  bracketOccupancy: BracketOccupancy;
+  confidence: Confidence;
+  deductionBreakdown: DeductionBreakdown;
+  federalTaxInput: FederalTaxInput;
+  federalTaxResult: FederalTaxResult;
+  ficaBreakdown: FicaBreakdown;
+  ficaParameters: FicaParameters;
+  filingStatus: FilingStatus;
+  indexedAmount: IndexedAmount;
+  indexedLadder: IndexedLadder;
+  indexingPolicy: IndexingPolicy;
+  indexingRates: IndexingRates;
+  ladder: Ladder;
+  ladderBand: LadderBand;
+  resolvedYearTables: ResolvedYearTables;
+  roundingRule: RoundingRule;
+  seniorBonusParameters: SeniorBonusParameters;
+  taxPayer: TaxPayer;
 };
 
 /**
@@ -110,6 +146,11 @@ describe('public surface', () => {
     // FIN-65: paired with HISTORICAL_ANNUAL_RETURNS — the Monte Carlo historical path draws
     // a period's return and its cost-of-living increase from the same year.
     'HISTORICAL_ANNUAL_INFLATION',
+    // FIN-150: Federal Tax Engine orchestrator. Not wired into runProjection/pipeline.ts —
+    // applyTax stays on zeroTax; that wiring is a follow-on project (ERD §1.1).
+    'computeFederalTax',
+    'resolveTables',
+    'TAX_TABLES',
   ];
 
   it.each(runtimeExports)('re-exports %s', (name) => {
