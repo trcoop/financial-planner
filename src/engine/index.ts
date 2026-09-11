@@ -93,3 +93,36 @@ export type { HistoricalYearReturn } from './historicalReturns';
 
 export { HISTORICAL_ANNUAL_INFLATION } from './inflationData';
 export type { HistoricalYearInflation } from './inflationData';
+
+/**
+ * Federal Tax Engine (FIN-150, WP-F). `computeFederalTax` is NOT wired into `runProjection` or
+ * `pipeline.ts` — `applyTax` stays on `zeroTax` — that wiring is a follow-on project's job (see
+ * this project's ERD §1.1). These exports let a caller (or a Ladle story) compute a standalone
+ * federal tax result today.
+ *
+ * `STORY_INDEXING`/`STORY_FIXTURES`/`StoryScenarioName` are deliberately NOT re-exported here —
+ * they are story/test scaffolding for the tax module's own chart components, imported via
+ * `src/engine/tax/storyFixtures.ts` directly, and promoting them here would put scaffolding on
+ * the engine's documented public surface.
+ */
+export { computeFederalTax, resolveTables, TAX_TABLES } from './tax';
+export type {
+  BracketOccupancy,
+  Confidence,
+  DeductionBreakdown,
+  FederalTaxInput,
+  FederalTaxResult,
+  FicaBreakdown,
+  FicaParameters,
+  FilingStatus,
+  IndexedAmount,
+  IndexedLadder,
+  IndexingPolicy,
+  IndexingRates,
+  Ladder,
+  LadderBand,
+  ResolvedYearTables,
+  RoundingRule,
+  SeniorBonusParameters,
+  TaxPayer,
+} from './tax';
