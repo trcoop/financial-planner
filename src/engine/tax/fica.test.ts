@@ -77,7 +77,31 @@ describe('computeFica', () => {
 
       expect(below.additionalMedicare).toBe(0);
       expect(at.additionalMedicare).toBe(0);
+      // A $1 excess rounds to $0 regardless of the real threshold value, so this trio alone
+      // can't detect a threshold shifted by even a few dollars — see the larger-excess pair
+      // below, which straddles a rounding boundary specifically so a +-1 shift in the
+      // threshold used for the comparison flips the (nonzero) rounded result.
       expect(above.additionalMedicare).toBe(Math.round(1 * params.additionalMedicareRate));
+    },
+  );
+
+  it.each<FilingStatus>(['single', 'mfj', 'mfs', 'hoh'])(
+    'distinguishes a shifted %s Additional Medicare threshold via a rounding-boundary excess',
+    (filingStatus) => {
+      const params = paramsFor(filingStatus);
+      const threshold = THRESHOLD_BY_STATUS[filingStatus];
+
+      // At 0.9% these two straddle a half-up rounding boundary ($55 excess -> $0.495 rounds to
+      // $0, $56 excess -> $0.504 rounds to $1). If the threshold used in the excess calculation
+      // is off by +1, the $56 case's effective excess becomes $55 and its rounded value drops
+      // to $0. If it's off by -1, the $55 case's effective excess becomes $56 and its rounded
+      // value jumps to $1. Together the pair catches a +-1 shift in either direction, which a
+      // plain +-$1 probe (rounding to $0 either way) cannot.
+      const justBelowBoundary = computeFica(params, [person(threshold + 55)]);
+      const justAboveBoundary = computeFica(params, [person(threshold + 56)]);
+
+      expect(justBelowBoundary.additionalMedicare).toBe(Math.round(55 * params.additionalMedicareRate));
+      expect(justAboveBoundary.additionalMedicare).toBe(Math.round(56 * params.additionalMedicareRate));
     },
   );
 
@@ -99,10 +123,32 @@ describe('computeFica', () => {
 
     const expectedSs = Math.round(WAGE_BASE * params.socialSecurityRate);
     const expectedMedicare = Math.round(1_000_000 * params.medicareRate);
+    const expectedAdditionalMedicare = Math.round(
+      (1_000_000 - params.additionalMedicareThreshold) * params.additionalMedicareRate,
+    );
 
     expect(result.socialSecurity).toBe(expectedSs);
     expect(result.medicare).toBe(expectedMedicare);
     expect(result.medicare).toBeGreaterThan(result.socialSecurity);
+    expect(result.additionalMedicare).toBe(expectedAdditionalMedicare);
+  });
+
+  it('computes Additional Medicare on COMBINED household income for a 2-person mfj return', () => {
+    const params = paramsFor('mfj');
+    // Combined $350,000 vs. the $250,000 mfj threshold -> $100,000 excess. Neither person
+    // individually exceeds the threshold, so this fails if the implementation mistakenly
+    // sums per-person excess instead of computing excess over the combined household total.
+    // The rate is taken from `params` (not hardcoded here) so doubling
+    // `additionalMedicareRate` in the implementation is also caught.
+    const people = [person(200_000), person(150_000)];
+
+    const result = computeFica(params, people);
+
+    const expected = Math.round(
+      (200_000 + 150_000 - params.additionalMedicareThreshold) * params.additionalMedicareRate,
+    );
+    expect(expected).toBe(900);
+    expect(result.additionalMedicare).toBe(expected);
   });
 
   it('never assigns the rounding remainder to additionalMedicare (P13, exact-sum property)', () => {
@@ -115,6 +161,14 @@ describe('computeFica', () => {
       { filingStatus: 'hoh', incomes: [999_999.99] },
       { filingStatus: 'single', incomes: [0] },
       { filingStatus: 'mfj', incomes: [50_000.1, 60_000.2] },
+      // Constructed so the three raw components round in genuinely conflicting directions:
+      // socialSecurity raw = 10,918.20 (frac .2, rounds down), medicare raw = 2,900.802140...
+      // (frac .8, rounds UP), additionalMedicare raw = 0.49788... (frac just under .5, rounds
+      // down). Naively rounding each component independently gives 10,918 + 2,901 + 0 =
+      // 13,819, but the correctly-rounded total is round(13,819.50002) = 13,820 -- a genuine
+      // one-dollar conflict that only `allocateRounding`'s remainder assignment closes.
+      // Deleting `allocateRounding` (independent per-component `roundHalfUp`) fails this case.
+      { filingStatus: 'single', incomes: [200_055.32] },
     ];
 
     for (const { filingStatus, incomes } of cases) {
