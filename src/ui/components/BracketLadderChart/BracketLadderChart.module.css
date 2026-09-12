@@ -1,0 +1,99 @@
+.card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Marginal statutory rate + effective marginal rate annotation (ERD §8.3) — plain text, always
+ * visible alongside the marker, never conveyed only by the marker's position on the chart. */
+.annotation {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stackTitle {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.plot {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* The full-height, zero-fill track every band renders regardless of occupancy — this is the
+ * "unoccupied bands are still visible" requirement (ERD §8.3). Its color must resolve to a
+ * visible, non-transparent surface: if this token silently failed to resolve, an unoccupied band
+ * would be indistinguishable from one whose fill color simply failed too (ERD §8.6), so this is
+ * checked by hand against theme.css, not just by a green stylelint run.
+ */
+.track {
+  fill: var(--color-border-subtle);
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.marker {
+  stroke: var(--color-warning);
+  stroke-width: 2;
+  stroke-dasharray: 4 2;
+}
+
+/* Visible legend/table — every band's rate, range, income and tax as plain text, never conveyed
+ * by the bar's fill/position alone (ERD §8.6). */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+}
+
+.table th,
+.table td {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.table th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.table td:last-child,
+.table th:last-child,
+.table td:nth-child(3),
+.table th:nth-child(3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
