@@ -1,0 +1,93 @@
+.card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  align-self: flex-start;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.plotWrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.plot {
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  display: block;
+}
+
+.baseline {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.barTotal {
+  fill: var(--color-primary);
+}
+
+.barDecrease {
+  fill: var(--color-error);
+}
+
+.barFica {
+  fill: var(--color-warning);
+}
+
+.connector {
+  stroke: var(--color-border);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+/* Visible legend/table — every segment's label and formatted value as plain text, not conveyed
+ * by bar color or position alone (ERD §8.2/§8.6 accessibility requirement). */
+.legend {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.legendHeader {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.legendLabel {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.legendValue {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
