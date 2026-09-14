@@ -1,0 +1,133 @@
+.card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  align-self: flex-start;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.plotWrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.plot {
+  width: 100%;
+  max-width: 480px;
+  height: auto;
+  display: block;
+}
+
+.rowLabel {
+  font-size: 11px;
+  font-family: var(--font-family-body);
+  fill: var(--color-text-muted);
+}
+
+.barTrack {
+  fill: var(--color-surface);
+  stroke: var(--color-border-subtle);
+  stroke-width: 1;
+}
+
+/* The amount that remains/carries forward to the next step (taxable income, tax owed) — the
+ * chart's one "base" color, used consistently across both bars so a reader learns it once. */
+.segmentBase {
+  fill: var(--color-primary);
+}
+
+/* An amount subtracted out of the bar's total (a deduction or a credit) — green, because it
+ * lowers what's owed, replacing the previous red fill that read as an error rather than a
+ * benefit. Standard deduction and credits share this shade; senior bonus deduction uses the
+ * lighter tint below so the two deduction sub-segments stay visually distinguishable from each
+ * other even though both are "reductions." */
+.segmentReduction {
+  fill: var(--color-success);
+}
+
+/* Distinguishes the senior bonus deduction from the standard deduction within the same bar —
+ * same green family (still reads as "a reduction"), lighter tint so the two never look identical. */
+.segmentReductionBonus {
+  fill: var(--color-success-subtle);
+}
+
+.segmentFica {
+  fill: var(--color-warning);
+}
+
+/* Visible legend/table — every segment's label and formatted value as plain text, not conveyed
+ * by bar color or position alone (ERD §8.2/§8.6 accessibility requirement). The color swatch is
+ * a purely additive cross-reference back to the chart above. */
+.legend {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.legendHeader {
+  text-align: left;
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.legendLabel {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.legendValue {
+  padding: var(--space-1) var(--space-2);
+  color: var(--color-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  margin-right: var(--space-2);
+  vertical-align: middle;
+}
+
+.swatchBase {
+  background: var(--color-primary);
+}
+
+.swatchReduction {
+  background: var(--color-success);
+}
+
+.swatchReductionBonus {
+  background: var(--color-success-subtle);
+}
+
+.swatchFica {
+  background: var(--color-warning);
+}
