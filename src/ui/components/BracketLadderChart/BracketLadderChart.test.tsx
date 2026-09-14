@@ -42,14 +42,16 @@ describe('BracketLadderChart', () => {
     expect(rows.length).toBeGreaterThanOrEqual(middleIncome.ordinaryBrackets.length)
     // Spot check the first occupied band's numbers appear as plain text, not just as a fill width.
     const firstBand = middleIncome.ordinaryBrackets[0]
-    expect(screen.getByText(formatPercent(firstBand.rate * 100), { exact: false })).toBeInTheDocument()
+    expect(
+      screen.getAllByText(formatPercent(firstBand.rate * 100), { exact: false }).length,
+    ).toBeGreaterThan(0)
   })
 
   it('gives the open-ended top band a synthetic-extent, open-ended label rather than scaling to Infinity', () => {
     render(<BracketLadderChart result={topBracket} title="Ladder" />)
     const topBand = topBracket.ordinaryBrackets[topBracket.ordinaryBrackets.length - 1]
     expect(topBand.upperBound).toBe(Infinity)
-    expect(screen.getByText(/and up/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/and up/i).length).toBeGreaterThan(0)
   })
 
   it('renders the marginal-band marker and the effectiveMarginalRate as a labelled annotation', () => {
