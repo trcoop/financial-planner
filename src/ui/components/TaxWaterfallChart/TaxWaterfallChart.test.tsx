@@ -6,6 +6,7 @@ import { computeFederalTax, STORY_FIXTURES } from '../../../engine/tax'
 import type { FederalTaxInput } from '../../../engine'
 import { TaxWaterfallChart } from './TaxWaterfallChart'
 import { toPixelHeight } from './waterfallLayout'
+import { formatCurrency } from '../../utils/format'
 
 const middleIncomeResult = computeFederalTax(STORY_FIXTURES.MiddleIncome)
 const zeroTaxResult = computeFederalTax(STORY_FIXTURES.ZeroTax)
@@ -32,10 +33,15 @@ describe('TaxWaterfallChart', () => {
 
     const grossIncome =
       middleIncomeResult.grossOrdinaryIncome + middleIncomeResult.grossPreferentialIncome
-    expect(screen.getAllByText(`$${grossIncome.toLocaleString('en-US')}`).length).toBeGreaterThan(0)
-    expect(
-      screen.getAllByText(`$${middleIncomeResult.taxOwed.toLocaleString('en-US')}`).length,
-    ).toBeGreaterThan(0)
+    expect(screen.getAllByText(formatCurrency(grossIncome)).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(formatCurrency(middleIncomeResult.taxOwed)).length).toBeGreaterThan(0)
+  })
+
+  it('shows a combined total tax liability figure (income tax + FICA)', () => {
+    render(<TaxWaterfallChart result={middleIncomeResult} title="Single filer, 2026" />)
+    const total = middleIncomeResult.taxOwed + middleIncomeResult.fica.total
+    expect(screen.getByText(/Total tax liability/)).toBeInTheDocument()
+    expect(screen.getAllByText(formatCurrency(total)).length).toBeGreaterThan(0)
   })
 
   it('shows the standard deduction and senior bonus deduction as separate rows, never merged', () => {
@@ -52,21 +58,20 @@ describe('TaxWaterfallChart', () => {
     expect(screen.getAllByText('$0').length).toBeGreaterThan(0)
   })
 
-  it('shows FICA as a distinct line, not folded into the waterfall segments', () => {
+  it('shows FICA as a distinct line, not folded into the income-tax bars', () => {
     render(<TaxWaterfallChart result={middleIncomeResult} title="Single filer, 2026" />)
     expect(screen.getAllByText(/FICA/).length).toBeGreaterThan(0)
-    expect(
-      screen.getAllByText(`$${middleIncomeResult.fica.total.toLocaleString('en-US')}`).length,
-    ).toBeGreaterThan(0)
+    expect(screen.getAllByText(formatCurrency(middleIncomeResult.fica.total)).length).toBeGreaterThan(0)
   })
 
-  it('renders one rect per waterfall segment plus one for FICA', () => {
+  it('renders the income bar, tax bar, and FICA bar as separate, non-stacked SVG groups', () => {
     const { container } = render(
       <TaxWaterfallChart result={middleIncomeResult} title="Single filer, 2026" />,
     )
-    // 7 waterfall segments (gross income, standard deduction, senior bonus deduction, taxable
-    // income, tax before credits, credits, tax owed) + 1 FICA bar = 8.
-    expect(container.querySelectorAll('svg rect')).toHaveLength(8)
+    // 2 bar "tracks" (background) + 3 income segments + 2 tax segments = 5 filled segment rects,
+    // plus a FICA track + FICA fill = 2 more. Tracks: income, tax, fica = 3.
+    // Total rects = 3 tracks + 3 income segments + 2 tax segments + 1 fica fill = 9.
+    expect(container.querySelectorAll('svg rect')).toHaveLength(9)
   })
 
   it('does not throw and still shows all rows for the ZeroTax scenario (income below the deduction)', () => {
@@ -76,19 +81,18 @@ describe('TaxWaterfallChart', () => {
   })
 
   describe('toPixelHeight', () => {
-    // Every real `FederalTaxResult` value this is ever called with is non-negative and within
-    // its group's own scale by construction, so these adverse inputs are unreachable through
-    // `TaxWaterfallChart` with real engine output — this unit-tests the clamp itself directly,
-    // since a rendering-level test can't otherwise exercise it (see the doc comment on
-    // `toPixelHeight`).
+    // Every real `FederalTaxResult` value this is ever called with is non-negative, but a
+    // deduction CAN legitimately exceed its bar's scale (gross income) when deductions exceed
+    // income — this unit-tests the clamp itself directly since that's the load-bearing path, plus
+    // the other adverse-input cases as defense-in-depth (see the doc comment on `toPixelHeight`).
     it('clamps a negative dollar value to zero pixels', () => {
       expect(toPixelHeight(-500, 1000, 150)).toBe(0)
     })
 
-    it('clamps a value above scaleMax to the full band height', () => {
-      const height = toPixelHeight(5000, 1000, 150)
-      expect(height).toBeGreaterThan(0)
-      expect(height).toBe(toPixelHeight(1000, 1000, 150))
+    it('clamps a value above scaleMax to the full band extent', () => {
+      const width = toPixelHeight(5000, 1000, 150)
+      expect(width).toBeGreaterThan(0)
+      expect(width).toBe(toPixelHeight(1000, 1000, 150))
     })
 
     it('returns zero, not NaN or Infinity, when scaleMax is zero or negative', () => {
@@ -105,9 +109,7 @@ describe('TaxWaterfallChart', () => {
     render(<TaxWaterfallChart result={seniorBonusResult} title="Senior bonus phase-out" />)
     expect(seniorBonusResult.deduction.seniorBonusDeduction).toBeGreaterThan(0)
     expect(
-      screen.getAllByText(
-        `$${seniorBonusResult.deduction.seniorBonusDeduction.toLocaleString('en-US')}`,
-      ).length,
+      screen.getAllByText(formatCurrency(seniorBonusResult.deduction.seniorBonusDeduction)).length,
     ).toBeGreaterThan(0)
   })
 
