@@ -20,6 +20,12 @@ export interface BracketLadderChartProps {
 const VIEW_WIDTH = 300
 const BAND_HEIGHT = 28
 const BAND_GAP = 6
+/** Vertical space reserved above each band for its own rate/range label (ERD §8.3: "per-band
+ * rate/bound labels" belong on the chart itself, not only in the table below it) — labels sit in
+ * this strip rather than on top of the band rects so they stay legible against the card
+ * background regardless of whether the band underneath is filled, empty, or mid-fraction. */
+const LABEL_HEIGHT = 14
+const ROW_HEIGHT = LABEL_HEIGHT + BAND_HEIGHT + BAND_GAP
 
 /** A band's fill fraction, in `[0, 1]`. The top band's `upperBound` is `Infinity`, so there is no
  * dollar-denominated width to divide by — per ERD §8.3 it gets a synthetic extent rather than an
@@ -54,7 +60,7 @@ interface LadderStackProps {
 }
 
 function LadderStack({ bands, markerRate, fillColor, stackLabel, captionId }: LadderStackProps) {
-  const viewHeight = bands.length * (BAND_HEIGHT + BAND_GAP) - BAND_GAP
+  const viewHeight = bands.length * ROW_HEIGHT - BAND_GAP
 
   return (
     <div className={styles.stack} data-stack={stackLabel}>
@@ -68,12 +74,50 @@ function LadderStack({ bands, markerRate, fillColor, stackLabel, captionId }: La
         aria-hidden="true"
       >
         {bands.map((band, index) => {
-          const y = index * (BAND_HEIGHT + BAND_GAP)
+          const rowTop = index * ROW_HEIGHT
+          const labelY = rowTop + LABEL_HEIGHT - 3
+          const y = rowTop + LABEL_HEIGHT
           const fraction = fillFraction(band)
           const isMarkerBand = markerRate !== undefined && band.rate === markerRate
+          // Nudged off the exact left edge so an empty (fraction === 0) marginal band's dashed
+          // line reads as a deliberate call-out rather than a stray pixel on the track's own
+          // left border (this happens for real — see PreferentialHeavy, where the ordinary
+          // ladder is entirely unoccupied but still carries the marginal-rate marker).
+          const markerX = Math.max(fraction * VIEW_WIDTH, 1.5)
 
           return (
             <g key={`${band.lowerBound}-${band.rate}`}>
+              <text
+                data-role="band-label"
+                x={2}
+                y={labelY}
+                className={styles.bandLabel}
+              >
+                {formatPercent(band.rate * 100)} · {boundsLabel(band)}
+              </text>
+              {isMarkerBand ? (
+                <text
+                  data-role="marker-label"
+                  x={VIEW_WIDTH - 2}
+                  y={labelY}
+                  textAnchor="end"
+                  className={styles.markerLabel}
+                >
+                  Marginal bracket
+                </text>
+              ) : (
+                band.incomeInThisBracket > 0 && (
+                  <text
+                    data-role="band-income-label"
+                    x={VIEW_WIDTH - 2}
+                    y={labelY}
+                    textAnchor="end"
+                    className={styles.bandIncomeLabel}
+                  >
+                    {formatCurrency(band.incomeInThisBracket)} taxed here
+                  </text>
+                )
+              )}
               <rect
                 data-role="band-track"
                 x={0}
@@ -93,8 +137,8 @@ function LadderStack({ bands, markerRate, fillColor, stackLabel, captionId }: La
               {isMarkerBand && (
                 <line
                   data-role="marginal-marker"
-                  x1={fraction * VIEW_WIDTH}
-                  x2={fraction * VIEW_WIDTH}
+                  x1={markerX}
+                  x2={markerX}
                   y1={y - BAND_GAP / 2}
                   y2={y + BAND_HEIGHT + BAND_GAP / 2}
                   className={styles.marker}
@@ -156,6 +200,31 @@ export function BracketLadderChart({ result, title, showPreferential = false }: 
           {' · '}
           Effective marginal rate: <strong>{formatPercent(result.effectiveMarginalRate * 100)}</strong>
         </p>
+
+        {/* What the color/pattern of every band means, spelled out in text (never color-only) —
+         * the gap that made the sibling TaxWaterfallChart read as "a bunch of bars, I don't know
+         * what they mean." Every value here is also in the table below; this just orients the
+         * reader before they get there. */}
+        <ul className={styles.legend}>
+          <li className={styles.legendItem}>
+            <span className={styles.swatch} style={{ background: 'var(--color-primary)' }} />
+            Ordinary income taxed in this band
+          </li>
+          <li className={styles.legendItem}>
+            <span className={styles.swatch} data-variant="track" />
+            Unused headroom — bracket not yet reached
+          </li>
+          <li className={styles.legendItem}>
+            <span className={styles.swatch} data-variant="marker" />
+            Marginal bracket (statutory rate)
+          </li>
+          {showPreferential && result.preferentialBrackets && (
+            <li className={styles.legendItem}>
+              <span className={styles.swatch} style={{ background: 'var(--color-success)' }} />
+              Preferential (capital gains) income taxed in this band
+            </li>
+          )}
+        </ul>
 
         <LadderStack
           bands={result.ordinaryBrackets}
