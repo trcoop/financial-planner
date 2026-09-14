@@ -1,7 +1,15 @@
 import type { FederalTaxResult } from '../../../engine'
 import { Card } from '../Card/Card'
+import { StatTile } from '../StatTile/StatTile'
 import { formatCurrency } from '../../utils/format'
-import { buildSegments, layoutGroup, toPixelHeight, type DrawnBar } from './waterfallLayout'
+import {
+  buildIncomeSegments,
+  buildTaxSegments,
+  layoutSegments,
+  toPixelHeight,
+  type DrawnSegment,
+  type SegmentRole,
+} from './waterfallLayout'
 import styles from './TaxWaterfallChart.module.css'
 
 export interface TaxWaterfallChartProps {
@@ -13,75 +21,99 @@ export interface TaxWaterfallChartProps {
   title: string
 }
 
-/** Fixed viewBox coordinate space, matching the approach `DonutChart`/`PercentileLineChart` use:
- * plot in a stable coordinate space and let the `viewBox` scale it to the rendered size. */
-const VIEW_WIDTH = 640
-const VIEW_HEIGHT = 220
-const BASELINE_Y = 190
-const BAND_HEIGHT = 150
-const BAR_WIDTH = 56
-const GROUP_GAP = 36
-const FICA_GAP = 48
+/**
+ * Originally built as a floating waterfall/bridge chart (bars resting on a zero baseline,
+ * connected by dashed lines between running totals). That shape was reverse-engineered from a
+ * competitor's minified bundle (a `federalTaxBreakdown` array name), never from their actual
+ * rendered UI, and a real (non-technical) user reviewing it in Ladle could not tell what it showed
+ * — different-colored bars with no shared meaning, a red "decrease" bar that read as an error, and
+ * no combined total-tax-liability figure anywhere despite tax-owed and FICA both being present.
+ *
+ * This redesign drops the bridge/connector geometry for two simple "parts of a whole" bars — the
+ * shape a lay reader already knows from a battery-level or storage-usage indicator: a single
+ * horizontal strip whose colored sections sum to a labeled total. Each strip's segments map
+ * 1-for-1 onto a row in the table below (the part the project owner said was "the useful part"),
+ * so the picture explains the table instead of requiring the table to explain the picture.
+ *
+ * Fixed viewBox coordinate space, matching the approach `DonutChart`/`PercentileLineChart` use:
+ * plot in a stable coordinate space and let the `viewBox` scale it to the rendered size.
+ */
+const VIEW_WIDTH = 480
+const BAR_HEIGHT = 40
+const BAR_GAP = 28
+const ROW_LABEL_HEIGHT = 22
+const FICA_BAR_HEIGHT = 18
+
+const roleClass: Record<SegmentRole, string> = {
+  base: styles.segmentBase,
+  reduction: styles.segmentReduction,
+  reductionBonus: styles.segmentReductionBonus,
+}
 
 export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
-  const segments = buildSegments(result)
-  const incomeSegments = segments.filter((s) => s.group === 'income')
-  const taxSegments = segments.filter((s) => s.group === 'tax')
+  const grossIncome = result.grossOrdinaryIncome + result.grossPreferentialIncome
+  const totalTaxLiability = result.taxOwed + result.fica.total
 
-  const incomeBars = layoutGroup(incomeSegments, 0, BAR_WIDTH)
-  const taxGroupStartX = incomeBars.length * BAR_WIDTH + GROUP_GAP
-  const taxBars = layoutGroup(taxSegments, taxGroupStartX, BAR_WIDTH)
-  const ficaX = taxGroupStartX + taxBars.length * BAR_WIDTH + FICA_GAP
+  const incomeSegments = buildIncomeSegments(result)
+  const taxSegments = buildTaxSegments(result)
 
-  // Each group is scaled against its own largest magnitude — income dollars and tax dollars are
-  // wildly different scales, so sharing one scale would make the tax-side bars imperceptible.
-  const incomeScaleMax = Math.max(1, ...incomeBars.map((b) => b.rangeHigh))
-  const taxScaleMax = Math.max(1, ...taxBars.map((b) => b.rangeHigh))
-  const ficaScaleMax = Math.max(1, result.fica.total)
+  // Each segment is clamped against its own bar's nominal total (gross income / tax before
+  // credits) — a degenerate case (deductions exceeding income) can make a `reduction` segment
+  // exceed that total, which `toPixelHeight` clamps rather than overflowing the bar.
+  const incomeScaleMax = Math.max(1, grossIncome)
+  const taxScaleMax = Math.max(1, result.taxBeforeCredits)
 
-  const renderBar = (bar: DrawnBar, scaleMax: number) => {
-    const topPx = toPixelHeight(bar.rangeHigh, scaleMax, BAND_HEIGHT)
-    const bottomPx = toPixelHeight(bar.rangeLow, scaleMax, BAND_HEIGHT)
-    const y = BASELINE_Y - topPx
-    const height = Math.max(0, topPx - bottomPx)
-    const isSubtotal = bar.segment.kind !== 'decrease'
-    return (
-      <rect
-        key={bar.segment.key}
-        x={bar.x}
-        y={y}
-        width={BAR_WIDTH - 8}
-        height={height}
-        className={isSubtotal ? styles.barTotal : styles.barDecrease}
-      />
-    )
-  }
+  const incomeBars = layoutSegments(incomeSegments, incomeScaleMax, VIEW_WIDTH)
+  const taxBars = layoutSegments(taxSegments, taxScaleMax, VIEW_WIDTH)
+  const ficaWidth = toPixelHeight(result.fica.total, Math.max(1, result.fica.total), VIEW_WIDTH)
 
-  const renderConnector = (from: DrawnBar, to: DrawnBar, scaleMax: number) => {
-    // Connect the resting edge of `from` (its rangeLow when it fell, its rangeHigh when it's a
-    // rising total/subtotal) to the start of `to`.
-    const connectorValue = from.segment.kind === 'decrease' ? from.rangeLow : from.rangeHigh
-    const y = BASELINE_Y - toPixelHeight(connectorValue, scaleMax, BAND_HEIGHT)
-    return (
-      <line
-        key={`${from.segment.key}-${to.segment.key}`}
-        x1={from.x + BAR_WIDTH - 8}
-        y1={y}
-        x2={to.x}
-        y2={y}
-        className={styles.connector}
-      />
-    )
-  }
+  const renderRow = (
+    rowLabel: string,
+    rowTotal: number,
+    bars: DrawnSegment[],
+    y: number,
+  ) => (
+    <g key={rowLabel}>
+      <text x={0} y={y} className={styles.rowLabel}>
+        {rowLabel}: {formatCurrency(rowTotal)}
+      </text>
+      <g transform={`translate(0, ${y + 8})`}>
+        <rect x={0} y={0} width={VIEW_WIDTH} height={BAR_HEIGHT} className={styles.barTrack} />
+        {bars.map((bar) => (
+          <rect
+            key={bar.segment.key}
+            x={bar.x}
+            y={0}
+            width={bar.width}
+            height={BAR_HEIGHT}
+            className={roleClass[bar.segment.role]}
+          />
+        ))}
+      </g>
+    </g>
+  )
 
-  const ficaHeight = toPixelHeight(result.fica.total, ficaScaleMax, BAND_HEIGHT)
+  const incomeRowY = ROW_LABEL_HEIGHT
+  const taxRowY = incomeRowY + BAR_HEIGHT + BAR_GAP + ROW_LABEL_HEIGHT
+  const ficaRowY = taxRowY + BAR_HEIGHT + BAR_GAP + ROW_LABEL_HEIGHT
+  const viewHeight = ficaRowY + FICA_BAR_HEIGHT + 8
 
-  const legendRows: { label: string; value: number }[] = [
-    ...segments.map((s) => ({ label: s.label, value: s.value })),
+  const legendRows: { label: string; value: number; swatch?: string }[] = [
+    { label: 'Gross income', value: grossIncome },
+    { label: 'Standard deduction', value: result.deduction.standardDeduction, swatch: styles.swatchReduction },
+    {
+      label: 'Senior bonus deduction',
+      value: result.deduction.seniorBonusDeduction,
+      swatch: styles.swatchReductionBonus,
+    },
+    { label: 'Taxable income', value: result.taxableIncome, swatch: styles.swatchBase },
+    { label: 'Tax before credits', value: result.taxBeforeCredits },
+    { label: 'Credits', value: result.credits, swatch: styles.swatchReduction },
+    { label: 'Tax owed', value: result.taxOwed, swatch: styles.swatchBase },
     { label: 'FICA — Social Security', value: result.fica.socialSecurity },
     { label: 'FICA — Medicare', value: result.fica.medicare },
     { label: 'FICA — Additional Medicare', value: result.fica.additionalMedicare },
-    { label: 'FICA total', value: result.fica.total },
+    { label: 'FICA total', value: result.fica.total, swatch: styles.swatchFica },
   ]
 
   return (
@@ -89,44 +121,39 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
       <figure className={styles.figure} aria-label={title}>
         <figcaption className={styles.title}>{title}</figcaption>
 
+        <StatTile
+          label="Total tax liability (federal income tax + FICA)"
+          value={formatCurrency(totalTaxLiability)}
+        />
+
         <div className={styles.plotWrapper}>
           <svg
             className={styles.plot}
-            viewBox={`0 0 ${VIEW_WIDTH} ${VIEW_HEIGHT}`}
+            viewBox={`0 0 ${VIEW_WIDTH} ${viewHeight}`}
             aria-hidden="true"
           >
-            <line
-              x1={0}
-              y1={BASELINE_Y}
-              x2={ficaX + BAR_WIDTH}
-              y2={BASELINE_Y}
-              className={styles.baseline}
-            />
+            {renderRow('Gross income → taxable income', grossIncome, incomeBars, incomeRowY)}
+            {renderRow('Tax before credits → tax owed', result.taxBeforeCredits, taxBars, taxRowY)}
 
-            {incomeBars.map((bar) => renderBar(bar, incomeScaleMax))}
-            {incomeBars.slice(0, -1).map((bar, i) => renderConnector(bar, incomeBars[i + 1], incomeScaleMax))}
-
-            {taxBars.map((bar) => renderBar(bar, taxScaleMax))}
-            {taxBars.slice(0, -1).map((bar, i) => renderConnector(bar, taxBars[i + 1], taxScaleMax))}
-
-            {/* FICA is deliberately drawn as its own separate bar, never chained into the
-             * waterfall's running total — folding it in would misrepresent the marginal
-             * income-tax rate (ERD §8.2). */}
-            <rect
-              x={ficaX}
-              y={BASELINE_Y - ficaHeight}
-              width={BAR_WIDTH - 8}
-              height={ficaHeight}
-              className={styles.barFica}
-            />
+            {/* FICA is deliberately drawn as its own separate, single-color bar — never chained
+             * into or scaled against the income-tax bars above — because folding its dollars into
+             * the same stack would misrepresent the marginal income-tax rate (ERD §8.2). */}
+            <text x={0} y={ficaRowY} className={styles.rowLabel}>
+              FICA: {formatCurrency(result.fica.total)}
+            </text>
+            <g transform={`translate(0, ${ficaRowY + 8})`}>
+              <rect x={0} y={0} width={VIEW_WIDTH} height={FICA_BAR_HEIGHT} className={styles.barTrack} />
+              <rect x={0} y={0} width={ficaWidth} height={FICA_BAR_HEIGHT} className={styles.segmentFica} />
+            </g>
           </svg>
         </div>
 
         {/* Visible legend/table duplicating every value shown in the plot above, so nothing is
-         * conveyed by bar position or color alone (ERD §8.2/§8.6). No element here is
-         * interactive — there is nothing for `:focus-visible`/`--focus-ring` to style yet; if an
-         * interactive affordance (e.g. a hover/tap detail) is added later it must pick up
-         * `--focus-ring` at that point. */}
+         * conveyed by bar position or color alone (ERD §8.2/§8.6). The color swatch in the first
+         * column is purely additive — the label and formatted value alone are already sufficient
+         * to read every row. No element here is interactive — there is nothing for
+         * `:focus-visible`/`--focus-ring` to style yet; if an interactive affordance (e.g. a
+         * hover/tap detail) is added later it must pick up `--focus-ring` at that point. */}
         <table className={styles.legend}>
           <thead>
             <tr>
@@ -137,7 +164,10 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
           <tbody>
             {legendRows.map((row) => (
               <tr key={row.label}>
-                <td className={styles.legendLabel}>{row.label}</td>
+                <td className={styles.legendLabel}>
+                  {row.swatch ? <span aria-hidden="true" className={`${styles.swatch} ${row.swatch}`} /> : null}
+                  {row.label}
+                </td>
                 <td className={styles.legendValue}>{formatCurrency(row.value)}</td>
               </tr>
             ))}
