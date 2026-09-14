@@ -4,13 +4,13 @@ name: Update visual baselines
 # generated on the same OS as the `visual` CI job (ubuntu-latest) to avoid font-rendering
 # diffs, so run this instead of `npm run test:visual:update` locally on a non-Linux machine —
 # download the resulting artifact and commit the PNGs it contains.
+#
+# Run via `gh workflow run "Update visual baselines" --ref <branch>` (or the Actions UI's
+# branch selector) — the branch you pick there is what gets checked out below. There is no
+# separate `ref` input to set; an older version of this workflow had one, and it was easy to
+# set --ref without also setting the input, which silently checked out `main` instead.
 on:
-  workflow_dispatch:
-    inputs:
-      ref:
-        description: Branch to generate baselines from
-        required: false
-        default: main
+  workflow_dispatch: {}
 
 jobs:
   update-snapshots:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.ref_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
