@@ -47,3 +47,10 @@ export const SeniorBonusPhaseOut: Story = () => (
     title="Senior bonus phase-out — single, age 65, mid phase-out"
   />
 )
+
+export const SeniorBonusPhaseOutMFJ: Story = () => (
+  <BracketLadderChart
+    result={computeFederalTax(STORY_FIXTURES.SeniorBonusPhaseOutMFJ)}
+    title="Senior bonus phase-out — married filing jointly, both spouses 65+"
+  />
+)
