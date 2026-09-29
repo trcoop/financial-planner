@@ -2,6 +2,7 @@ import { useId } from 'react'
 import type { FederalTaxResult } from '../../../engine'
 import { Card } from '../Card/Card'
 import { StatTile } from '../StatTile/StatTile'
+import { Table, TableRow } from '../Table/Table'
 import { formatCurrency } from '../../utils/format'
 import {
   buildIncomeSegments,
@@ -80,11 +81,9 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
     </svg>
   )
 
-  const renderRow = (rowLabel: string, rowTotal: number, bars: DrawnSegment[]) => (
+  const renderRow = (rowLabel: string, bars: DrawnSegment[]) => (
     <div key={rowLabel} className={styles.row}>
-      <div className={styles.rowLabel}>
-        {rowLabel}: {formatCurrency(rowTotal)}
-      </div>
+      <div className={styles.rowLabel}>{rowLabel}</div>
       {renderBar(
         bars.map((bar) => ({
           key: bar.segment.key,
@@ -127,8 +126,14 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
               value={formatCurrency(totalTaxLiability)}
             />
 
-            {renderRow('Gross income → taxable income', grossIncome, incomeBars)}
-            {renderRow('Tax before credits → tax owed', result.taxBeforeCredits, taxBars)}
+            {renderRow(
+              `Gross income ${formatCurrency(grossIncome)} → taxable income ${formatCurrency(result.taxableIncome)}`,
+              incomeBars,
+            )}
+            {renderRow(
+              `Tax before credits ${formatCurrency(result.taxBeforeCredits)} → tax owed ${formatCurrency(result.taxOwed)}`,
+              taxBars,
+            )}
 
             {/* FICA is deliberately drawn as its own separate, single-color bar — never chained
              * into or scaled against the income-tax bars above — because folding its dollars into
@@ -148,25 +153,25 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
          * to read every row. No element here is interactive — there is nothing for
          * `:focus-visible`/`--focus-ring` to style yet; if an interactive affordance (e.g. a
          * hover/tap detail) is added later it must pick up `--focus-ring` at that point. */}
-        <table className={styles.legend}>
+        <Table>
           <thead>
-            <tr>
-              <th className={styles.legendHeader}>Segment</th>
-              <th className={styles.legendHeader}>Amount</th>
-            </tr>
+            <TableRow>
+              <th scope="col">Segment</th>
+              <th scope="col">Amount</th>
+            </TableRow>
           </thead>
           <tbody>
             {legendRows.map((row) => (
-              <tr key={row.label}>
-                <td className={styles.legendLabel}>
+              <TableRow key={row.label}>
+                <td>
                   {row.swatch ? <span aria-hidden="true" className={`${styles.swatch} ${row.swatch}`} /> : null}
                   {row.label}
                 </td>
-                <td className={styles.legendValue}>{formatCurrency(row.value)}</td>
-              </tr>
+                <td>{formatCurrency(row.value)}</td>
+              </TableRow>
             ))}
           </tbody>
-        </table>
+        </Table>
         </div>
       </figure>
     </Card>

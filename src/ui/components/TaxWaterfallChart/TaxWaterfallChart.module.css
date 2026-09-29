@@ -15,7 +15,7 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .title {
@@ -75,9 +75,9 @@
 }
 
 .barTrack {
-  fill: var(--color-surface);
-  stroke: var(--color-border-subtle);
-  stroke-width: 1;
+  fill: var(--color-border-subtle);
+  stroke: var(--color-border);
+  stroke-width: var(--chart-stroke-thin);
   vector-effect: non-scaling-stroke;
 }
 
@@ -106,42 +106,12 @@
   fill: var(--color-warning);
 }
 
-/* Visible legend/table — every segment's label and formatted value as plain text, not conveyed
- * by bar color or position alone (ERD §8.2/§8.6 accessibility requirement). The color swatch is
- * a purely additive cross-reference back to the chart above. */
-.legend {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.legendHeader {
-  text-align: left;
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-text-muted);
-  font-weight: 600;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.legendLabel {
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-text-muted);
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
-.legendValue {
-  padding: var(--space-1) var(--space-2);
-  color: var(--color-text);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-
+/* The legend is the shared Table; this is only the colour cross-reference swatch back to the
+ * chart above (never the only carrier of meaning — every row's label and value are text). */
 .swatch {
   display: inline-block;
-  width: var(--space-3);
-  height: var(--space-3);
+  width: var(--chart-swatch-size);
+  height: var(--chart-swatch-size);
   border-radius: var(--radius-sm);
   margin-right: var(--space-2);
   vertical-align: middle;

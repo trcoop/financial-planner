@@ -126,8 +126,17 @@
   --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.08);
 
   /* Chart scale (BracketLadderChart) — SVG text is sized in viewBox units, so this is
-     deliberately separate from the rem-based --font-size-* scale. */
-  --chart-label-font-size: 8px;
+     deliberately separate from the rem-based --font-size-* scale. The plot is capped at
+     --chart-plot-max-width (viewBox is 300 wide) so the viewBox scale stays within ~0.9-1.2x and
+     the rendered labels stay between ~11px and ~14px, in line with --font-size-sm elsewhere. */
+  --chart-label-font-size: 12px;
+  --chart-plot-max-width: 360px;
+  /* Chart series colour for the preferential (capital gains) income series in BracketLadderChart.
+     Violet, deliberately not --color-success (which means reduction/credit in TaxWaterfallChart)
+     or --color-primary (ordinary income). #7c3aed is ~5.7:1 on --color-bg and ~5.1:1 on the
+     --color-border-subtle track, above the 3:1 non-text floor. The chart legend names the series
+     in text, so meaning is never carried by colour alone. */
+  --chart-series-preferential: #7c3aed;
   --chart-stroke-thin: 1px;
   --chart-stroke-thick: 2px;
   --chart-marker-dash: 4 2;

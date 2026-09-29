@@ -127,9 +127,14 @@ describe('TaxWaterfallChart', () => {
   it('labels each bar row with its name and formatted total (HTML text, not SVG text)', () => {
     const { container } = render(<TaxWaterfallChart result={creditsResult} title="t" />)
     expect(container.querySelector('svg text')).toBeNull()
-    expect(screen.getByText('Gross income → taxable income: $120,000')).toBeInTheDocument()
+    // Both ends of each arrow are shown, so the label never implies one figure is the other.
     expect(
-      screen.getByText(`Tax before credits → tax owed: ${formatCurrency(creditsResult.taxBeforeCredits)}`),
+      screen.getByText(`Gross income $120,000 → taxable income ${formatCurrency(creditsResult.taxableIncome)}`),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        `Tax before credits ${formatCurrency(creditsResult.taxBeforeCredits)} → tax owed ${formatCurrency(creditsResult.taxOwed)}`,
+      ),
     ).toBeInTheDocument()
     expect(screen.getByText(`FICA: ${formatCurrency(9180)}`)).toBeInTheDocument()
   })
@@ -253,5 +258,28 @@ describe('TaxWaterfallChart', () => {
     const result = computeFederalTax(input)
     render(<TaxWaterfallChart result={result} title="Type check" />)
     expect(screen.getByRole('figure', { name: 'Type check' })).toBeInTheDocument()
+  })
+
+  it('renders the legend with the shared Table (no hand-rolled legend classes)', () => {
+    const { container } = render(<TaxWaterfallChart result={middleIncomeResult} title="t" />)
+    const table = screen.getByRole('table')
+    expect(table.className).toContain('table')
+    expect(table.className).not.toContain('legend')
+    expect(container.querySelectorAll('tbody tr')).toHaveLength(11)
+    for (const tr of Array.from(container.querySelectorAll('tr'))) expect(tr.className).toContain('row')
+    expect(container.querySelector('[class*="legendLabel"]')).toBeNull()
+  })
+
+  it('styles tracks, swatches, gap and title with the shared chart tokens', () => {
+    const css = readFileSync(join(__dirname, 'TaxWaterfallChart.module.css'), 'utf8')
+    const rule = (sel: string) => css.match(new RegExp(`${sel.replace('.', '\\.')}\\s*\\{([^}]*)\\}`))![1]
+    expect(rule('.barTrack')).toMatch(/fill:\s*var\(--color-border-subtle\)/)
+    expect(rule('.barTrack')).toMatch(/stroke:\s*var\(--color-border\)/)
+    expect(rule('.swatch')).toMatch(/width:\s*var\(--chart-swatch-size\)/)
+    expect(rule('.swatch')).toMatch(/height:\s*var\(--chart-swatch-size\)/)
+    expect(rule('.figure')).toMatch(/gap:\s*var\(--space-4\)/)
+    expect(rule('.title')).toMatch(/align-self:\s*flex-start/)
+    expect(rule('.segmentReduction')).toMatch(/var\(--color-success\)/)
+    expect(rule('.segmentFica')).toMatch(/var\(--color-warning\)/)
   })
 })
