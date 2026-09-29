@@ -30,10 +30,10 @@ export interface TaxWaterfallChartProps {
  * Plots in a fixed viewBox coordinate space and lets the viewBox scale it, like `DonutChart`.
  */
 const VIEW_WIDTH = 480
-const BAR_HEIGHT = 40
-const BAR_GAP = 28
-const ROW_LABEL_HEIGHT = 22
-const FICA_BAR_HEIGHT = 18
+// Bars are drawn in a fixed-width viewBox stretched to the container (`preserveAspectRatio="none"`)
+// and given a token-sized CSS height, so no text lives inside the SVG — row labels are HTML above
+// each bar so type scales with the theme tokens rather than with the viewBox.
+const BAR_VIEW_HEIGHT = 10
 
 const roleClass: Record<SegmentRole, string> = {
   base: styles.segmentBase,
@@ -59,36 +59,43 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
   const taxBars = layoutSegments(taxSegments, taxScaleMax, VIEW_WIDTH)
   const ficaWidth = toPixelWidth(result.fica.total, Math.max(1, result.fica.total), VIEW_WIDTH)
 
-  const renderRow = (
-    rowLabel: string,
-    rowTotal: number,
-    bars: DrawnSegment[],
-    y: number,
-  ) => (
-    <g key={rowLabel}>
-      <text x={0} y={y} className={styles.rowLabel}>
-        {rowLabel}: {formatCurrency(rowTotal)}
-      </text>
-      <g transform={`translate(0, ${y + 8})`}>
-        <rect x={0} y={0} width={VIEW_WIDTH} height={BAR_HEIGHT} className={styles.barTrack} />
-        {bars.map((bar) => (
-          <rect
-            key={bar.segment.key}
-            x={bar.x}
-            y={0}
-            width={bar.width}
-            height={BAR_HEIGHT}
-            className={roleClass[bar.segment.role]}
-          />
-        ))}
-      </g>
-    </g>
+  const renderBar = (bars: { key: string; x: number; width: number; cls: string }[], barClass: string) => (
+    <svg
+      className={`${styles.bar} ${barClass}`}
+      viewBox={`0 0 ${VIEW_WIDTH} ${BAR_VIEW_HEIGHT}`}
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <rect x={0} y={0} width={VIEW_WIDTH} height={BAR_VIEW_HEIGHT} className={styles.barTrack} />
+      {bars.map((bar) => (
+        <rect
+          key={bar.key}
+          x={bar.x}
+          y={0}
+          width={bar.width}
+          height={BAR_VIEW_HEIGHT}
+          className={bar.cls}
+        />
+      ))}
+    </svg>
   )
 
-  const incomeRowY = ROW_LABEL_HEIGHT
-  const taxRowY = incomeRowY + BAR_HEIGHT + BAR_GAP + ROW_LABEL_HEIGHT
-  const ficaRowY = taxRowY + BAR_HEIGHT + BAR_GAP + ROW_LABEL_HEIGHT
-  const viewHeight = ficaRowY + FICA_BAR_HEIGHT + 8
+  const renderRow = (rowLabel: string, rowTotal: number, bars: DrawnSegment[]) => (
+    <div key={rowLabel} className={styles.row}>
+      <div className={styles.rowLabel}>
+        {rowLabel}: {formatCurrency(rowTotal)}
+      </div>
+      {renderBar(
+        bars.map((bar) => ({
+          key: bar.segment.key,
+          x: bar.x,
+          width: bar.width,
+          cls: roleClass[bar.segment.role],
+        })),
+        styles.barTall,
+      )}
+    </div>
+  )
 
   const legendRows: { label: string; value: number; swatch?: string }[] = [
     { label: 'Gross income', value: grossIncome },
@@ -113,32 +120,27 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
       <figure className={styles.figure} aria-labelledby={captionId}>
         <figcaption id={captionId} className={styles.title}>{title}</figcaption>
 
-        <StatTile
-          label="Total tax liability (federal income tax + FICA)"
-          value={formatCurrency(totalTaxLiability)}
-        />
+        <div className={styles.body}>
+          <div className={styles.plotColumn}>
+            <StatTile
+              label="Total tax liability (federal income tax + FICA)"
+              value={formatCurrency(totalTaxLiability)}
+            />
 
-        <div className={styles.plotWrapper}>
-          <svg
-            className={styles.plot}
-            viewBox={`0 0 ${VIEW_WIDTH} ${viewHeight}`}
-            aria-hidden="true"
-          >
-            {renderRow('Gross income → taxable income', grossIncome, incomeBars, incomeRowY)}
-            {renderRow('Tax before credits → tax owed', result.taxBeforeCredits, taxBars, taxRowY)}
+            {renderRow('Gross income → taxable income', grossIncome, incomeBars)}
+            {renderRow('Tax before credits → tax owed', result.taxBeforeCredits, taxBars)}
 
             {/* FICA is deliberately drawn as its own separate, single-color bar — never chained
              * into or scaled against the income-tax bars above — because folding its dollars into
              * the same stack would misrepresent the marginal income-tax rate (ERD §8.2). */}
-            <text x={0} y={ficaRowY} className={styles.rowLabel}>
-              FICA: {formatCurrency(result.fica.total)}
-            </text>
-            <g transform={`translate(0, ${ficaRowY + 8})`}>
-              <rect x={0} y={0} width={VIEW_WIDTH} height={FICA_BAR_HEIGHT} className={styles.barTrack} />
-              <rect x={0} y={0} width={ficaWidth} height={FICA_BAR_HEIGHT} className={styles.segmentFica} />
-            </g>
-          </svg>
-        </div>
+            <div className={styles.row}>
+              <div className={styles.rowLabel}>FICA: {formatCurrency(result.fica.total)}</div>
+              {renderBar(
+                [{ key: 'fica', x: 0, width: ficaWidth, cls: styles.segmentFica }],
+                styles.barShort,
+              )}
+            </div>
+          </div>
 
         {/* Visible legend/table duplicating every value shown in the plot above, so nothing is
          * conveyed by bar position or color alone (ERD §8.2/§8.6). The color swatch in the first
@@ -165,6 +167,7 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
             ))}
           </tbody>
         </table>
+        </div>
       </figure>
     </Card>
   )

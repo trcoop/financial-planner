@@ -26,27 +26,59 @@
   color: var(--color-text);
 }
 
-.plotWrapper {
-  width: 100%;
-  overflow-x: auto;
+.body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
 }
 
-.plot {
-  width: 100%;
-  height: auto;
-  display: block;
+/* Matches the app's single responsive breakpoint (Drawer's DESKTOP_QUERY, FIN-32): on wide
+ * layouts the bars and the legend table sit side by side so the whole component stays compact. */
+@media (min-width: 960px) {
+  .body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+}
+
+.plotColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .rowLabel {
   font-size: var(--font-size-sm);
-  font-family: var(--font-family-body);
-  fill: var(--color-text-muted);
+  color: var(--color-text-muted);
+}
+
+/* Bars stretch to the container width (preserveAspectRatio="none") at a token-sized height. */
+.bar {
+  width: 100%;
+  display: block;
+}
+
+.barTall {
+  height: var(--space-5);
+}
+
+.barShort {
+  height: var(--space-4);
 }
 
 .barTrack {
   fill: var(--color-surface);
   stroke: var(--color-border-subtle);
   stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 /* The amount that remains/carries forward to the next step (taxable income, tax owed) — the

@@ -117,9 +117,35 @@ describe('TaxWaterfallChart', () => {
     expect(container.querySelectorAll('svg rect')).toHaveLength(9)
   })
 
-  it('hides the decorative svg from assistive tech', () => {
+  it('hides every decorative bar svg from assistive tech', () => {
     const { container } = render(<TaxWaterfallChart result={middleIncomeResult} title="t" />)
-    expect(container.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+    const svgs = container.querySelectorAll('svg')
+    expect(svgs).toHaveLength(3)
+    for (const svg of svgs) expect(svg).toHaveAttribute('aria-hidden', 'true')
+  })
+
+  it('labels each bar row with its name and formatted total (HTML text, not SVG text)', () => {
+    const { container } = render(<TaxWaterfallChart result={creditsResult} title="t" />)
+    expect(container.querySelector('svg text')).toBeNull()
+    expect(screen.getByText('Gross income → taxable income: $120,000')).toBeInTheDocument()
+    expect(
+      screen.getByText(`Tax before credits → tax owed: ${formatCurrency(creditsResult.taxBeforeCredits)}`),
+    ).toBeInTheDocument()
+    expect(screen.getByText(`FICA: ${formatCurrency(9180)}`)).toBeInTheDocument()
+  })
+
+  it('renders the legend header row and swatches matching each segment role', () => {
+    render(<TaxWaterfallChart result={seniorBonusResult} title="t" />)
+    expect(screen.getByRole('columnheader', { name: 'Segment' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: 'Amount' })).toBeInTheDocument()
+    const swatchOf = (label: string) =>
+      screen.getByText(label).closest('tr')?.querySelector('span[aria-hidden="true"]')?.className ?? ''
+    expect(swatchOf('Senior bonus deduction')).toContain('swatchReductionBonus')
+    expect(swatchOf('Standard deduction')).toContain('swatchReduction')
+    expect(swatchOf('Standard deduction')).not.toContain('swatchReductionBonus')
+    expect(swatchOf('Taxable income')).toContain('swatchBase')
+    expect(swatchOf('FICA total')).toContain('swatchFica')
+    expect(swatchOf('Gross income')).toBe('')
   })
 
   it('draws income segments side by side with widths proportional to gross income', () => {
