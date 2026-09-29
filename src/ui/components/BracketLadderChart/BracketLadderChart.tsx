@@ -1,5 +1,7 @@
 import type { BracketOccupancy, FederalTaxResult } from '../../../engine'
+import { useId } from 'react'
 import { Card } from '../Card/Card'
+import { Table, TableRow } from '../Table/Table'
 import { formatCurrency, formatPercent } from '../../utils/format'
 import styles from './BracketLadderChart.module.css'
 
@@ -25,6 +27,13 @@ const BAND_GAP = 6
  * this strip rather than on top of the band rects so they stay legible against the card
  * background regardless of whether the band underneath is filled, empty, or mid-fraction. */
 const LABEL_HEIGHT = 14
+/** Series fills, shared by the SVG bands and the legend swatches so the key can never drift from
+ * the chart it explains. */
+const ORDINARY_FILL = 'var(--color-primary)'
+const PREFERENTIAL_FILL = 'var(--color-success)'
+/** Minimum x of the marginal marker, so a zero-fill marginal band's line is not drawn on the
+ * track's own left border. */
+const MARKER_MIN_X = 1.5
 const ROW_HEIGHT = LABEL_HEIGHT + BAND_HEIGHT + BAND_GAP
 
 /** A band's fill fraction, in `[0, 1]`. The top band's `upperBound` is `Infinity`, so there is no
@@ -55,17 +64,18 @@ interface LadderStackProps {
    * bracket rate" concept in the result), so it's optional and omitted there. */
   markerRate?: number
   fillColor: string
-  stackLabel: string
-  captionId: string
+  stackLabel: 'ordinary' | 'preferential'
+  heading: string
 }
 
-function LadderStack({ bands, markerRate, fillColor, stackLabel, captionId }: LadderStackProps) {
+function LadderStack({ bands, markerRate, fillColor, stackLabel, heading }: LadderStackProps) {
+  const captionId = useId()
   const viewHeight = bands.length * ROW_HEIGHT - BAND_GAP
 
   return (
     <div className={styles.stack} data-stack={stackLabel}>
       <h3 className={styles.stackTitle} id={captionId}>
-        {stackLabel === 'preferential' ? 'Preferential (capital gains) ladder' : 'Ordinary income ladder'}
+        {heading}
       </h3>
 
       <svg
@@ -83,7 +93,7 @@ function LadderStack({ bands, markerRate, fillColor, stackLabel, captionId }: La
           // line reads as a deliberate call-out rather than a stray pixel on the track's own
           // left border (this happens for real — see PreferentialHeavy, where the ordinary
           // ladder is entirely unoccupied but still carries the marginal-rate marker).
-          const markerX = Math.max(fraction * VIEW_WIDTH, 1.5)
+          const markerX = Math.max(fraction * VIEW_WIDTH, MARKER_MIN_X)
 
           return (
             <g key={`${band.lowerBound}-${band.rate}`}>
@@ -149,26 +159,28 @@ function LadderStack({ bands, markerRate, fillColor, stackLabel, captionId }: La
         })}
       </svg>
 
-      <table className={styles.table} aria-labelledby={captionId}>
+      {/* Reuses the shared Table (Design Spec §6); `labelledBy` is the optional prop added for
+       * this so the visible <h3> above the plot names the table. */}
+      <Table labelledBy={captionId}>
         <thead>
-          <tr>
+          <TableRow>
             <th scope="col">Rate</th>
             <th scope="col">Range</th>
             <th scope="col">Income in band</th>
             <th scope="col">Tax from band</th>
-          </tr>
+          </TableRow>
         </thead>
         <tbody>
           {bands.map((band) => (
-            <tr key={`${band.lowerBound}-${band.rate}`}>
+            <TableRow key={`${band.lowerBound}-${band.rate}`}>
               <td>{formatPercent(band.rate * 100)}</td>
               <td>{boundsLabel(band)}</td>
               <td>{formatCurrency(band.incomeInThisBracket)}</td>
               <td>{formatCurrency(Math.round(band.taxFromThisBracket))}</td>
-            </tr>
+            </TableRow>
           ))}
         </tbody>
-      </table>
+      </Table>
     </div>
   )
 }
@@ -187,9 +199,6 @@ function LadderStack({ bands, markerRate, fillColor, stackLabel, captionId }: La
  * (Design Spec §6).
  */
 export function BracketLadderChart({ result, title, showPreferential = false }: BracketLadderChartProps) {
-  const ordinaryCaptionId = `bracket-ladder-ordinary-${title.replace(/\s+/g, '-')}`
-  const preferentialCaptionId = `bracket-ladder-preferential-${title.replace(/\s+/g, '-')}`
-
   return (
     <Card className={styles.card}>
       <figure className={styles.figure} aria-label={title}>
@@ -207,7 +216,7 @@ export function BracketLadderChart({ result, title, showPreferential = false }: 
          * reader before they get there. */}
         <ul className={styles.legend}>
           <li className={styles.legendItem}>
-            <span className={styles.swatch} style={{ background: 'var(--color-primary)' }} />
+            <span className={styles.swatch} style={{ background: ORDINARY_FILL }} />
             Ordinary income taxed in this band
           </li>
           <li className={styles.legendItem}>
@@ -220,7 +229,7 @@ export function BracketLadderChart({ result, title, showPreferential = false }: 
           </li>
           {showPreferential && result.preferentialBrackets && (
             <li className={styles.legendItem}>
-              <span className={styles.swatch} style={{ background: 'var(--color-success)' }} />
+              <span className={styles.swatch} style={{ background: PREFERENTIAL_FILL }} />
               Preferential (capital gains) income taxed in this band
             </li>
           )}
@@ -229,17 +238,17 @@ export function BracketLadderChart({ result, title, showPreferential = false }: 
         <LadderStack
           bands={result.ordinaryBrackets}
           markerRate={result.ordinaryBracketRate}
-          fillColor="var(--color-primary)"
+          fillColor={ORDINARY_FILL}
           stackLabel="ordinary"
-          captionId={ordinaryCaptionId}
+          heading="Ordinary income ladder"
         />
 
         {showPreferential && result.preferentialBrackets && (
           <LadderStack
             bands={result.preferentialBrackets}
-            fillColor="var(--color-success)"
+            fillColor={PREFERENTIAL_FILL}
             stackLabel="preferential"
-            captionId={preferentialCaptionId}
+            heading="Preferential (capital gains) ladder"
           />
         )}
       </figure>

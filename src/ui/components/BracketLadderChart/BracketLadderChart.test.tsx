@@ -5,13 +5,29 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { computeFederalTax } from '../../../engine'
 import { STORY_FIXTURES } from '../../../engine/tax'
-import { formatPercent } from '../../utils/format'
+import type { FederalTaxResult } from '../../../engine'
+import { formatCurrency, formatPercent } from '../../utils/format'
 import { BracketLadderChart } from './BracketLadderChart'
 
 const middleIncome = computeFederalTax(STORY_FIXTURES.MiddleIncome)
 const topBracket = computeFederalTax(STORY_FIXTURES.TopBracket)
 const preferentialHeavy = computeFederalTax(STORY_FIXTURES.PreferentialHeavy)
 const zeroTax = computeFederalTax(STORY_FIXTURES.ZeroTax)
+const seniorPhaseOut = computeFederalTax(STORY_FIXTURES.SeniorBonusPhaseOut)
+
+type Rendered = ReturnType<typeof render>['container']
+const fills = (c: Rendered, stack = 'ordinary') =>
+  Array.from(c.querySelectorAll(`[data-stack="${stack}"] [data-role="band-fill"]`))
+const widths = (c: Rendered, stack = 'ordinary') => fills(c, stack).map((f) => Number(f.getAttribute('width')))
+const VIEW_WIDTH = 300
+
+/** Overrides one ordinary band's income (fixtures never exceed a band's width, so clamping needs a synthetic band). */
+function withBand(index: number, patch: Partial<FederalTaxResult['ordinaryBrackets'][number]>): FederalTaxResult {
+  return {
+    ...middleIncome,
+    ordinaryBrackets: middleIncome.ordinaryBrackets.map((b, i) => (i === index ? { ...b, ...patch } : b)),
+  }
+}
 
 describe('BracketLadderChart', () => {
   afterEach(() => cleanup())
@@ -80,10 +96,137 @@ describe('BracketLadderChart', () => {
     expect(screen.getByRole('figure', { name: 'Ladder' })).toBeInTheDocument()
   })
 
+  it('sizes fills as income / (upperBound - lowerBound) of the viewBox, and fills a full band completely', () => {
+    const { container } = render(<BracketLadderChart result={middleIncome} title="Ladder" />)
+    const w = widths(container)
+    const b = middleIncome.ordinaryBrackets
+    expect(w[0]).toBe(VIEW_WIDTH)
+    expect(w[1]).toBe(VIEW_WIDTH)
+    expect(w[2]).toBeCloseTo((b[2].incomeInThisBracket / (b[2].upperBound - b[2].lowerBound)) * VIEW_WIDTH, 6)
+    expect(w[2]).toBeGreaterThan(0)
+    expect(w[2]).toBeLessThan(VIEW_WIDTH)
+    expect(w.slice(3)).toEqual([0, 0, 0, 0])
+  })
+
+  it('clamps over-full bands to the track width and negative income to zero', () => {
+    const over = render(<BracketLadderChart result={withBand(0, { incomeInThisBracket: 12_400 * 2 })} title="Ladder" />)
+    expect(widths(over.container)[0]).toBe(VIEW_WIDTH)
+    cleanup()
+    const neg = render(<BracketLadderChart result={withBand(0, { incomeInThisBracket: -5 })} title="Ladder" />)
+    expect(widths(neg.container)[0]).toBe(0)
+  })
+
+  it('treats a zero-width band as empty and the open-ended top band as fully filled only when occupied', () => {
+    const { container } = render(<BracketLadderChart result={topBracket} title="Ladder" />)
+    const w = widths(container)
+    expect(w[w.length - 1]).toBe(VIEW_WIDTH)
+    cleanup()
+    // PreferentialHeavy's second preferential band is partly filled; its top band is unoccupied.
+    const pref = render(<BracketLadderChart result={preferentialHeavy} title="Ladder" showPreferential />)
+    const pw = widths(pref.container, 'preferential')
+    expect(pw[0]).toBe(VIEW_WIDTH)
+    expect(pw[1]).toBeCloseTo((344_450 / (551_600 - 55_550)) * VIEW_WIDTH, 6)
+    expect(pw[2]).toBe(0)
+    cleanup()
+    const zero = render(<BracketLadderChart result={middleIncome} title="Ladder" />)
+    expect(widths(zero.container).at(-1)).toBe(0)
+  })
+
+  it('renders a zero-width band as a zero-width fill rather than NaN', () => {
+    const { container } = render(<BracketLadderChart result={middleIncome} title="Ladder" showPreferential />)
+    const pref = middleIncome.preferentialBrackets[0]
+    expect(pref.upperBound - pref.lowerBound).toBe(0)
+    expect(fills(container, 'preferential')[0].getAttribute('width')).toBe('0')
+  })
+
+  it('keeps unoccupied bands at full track height with zero-width fill', () => {
+    const { container } = render(<BracketLadderChart result={middleIncome} title="Ladder" />)
+    const tracks = Array.from(container.querySelectorAll('[data-role="band-track"]'))
+    const f = fills(container)
+    const trackHeights = tracks.map((t) => t.getAttribute('height'))
+    expect(new Set(trackHeights).size).toBe(1)
+    expect(Number(trackHeights[0])).toBeGreaterThan(0)
+    expect(tracks.every((t) => t.getAttribute('width') === String(VIEW_WIDTH))).toBe(true)
+    expect(f[5].getAttribute('width')).toBe('0')
+    expect(f[5].getAttribute('height')).toBe(trackHeights[0])
+  })
+
+  it('puts the marker on the marginal band, not band 0, at the fill edge', () => {
+    const { container } = render(<BracketLadderChart result={middleIncome} title="Ladder" />)
+    const groups = Array.from(container.querySelectorAll('[data-stack="ordinary"] svg > g'))
+    const markerIdx = groups.map((g) => g.querySelector('[data-role="marginal-marker"]') !== null)
+    expect(markerIdx).toEqual([false, false, true, false, false, false, false])
+    const line = container.querySelector('[data-role="marginal-marker"]')!
+    expect(Number(line.getAttribute('x1'))).toBeCloseTo(widths(container)[2], 6)
+    expect(line.getAttribute('x2')).toBe(line.getAttribute('x1'))
+    expect(groups[2].querySelector('[data-role="marker-label"]')?.textContent).toBe('Marginal bracket')
+    expect(groups[0].querySelector('[data-role="band-income-label"]')?.textContent).toBe(
+      `${formatCurrency(12_400)} taxed here`,
+    )
+  })
+
+  it('nudges an empty marginal band\'s marker off the left edge', () => {
+    const { container } = render(<BracketLadderChart result={preferentialHeavy} title="Ladder" />)
+    const line = container.querySelector('[data-stack="ordinary"] [data-role="marginal-marker"]')!
+    expect(widths(container)[0]).toBe(0)
+    expect(line.getAttribute('x1')).toBe('1.5')
+  })
+
+  it('colours ordinary fills and legend swatch with primary, preferential with success', () => {
+    const { container } = render(<BracketLadderChart result={preferentialHeavy} title="Ladder" showPreferential />)
+    expect(fills(container).every((f) => f.getAttribute('fill') === 'var(--color-primary)')).toBe(true)
+    expect(fills(container, 'preferential').every((f) => f.getAttribute('fill') === 'var(--color-success)')).toBe(true)
+    const swatchOf = (text: RegExp) => screen.getByText(text).querySelector('span')!.style.background
+    expect(swatchOf(/Ordinary income taxed/)).toBe('var(--color-primary)')
+    expect(swatchOf(/Preferential \(capital gains\) income taxed/)).toBe('var(--color-success)')
+  })
+
+  it('hides the svg from assistive tech, shows the title, and names each table by its visible heading', () => {
+    const { container } = render(<BracketLadderChart result={preferentialHeavy} title="My title" showPreferential />)
+    for (const svg of Array.from(container.querySelectorAll('svg'))) expect(svg.getAttribute('aria-hidden')).toBe('true')
+    expect(screen.getByText('My title')).toBeVisible()
+    const tables = screen.getAllByRole('table')
+    expect(tables).toHaveLength(2)
+    const names = tables.map((t) => document.getElementById(t.getAttribute('aria-labelledby')!)?.textContent)
+    expect(names).toEqual(['Ordinary income ladder', 'Preferential (capital gains) ladder'])
+    expect(screen.getByRole('table', { name: 'Ordinary income ladder' })).toBe(tables[0])
+  })
+
+  it('renders table headers and per-band cell contents from the engine result', () => {
+    render(<BracketLadderChart result={middleIncome} title="Ladder" />)
+    const table = screen.getByRole('table', { name: 'Ordinary income ladder' })
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'Rate',
+      'Range',
+      'Income in band',
+      'Tax from band',
+    ])
+    const rows = Array.from(table.querySelectorAll('tbody tr'))
+    expect(rows).toHaveLength(middleIncome.ordinaryBrackets.length)
+    const cells = (r: Element) => Array.from(r.querySelectorAll('td')).map((td) => td.textContent)
+    expect(cells(rows[2])).toEqual([
+      formatPercent(22),
+      `${formatCurrency(50_400)} – ${formatCurrency(105_700)}`,
+      formatCurrency(53_500),
+      formatCurrency(11_770),
+    ])
+    expect(cells(rows[6])[1]).toBe(`${formatCurrency(640_600)} and up`)
+  })
+
+  it('shows the effective marginal rate distinct from the statutory rate when they differ', () => {
+    render(<BracketLadderChart result={seniorPhaseOut} title="Ladder" />)
+    expect(seniorPhaseOut.ordinaryBracketRate).not.toBeCloseTo(seniorPhaseOut.effectiveMarginalRate, 3)
+    const annotation = screen.getByText(/Marginal statutory rate/)
+    const [statutory, effective] = Array.from(annotation.querySelectorAll('strong')).map((e) => e.textContent)
+    expect(statutory).toBe(formatPercent(seniorPhaseOut.ordinaryBracketRate * 100))
+    expect(effective).toBe(formatPercent(seniorPhaseOut.effectiveMarginalRate * 100))
+    expect(statutory).not.toBe(effective)
+  })
+
   it('never imports engine/tax/tables (ERD §8.4) — asserted against this component\'s own source file', () => {
     const dir = dirname(fileURLToPath(import.meta.url))
     const source = readFileSync(join(dir, 'BracketLadderChart.tsx'), 'utf8')
-    expect(source).not.toMatch(/from ['"].*tables['"]/)
+    expect(source).not.toMatch(/tables/)
     expect(source).not.toMatch(/TAX_TABLES/)
   })
 })

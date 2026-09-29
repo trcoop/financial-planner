@@ -178,3 +178,14 @@ table {
   outline: none;
   box-shadow: var(--focus-ring);
 }
+
+/* Chart-scale tokens (BracketLadderChart). SVG text is sized in viewBox units, so this is
+ * deliberately separate from the rem-based --font-size-* scale. */
+:root {
+  --chart-label-font-size: 8px;
+  --chart-stroke-thin: 1px;
+  --chart-stroke-thick: 2px;
+  --chart-marker-dash: 4 2;
+  --chart-swatch-size: 12px;
+  --chart-swatch-marker-height: 14px;
+}
