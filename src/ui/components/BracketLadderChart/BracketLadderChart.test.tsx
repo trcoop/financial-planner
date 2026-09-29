@@ -254,4 +254,22 @@ describe('BracketLadderChart', () => {
     expect(tok('--chart-plot-max-width')).toBe('360px')
     expect(tok('--chart-label-font-size')).toBe('12px')
   })
+
+  it('lays the plot and table side by side from 960px and stacks below', () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'BracketLadderChart.module.css'), 'utf8')
+    const media = css.match(/@media \(min-width: 960px\)\s*\{([\s\S]*?)\n\}/)![1]
+    expect(media).toMatch(/\.stack\s*\{[^}]*display:\s*grid/)
+    expect(media).toMatch(/grid-template-columns:\s*var\(--chart-plot-max-width\)\s+minmax\(0,\s*1fr\)/)
+    expect(media).toMatch(/column-gap:\s*var\(--space-5\)/)
+    expect(media).toMatch(/\.stackTitle\s*\{[^}]*grid-column:\s*1 \/ -1/)
+    // Outside the media query the stack stays a single flex column.
+    expect(css.replace(media, '')).toMatch(/\.stack\s*\{[^}]*flex-direction:\s*column/)
+  })
+
+  it('leaves clear space between each band label baseline and the band below', () => {
+    const { container } = render(<BracketLadderChart result={middleIncome} title="Ladder" />)
+    const label = container.querySelector('[data-role="band-label"]')!
+    const track = container.querySelector('[data-role="band-track"]')!
+    expect(Number(track.getAttribute('y')) - Number(label.getAttribute('y'))).toBe(6)
+  })
 })

@@ -26,7 +26,10 @@ const BAND_GAP = 6
  * rate/bound labels" belong on the chart itself, not only in the table below it) — labels sit in
  * this strip rather than on top of the band rects so they stay legible against the card
  * background regardless of whether the band underneath is filled, empty, or mid-fraction. */
-const LABEL_HEIGHT = 14
+const LABEL_HEIGHT = 18
+/** Clear space between a label's baseline and the top of the band beneath it, so the text never
+ * sits flush on the bar. */
+const LABEL_GAP = 6
 /** Series fills, shared by the SVG bands and the legend swatches so the key can never drift from
  * the chart it explains. */
 const ORDINARY_FILL = 'var(--color-primary)'
@@ -85,7 +88,7 @@ function LadderStack({ bands, markerRate, fillColor, stackLabel, heading }: Ladd
       >
         {bands.map((band, index) => {
           const rowTop = index * ROW_HEIGHT
-          const labelY = rowTop + LABEL_HEIGHT - 3
+          const labelY = rowTop + LABEL_HEIGHT - LABEL_GAP
           const y = rowTop + LABEL_HEIGHT
           const fraction = fillFraction(band)
           const isMarkerBand = markerRate !== undefined && band.rate === markerRate
