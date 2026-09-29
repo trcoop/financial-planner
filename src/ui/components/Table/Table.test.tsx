@@ -60,4 +60,23 @@ describe('Table', () => {
       'data-highlighted',
     )
   })
+
+  it('renders aria-labelledby only when labelledBy is given', () => {
+    const body = (
+      <tbody>
+        <TableRow>
+          <td>Row content</td>
+        </TableRow>
+      </tbody>
+    )
+    const { rerender } = render(
+      <>
+        <h3 id="heading">Named by heading</h3>
+        <Table labelledBy="heading">{body}</Table>
+      </>,
+    )
+    expect(screen.getByRole('table', { name: 'Named by heading' })).toHaveAttribute('aria-labelledby', 'heading')
+    rerender(<Table>{body}</Table>)
+    expect(screen.getByRole('table')).not.toHaveAttribute('aria-labelledby')
+  })
 })
