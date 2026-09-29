@@ -172,13 +172,13 @@ describe('BracketLadderChart', () => {
     expect(line.getAttribute('x1')).toBe('1.5')
   })
 
-  it('colours ordinary fills and legend swatch with primary, preferential with success', () => {
+  it('colours ordinary fills and legend swatch with primary, preferential with the chart series token', () => {
     const { container } = render(<BracketLadderChart result={preferentialHeavy} title="Ladder" showPreferential />)
     expect(fills(container).every((f) => f.getAttribute('fill') === 'var(--color-primary)')).toBe(true)
-    expect(fills(container, 'preferential').every((f) => f.getAttribute('fill') === 'var(--color-success)')).toBe(true)
+    expect(fills(container, 'preferential').every((f) => f.getAttribute('fill') === 'var(--chart-series-preferential)')).toBe(true)
     const swatchOf = (text: RegExp) => screen.getByText(text).querySelector('span')!.style.background
     expect(swatchOf(/Ordinary income taxed/)).toBe('var(--color-primary)')
-    expect(swatchOf(/Preferential \(capital gains\) income taxed/)).toBe('var(--color-success)')
+    expect(swatchOf(/Preferential \(capital gains\) income taxed/)).toBe('var(--chart-series-preferential)')
   })
 
   it('hides the svg from assistive tech, shows the title, and names each table by its visible heading', () => {
@@ -228,5 +228,30 @@ describe('BracketLadderChart', () => {
     const source = readFileSync(join(dir, 'BracketLadderChart.tsx'), 'utf8')
     expect(source).not.toMatch(/tables/)
     expect(source).not.toMatch(/TAX_TABLES/)
+  })
+
+  it('styles the marker neutral, tracks, swatches, gap, title and label scale with shared tokens', () => {
+    const css = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'BracketLadderChart.module.css'), 'utf8')
+    const rule = (sel: string) => css.match(new RegExp(`${sel.replace(/[.[\]']/g, '\\$&')}\\s*\\{([^}]*)\\}`))![1]
+    expect(css).not.toContain('--color-warning')
+    expect(css).not.toContain('--color-success')
+    expect(rule('.marker')).toMatch(/stroke:\s*var\(--color-text\)/)
+    expect(rule('.markerLabel')).toMatch(/fill:\s*var\(--color-text\)/)
+    expect(rule(".swatch[data-variant='marker']")).toMatch(/var\(--color-text\)/)
+    expect(rule('.track')).toMatch(/fill:\s*var\(--color-border-subtle\)/)
+    expect(rule('.swatch')).toMatch(/width:\s*var\(--chart-swatch-size\)/)
+    expect(rule('.figure')).toMatch(/gap:\s*var\(--space-4\)/)
+    expect(rule('.title')).toMatch(/align-self:\s*flex-start/)
+    expect(rule('.plot')).toMatch(/max-width:\s*var\(--chart-plot-max-width\)/)
+  })
+
+  it('defines the preferential series token distinct from success, and a plot cap that keeps labels near 1:1', () => {
+    const theme = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../theme.css'), 'utf8')
+    const tok = (n: string) => theme.match(new RegExp(`${n}:\\s*([^;]+);`))![1].trim()
+    expect(tok('--chart-series-preferential')).toBe('#7c3aed')
+    expect(tok('--chart-series-preferential')).not.toBe(tok('--color-success'))
+    // viewBox is 300 wide: the cap bounds the scale, so 12px labels render at most ~14.4px.
+    expect(tok('--chart-plot-max-width')).toBe('360px')
+    expect(tok('--chart-label-font-size')).toBe('12px')
   })
 })

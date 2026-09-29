@@ -19,6 +19,7 @@
 
 .title {
   margin: 0;
+  align-self: flex-start;
   font-size: var(--font-size-lg);
   font-weight: 600;
   color: var(--color-text);
@@ -67,7 +68,7 @@
 .swatch[data-variant='marker'] {
   background: transparent;
   border: 0;
-  border-left: var(--chart-stroke-thick) dashed var(--color-warning);
+  border-left: var(--chart-stroke-thick) dashed var(--color-text);
   width: 0;
   height: var(--chart-swatch-marker-height);
 }
@@ -87,6 +88,7 @@
 
 .plot {
   width: 100%;
+  max-width: var(--chart-plot-max-width);
   height: auto;
   display: block;
 }
@@ -104,7 +106,7 @@
 }
 
 .marker {
-  stroke: var(--color-warning);
+  stroke: var(--color-text);
   stroke-width: var(--chart-stroke-thick);
   stroke-dasharray: var(--chart-marker-dash);
 }
@@ -125,6 +127,6 @@
 
 .markerLabel {
   font-size: var(--chart-label-font-size);
-  fill: var(--color-warning);
+  fill: var(--color-text);
   font-weight: 600;
 }

@@ -30,7 +30,7 @@ const LABEL_HEIGHT = 14
 /** Series fills, shared by the SVG bands and the legend swatches so the key can never drift from
  * the chart it explains. */
 const ORDINARY_FILL = 'var(--color-primary)'
-const PREFERENTIAL_FILL = 'var(--color-success)'
+const PREFERENTIAL_FILL = 'var(--chart-series-preferential)'
 /** Minimum x of the marginal marker, so a zero-fill marginal band's line is not drawn on the
  * track's own left border. */
 const MARKER_MIN_X = 1.5
