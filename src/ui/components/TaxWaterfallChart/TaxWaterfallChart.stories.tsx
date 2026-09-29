@@ -8,7 +8,7 @@ export default {
 
 // Every story is driven by real `computeFederalTax` output over the shared §8.5 fixtures
 // (`STORY_FIXTURES`, authored by WP-F) — never a hand-written fixture — so a story proves
-// something about the engine, not just about the chart. All six pin `year: 2026`, a published
+// something about the engine, not just about the chart. All seven pin `year: 2026`, a published
 // actuals year, so the output (and therefore each Playwright baseline) is deterministic.
 
 export const ZeroTax: Story = () => (
@@ -38,5 +38,12 @@ export const SeniorBonusPhaseOut: Story = () => (
   <TaxWaterfallChart
     result={computeFederalTax(STORY_FIXTURES.SeniorBonusPhaseOut)}
     title="Senior bonus phase-out — mid phase-out"
+  />
+)
+
+export const SeniorBonusPhaseOutMFJ: Story = () => (
+  <TaxWaterfallChart
+    result={computeFederalTax(STORY_FIXTURES.SeniorBonusPhaseOutMFJ)}
+    title="Senior bonus phase-out — married filing jointly"
   />
 )
