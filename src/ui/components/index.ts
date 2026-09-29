@@ -62,3 +62,7 @@ export {
   DEFAULT_RETIREMENT_SPENDING_VALUES,
   retirementSpendingGoalAnnualAmount,
 } from './RetirementSpendingTab/RetirementSpendingGoal'
+export { TaxWaterfallChart } from './TaxWaterfallChart/TaxWaterfallChart'
+export type { TaxWaterfallChartProps } from './TaxWaterfallChart/TaxWaterfallChart'
+export { BracketLadderChart } from './BracketLadderChart/BracketLadderChart'
+export type { BracketLadderChartProps } from './BracketLadderChart/BracketLadderChart'
