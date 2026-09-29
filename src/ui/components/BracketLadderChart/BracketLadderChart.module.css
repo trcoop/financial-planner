@@ -1,0 +1,130 @@
+.card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.figure {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Marginal statutory rate + effective marginal rate annotation (ERD §8.3) — plain text, always
+ * visible alongside the marker, never conveyed only by the marker's position on the chart. */
+.annotation {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+/* Legend explaining what fill/track/marker mean in plain text — nothing here is conveyed by
+ * color alone, this is the human-readable key for it (see the component's inline comment). */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.swatch {
+  display: inline-block;
+  width: var(--chart-swatch-size);
+  height: var(--chart-swatch-size);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.swatch[data-variant='track'] {
+  background: var(--color-border-subtle);
+  border: var(--chart-stroke-thin) solid var(--color-border);
+}
+
+.swatch[data-variant='marker'] {
+  background: transparent;
+  border: 0;
+  border-left: var(--chart-stroke-thick) dashed var(--color-warning);
+  width: 0;
+  height: var(--chart-swatch-marker-height);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stackTitle {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.plot {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* The full-height, zero-fill track every band renders regardless of occupancy — this is the
+ * "unoccupied bands are still visible" requirement (ERD §8.3). Its color must resolve to a
+ * visible, non-transparent surface: if this token silently failed to resolve, an unoccupied band
+ * would be indistinguishable from one whose fill color simply failed too (ERD §8.6), so this is
+ * checked by hand against theme.css, not just by a green stylelint run.
+ */
+.track {
+  fill: var(--color-border-subtle);
+  stroke: var(--color-border);
+  stroke-width: var(--chart-stroke-thin);
+}
+
+.marker {
+  stroke: var(--color-warning);
+  stroke-width: var(--chart-stroke-thick);
+  stroke-dasharray: var(--chart-marker-dash);
+}
+
+/* Per-band rate/range label, drawn in the strip above each band (ERD §8.3) — always on the plain
+ * card background, never over the fill/track rects, so it stays legible regardless of what color
+ * (or non-color) the band underneath renders. */
+.bandLabel {
+  font-size: var(--chart-label-font-size);
+  fill: var(--color-text);
+  font-weight: 600;
+}
+
+.bandIncomeLabel {
+  font-size: var(--chart-label-font-size);
+  fill: var(--color-text-muted);
+}
+
+.markerLabel {
+  font-size: var(--chart-label-font-size);
+  fill: var(--color-warning);
+  font-weight: 600;
+}
