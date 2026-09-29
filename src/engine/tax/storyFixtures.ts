@@ -20,14 +20,16 @@ export const STORY_INDEXING: IndexingRates = {
   averageWageIndex: 0.036,
 };
 
-/** The six named scenarios §8.5 requires both chart components to render. */
+/** The named scenarios §8.5 requires both chart components to render: the six original ones plus
+ * `SeniorBonusPhaseOutMFJ` (FIN-157), which is the MFJ two-person case §8.5 scenario 6 describes. */
 export type StoryScenarioName =
   | 'ZeroTax'
   | 'MiddleIncome'
   | 'TopBracket'
   | 'PreferentialHeavy'
   | 'Age65Single'
-  | 'SeniorBonusPhaseOut';
+  | 'SeniorBonusPhaseOut'
+  | 'SeniorBonusPhaseOutMFJ';
 
 /**
  * One `FederalTaxInput` literal per named scenario. Each is asserted, in
@@ -83,16 +85,33 @@ export const STORY_FIXTURES: Readonly<Record<StoryScenarioName, FederalTaxInput>
     people: [{ age: 65, earnedIncome: 60_000 }],
     indexing: STORY_INDEXING,
   },
-  /** A single age-65 filer with MAGI inside the OBBBA senior-bonus phase-out band
-   * ($75,000-$175,000 unmarried): proves `0 < deduction.seniorBonusDeduction < 12_000` (the
-   * per-qualifying-person cap for a single filer is $6,000, so a partial phase-out is strictly
-   * below that, and strictly below the $12,000 MFJ two-person cap named in the ERD table). */
+  /** Single-filer senior-bonus phase-out. Role: the single-person half of ERD §8.5 scenario 6 (the
+   * MFJ two-person half is `SeniorBonusPhaseOutMFJ`). A single age-65 filer with MAGI inside the
+   * OBBBA senior-bonus phase-out band ($75,000-$175,000 unmarried): proves
+   * `0 < deduction.seniorBonusDeduction < 12_000` (the per-qualifying-person cap is $6,000, so a
+   * partial phase-out is strictly below that, and strictly below the $12,000 MFJ two-person cap). */
   SeniorBonusPhaseOut: {
     year: 2026,
     filingStatus: 'single',
     ordinaryIncome: 100_000,
     preferentialIncome: 0,
     people: [{ age: 65, earnedIncome: 100_000 }],
+    indexing: STORY_INDEXING,
+  },
+  /** ERD §8.5 scenario 6 as specified: MFJ, both spouses 65+, joint MAGI $170,000, inside the
+   * OBBBA senior-bonus phase-out band ($150,000-$250,000 joint). Role: the two-person half —
+   * per person $6,000 - 6% x $20,000 = $4,800, x 2 = $9,600. Proves
+   * `6_000 < deduction.seniorBonusDeduction < 12_000`: partially phased out yet more than any
+   * single qualifying person could receive, so both people are counted. */
+  SeniorBonusPhaseOutMFJ: {
+    year: 2026,
+    filingStatus: 'mfj',
+    ordinaryIncome: 170_000,
+    preferentialIncome: 0,
+    people: [
+      { age: 66, earnedIncome: 100_000 },
+      { age: 65, earnedIncome: 70_000 },
+    ],
     indexing: STORY_INDEXING,
   },
 };

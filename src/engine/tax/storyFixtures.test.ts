@@ -9,10 +9,11 @@ const EXPECTED_SCENARIO_NAMES: StoryScenarioName[] = [
   'PreferentialHeavy',
   'Age65Single',
   'SeniorBonusPhaseOut',
+  'SeniorBonusPhaseOutMFJ',
 ];
 
 describe('STORY_FIXTURES', () => {
-  it('has exactly the six StoryScenarioName members as keys', () => {
+  it('has exactly the seven StoryScenarioName members as keys', () => {
     expect(Object.keys(STORY_FIXTURES).sort()).toEqual([...EXPECTED_SCENARIO_NAMES].sort());
   });
 
@@ -53,5 +54,16 @@ describe('STORY_FIXTURES', () => {
     const result = computeFederalTax(STORY_FIXTURES.SeniorBonusPhaseOut);
     expect(result.deduction.seniorBonusDeduction).toBeGreaterThan(0);
     expect(result.deduction.seniorBonusDeduction).toBeLessThan(12_000);
+  });
+
+  it('SeniorBonusPhaseOutMFJ: 0 < seniorBonusDeduction < 12_000 and reflects two qualifying people', () => {
+    const fixture = STORY_FIXTURES.SeniorBonusPhaseOutMFJ;
+    expect(fixture.filingStatus).toBe('mfj');
+    expect(fixture.people).toHaveLength(2);
+    const result = computeFederalTax(fixture);
+    expect(result.deduction.seniorBonusDeduction).toBeGreaterThan(0);
+    expect(result.deduction.seniorBonusDeduction).toBeLessThan(12_000);
+    // Two people: strictly more than the single-person cap ($6,000) could ever yield.
+    expect(result.deduction.seniorBonusDeduction).toBeGreaterThan(6_000);
   });
 });
