@@ -77,6 +77,11 @@
      reads as "this app's blue, lightly", not a generic UI-kit grey. */
   --color-primary-subtle: color-mix(in oklch, var(--color-primary) 14%, var(--color-bg));
   --color-success: #15803d;
+  /* A lighter tint of --color-success, same derivation pattern as --color-primary-subtle — used
+   * to tell apart two "this reduces what you owe" segments (e.g. TaxWaterfallChart's senior bonus
+   * deduction vs. standard deduction, or tax credits) that share the same green semantic but must
+   * stay visually distinguishable from one another. */
+  --color-success-subtle: color-mix(in oklch, var(--color-success) 45%, var(--color-bg));
   --color-warning: #b45309;
   --color-error: #b91c1c;
   --color-highlight: #fef3c7;
