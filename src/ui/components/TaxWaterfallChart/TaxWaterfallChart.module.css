@@ -33,13 +33,12 @@
 
 .plot {
   width: 100%;
-  max-width: 480px;
   height: auto;
   display: block;
 }
 
 .rowLabel {
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-family: var(--font-family-body);
   fill: var(--color-text-muted);
 }
@@ -109,8 +108,8 @@
 
 .swatch {
   display: inline-block;
-  width: 10px;
-  height: 10px;
+  width: var(--space-3);
+  height: var(--space-3);
   border-radius: var(--radius-sm);
   margin-right: var(--space-2);
   vertical-align: middle;

@@ -68,8 +68,8 @@ export interface DrawnSegment {
 
 /** Lays out a group of segments left-to-right as proportional widths of `totalWidth`, scaled
  * against `scaleMax` (the bar's nominal total, e.g. gross income). Each segment's pixel width is
- * independently clamped via `toPixelHeight` (the same scale-and-clamp primitive used for the
- * vertical FICA bar) so a degenerate case — e.g. deductions exceeding gross income — still draws
+ * independently clamped via `toPixelWidth` (the same scale-and-clamp primitive used for the
+ * FICA bar) so a degenerate case — e.g. deductions exceeding gross income — still draws
  * valid, non-overflowing rects rather than negative or over-wide ones; the segments simply won't
  * sum to the full bar width in that case, which is itself an honest signal that deductions
  * consumed all (or more than) the income. */
@@ -81,15 +81,15 @@ export function layoutSegments(
   let x = 0
   const bars: DrawnSegment[] = []
   for (const segment of segments) {
-    const width = toPixelHeight(segment.value, scaleMax, totalWidth)
+    const width = toPixelWidth(segment.value, scaleMax, totalWidth)
     bars.push({ segment, x, width })
     x += width
   }
   return bars
 }
 
-/** Converts a dollar value on `[0, scaleMax]` into a pixel extent within `bandExtent` (used for
- * both bar widths and the FICA bar's height), clamping negative or over-scale values so a
+/** Converts a dollar value on `[0, scaleMax]` into a pixel width within `bandExtent` (used for
+ * every bar width, including the FICA bar), clamping negative or over-scale values so a
  * degenerate case still draws a valid (if flat/full) shape rather than one with a negative size or
  * one that overflows its band.
  *
@@ -97,7 +97,7 @@ export function layoutSegments(
  * dollar figure the engine returns is non-negative by contract — but a deduction segment CAN
  * legitimately exceed its bar's `scaleMax` (gross income) when deductions exceed income, which is
  * why the clamp is load-bearing here, not just defense-in-depth, and is unit-tested directly. */
-export function toPixelHeight(dollars: number, scaleMax: number, bandExtent: number): number {
+export function toPixelWidth(dollars: number, scaleMax: number, bandExtent: number): number {
   if (scaleMax <= 0) return 0
   const clamped = Math.max(0, Math.min(dollars, scaleMax))
   return (clamped / scaleMax) * bandExtent

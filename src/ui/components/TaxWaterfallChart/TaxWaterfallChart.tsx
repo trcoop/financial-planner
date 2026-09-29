@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import type { FederalTaxResult } from '../../../engine'
 import { Card } from '../Card/Card'
 import { StatTile } from '../StatTile/StatTile'
@@ -6,7 +7,7 @@ import {
   buildIncomeSegments,
   buildTaxSegments,
   layoutSegments,
-  toPixelHeight,
+  toPixelWidth,
   type DrawnSegment,
   type SegmentRole,
 } from './waterfallLayout'
@@ -22,21 +23,11 @@ export interface TaxWaterfallChartProps {
 }
 
 /**
- * Originally built as a floating waterfall/bridge chart (bars resting on a zero baseline,
- * connected by dashed lines between running totals). That shape was reverse-engineered from a
- * competitor's minified bundle (a `federalTaxBreakdown` array name), never from their actual
- * rendered UI, and a real (non-technical) user reviewing it in Ladle could not tell what it showed
- * — different-colored bars with no shared meaning, a red "decrease" bar that read as an error, and
- * no combined total-tax-liability figure anywhere despite tax-owed and FICA both being present.
- *
- * This redesign drops the bridge/connector geometry for two simple "parts of a whole" bars — the
- * shape a lay reader already knows from a battery-level or storage-usage indicator: a single
- * horizontal strip whose colored sections sum to a labeled total. Each strip's segments map
- * 1-for-1 onto a row in the table below (the part the project owner said was "the useful part"),
- * so the picture explains the table instead of requiring the table to explain the picture.
- *
- * Fixed viewBox coordinate space, matching the approach `DonutChart`/`PercentileLineChart` use:
- * plot in a stable coordinate space and let the `viewBox` scale it to the rendered size.
+ * Two horizontal "parts of a whole" bars (income split into deductions + taxable income; tax
+ * before credits split into credits + tax owed) plus a separate FICA bar, each segment mapping
+ * 1-for-1 onto a legend row below. Chosen over a floating bridge waterfall because non-technical
+ * readers could not tell what the bridge showed. FICA is never chained into the income-tax bars.
+ * Plots in a fixed viewBox coordinate space and lets the viewBox scale it, like `DonutChart`.
  */
 const VIEW_WIDTH = 480
 const BAR_HEIGHT = 40
@@ -51,6 +42,7 @@ const roleClass: Record<SegmentRole, string> = {
 }
 
 export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
+  const captionId = useId()
   const grossIncome = result.grossOrdinaryIncome + result.grossPreferentialIncome
   const totalTaxLiability = result.taxOwed + result.fica.total
 
@@ -59,13 +51,13 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
 
   // Each segment is clamped against its own bar's nominal total (gross income / tax before
   // credits) — a degenerate case (deductions exceeding income) can make a `reduction` segment
-  // exceed that total, which `toPixelHeight` clamps rather than overflowing the bar.
+  // exceed that total, which `toPixelWidth` clamps rather than overflowing the bar.
   const incomeScaleMax = Math.max(1, grossIncome)
   const taxScaleMax = Math.max(1, result.taxBeforeCredits)
 
   const incomeBars = layoutSegments(incomeSegments, incomeScaleMax, VIEW_WIDTH)
   const taxBars = layoutSegments(taxSegments, taxScaleMax, VIEW_WIDTH)
-  const ficaWidth = toPixelHeight(result.fica.total, Math.max(1, result.fica.total), VIEW_WIDTH)
+  const ficaWidth = toPixelWidth(result.fica.total, Math.max(1, result.fica.total), VIEW_WIDTH)
 
   const renderRow = (
     rowLabel: string,
@@ -118,8 +110,8 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
 
   return (
     <Card className={styles.card}>
-      <figure className={styles.figure} aria-label={title}>
-        <figcaption className={styles.title}>{title}</figcaption>
+      <figure className={styles.figure} aria-labelledby={captionId}>
+        <figcaption id={captionId} className={styles.title}>{title}</figcaption>
 
         <StatTile
           label="Total tax liability (federal income tax + FICA)"
