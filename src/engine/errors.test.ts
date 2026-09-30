@@ -40,3 +40,28 @@ describe('InvalidProjectionInputError', () => {
     expect(thrower).toThrow('withdrawalRateInRetirement must be 0-1');
   });
 });
+
+describe('SS_ error codes (FIN-160)', () => {
+  const SS_CODES = [
+    'SS_NEGATIVE_BENEFIT',
+    'SS_INVALID_BIRTH',
+    'SS_UNSUPPORTED_BIRTH_YEAR',
+    'SS_INVALID_AS_OF',
+    'SS_CLAIM_BEFORE_ELIGIBLE',
+    'SS_CLAIM_AFTER_70',
+    'SS_CLAIM_IN_PAST',
+    'SS_INVALID_ALREADY_COLLECTING',
+    'SS_INVALID_COLA',
+    'SS_INVALID_GROWTH_RATE',
+    'SS_INVALID_DEATH',
+    'SS_SPOUSAL_INPUT_ON_SINGLE',
+    'SS_INVALID_CLAIM_AXES',
+    'SS_INVALID_TOP_N',
+    'SS_NOT_IMPLEMENTED',
+  ] as const;
+
+  it.each(SS_CODES)('%s is a valid ProjectionErrorCode carried by the error class', (code) => {
+    const error = new InvalidProjectionInputError(code, 'x');
+    expect(error.code).toBe(code);
+  });
+});
