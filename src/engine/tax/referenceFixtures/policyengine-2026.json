@@ -5,6 +5,7 @@
     "policyengineCore": "3.32.10",
     "python": "3.14",
     "generated": "2026-09-29",
+    "addendum": "9 scenarios (15to20 at edge+10k/+50k per status; top-bracket +50k per status) added later with the same PolicyEngine versions; original 241 values unchanged",
     "taxYear": 2026,
     "runner": "run_py.py",
     "scenarios": "scenarios.json",
@@ -12,7 +13,7 @@
     "incomeTaxDefinition": "incomeTax = income_tax_before_credits - alternative_minimum_tax (PolicyEngine includes AMT in the before-credits figure; the engine does not model AMT).",
     "ficaDefinition": "ficaTotal = employee_social_security_tax + employee_medicare_tax + additional_medicare_tax.",
     "caveats": [
-      "AMT subtracted: 6 HOH preferential 15->20% scenarios trigger AMT in PolicyEngine",
+      "AMT subtracted: 6 HOH preferential 15->20% scenarios (ord12/ord24 edges) trigger AMT in PolicyEngine (verified: alternativeMinimumTax > 0 for exactly those 6 of 250)",
       "NIIT excluded (separate PolicyEngine variable net_investment_income_tax)",
       "PolicyEngine does not round tax to whole dollars; the engine does (sub-$1 deltas expected)",
       "No MFS scenarios; tax year 2026 only",
@@ -260,6 +261,15 @@
     "typical.mfj.wages_180k_30k_other_60k_LTCG": {"incomeTax":37540,"incomeTaxBeforeCredits":37540,"alternativeMinimumTax":0,"socialSecurity":11160,"medicare":2610,"additionalMedicare":0,"ficaTotal":13770},
     "typical.single._500k_LTCG_only": {"incomeTax":65167.5,"incomeTaxBeforeCredits":65167.5,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
     "typical.mfj._1M_LTCG_only": {"incomeTax":148040,"incomeTaxBeforeCredits":148040,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
-    "typical.single._30k_wages": {"incomeTax":1420,"incomeTaxBeforeCredits":1420,"alternativeMinimumTax":0,"socialSecurity":1860,"medicare":435,"additionalMedicare":0,"ficaTotal":2295}
+    "typical.single._30k_wages": {"incomeTax":1420,"incomeTaxBeforeCredits":1420,"alternativeMinimumTax":0,"socialSecurity":1860,"medicare":435,"additionalMedicare":0,"ficaTotal":2295},
+    "preferential.single.15to20.ord0.+10000": {"incomeTax":73492.5,"incomeTaxBeforeCredits":73492.5,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
+    "preferential.single.15to20.ord0.+50000": {"incomeTax":81187.5,"incomeTaxBeforeCredits":81187.5,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
+    "preferential.mfj.15to20.ord0.+10000": {"incomeTax":73890,"incomeTaxBeforeCredits":73890,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
+    "preferential.mfj.15to20.ord0.+50000": {"incomeTax":80780,"incomeTaxBeforeCredits":80780,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
+    "preferential.hoh.15to20.ord0.+10000": {"incomeTax":74887.5,"incomeTaxBeforeCredits":74887.5,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
+    "preferential.hoh.15to20.ord0.+50000": {"incomeTax":82180,"incomeTaxBeforeCredits":82180,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
+    "bracket_nonwage.single.top.+50000": {"incomeTax":211479.25,"incomeTaxBeforeCredits":211479.25,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
+    "bracket_nonwage.mfj.top.+50000": {"incomeTax":225083.5,"incomeTaxBeforeCredits":225083.5,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0},
+    "bracket_nonwage.hoh.top.+50000": {"incomeTax":209671,"incomeTaxBeforeCredits":209671,"alternativeMinimumTax":0,"socialSecurity":0,"medicare":0,"additionalMedicare":0,"ficaTotal":0}
   }
 }

@@ -1,6 +1,6 @@
 /**
  * One-off scenario generator for the PolicyEngine reference fixture (FIN-159). NOT run in CI.
- * Usage: npx tsx src/engine/tax/referenceFixtures/generateScenarios.ts <out.json>
+ * Usage: npx --yes tsx src/engine/tax/referenceFixtures/generateScenarios.ts <out.json>
  * It derives bracket/ladder edges from tables.ts, so re-running it after a table change moves the
  * scenarios WITH the (possibly wrong) tables. The checked-in scenarios.json is FROZEN; regenerate
  * only for a new tax year, then re-run the reference (see README.md).
@@ -66,5 +66,16 @@ add('fica','single.0','single zero income','single',[{age:40,wages:0}],0,0);
 // typical
 for(const [fs,w,o,p,d] of [['single',60000,0,0,'$60k wages'],['single',100000,0,0,'$100k wages'],['single',250000,0,0,'$250k wages'],['single',1000000,0,0,'$1M wages'],['mfj',100000,0,0,'$100k wages one earner'],['mfj',250000,0,0,'$250k wages'],['mfj',1000000,0,0,'$1M wages'],['hoh',60000,0,0,'$60k wages'],['hoh',250000,0,0,'$250k wages'],['single',90000,20000,15000,'wages 90k + 20k interest + 15k LTCG'],['mfj',180000,30000,60000,'wages 180k + 30k other + 60k LTCG'],['single',0,0,500000,'$500k LTCG only'],['mfj',0,0,1000000,'$1M LTCG only'],['single',30000,0,0,'$30k wages']] as [FS,number,number,number,string][])
   add('typical',`${fs}.${d.replace(/[^a-z0-9]+/gi,'_')}`,`${fs} ${d}`,fs,two(fs,w),o,p);
+// Added after the first 241 (kept last so the original scenarios stay byte-identical):
+// preferential income well past the 15%->20% edge (the edge-only +-1 scenarios can't catch a threshold that is off by $100+),
+// and ordinary income well into the 35%/37% brackets.
+for(const fs of S){
+  const edge=pl(fs)[2].lowerBound;
+  for(const d of [10000,50000]) add('preferential',`${fs}.15to20.ord0.+${d}`,`${fs}, LTCG/QD only so total taxable = 15%->20% edge (${edge}) +${d}`,fs,two(fs,0),0,edge+d);
+}
+for(const fs of S){
+  const top=ord(fs)[ord(fs).length-1];
+  add('bracket_nonwage',`${fs}.top.+50000`,`${fs}, non-wage ordinary only age 40, taxable income = ${top.rate*100}% bracket start (${top.lowerBound}) +50000`,fs,two(fs,0),top.lowerBound+50000+std(fs),0);
+}
 writeFileSync(process.argv[2],JSON.stringify(out,null,1));
 console.log(out.length,JSON.stringify(cnt));

@@ -1,7 +1,7 @@
 /**
  * FIN-159: regression test against frozen PolicyEngine-US 2.18.0 reference values (tax year 2026).
  *
- * 241 scenarios (single/MFJ/HOH; bracket edges, LTCG/QD ladder edges, age-65 / senior bonus,
+ * 250 scenarios (single/MFJ/HOH; bracket edges, LTCG/QD ladder edges, age-65 / senior bonus,
  * FICA edges, typical cases) run through the real `computeFederalTax`. Both fixtures are static
  * and independent of tables.ts, so a bad table entry (e.g. FIN-158's stale age-65 addition) fails
  * here. See referenceFixtures/README.md for provenance, caveats, and regeneration.
@@ -34,7 +34,7 @@ const expected = referenceJson.expected as unknown as Record<string, Expected>;
 
 describe('computeFederalTax vs PolicyEngine-US 2.18.0 reference (2026)', () => {
   it('has a reference entry for every scenario and vice versa', () => {
-    expect(scenarios).toHaveLength(241);
+    expect(scenarios).toHaveLength(250);
     expect(new Set(scenarios.map((s) => s.id)).size).toBe(scenarios.length);
     expect(Object.keys(expected).sort()).toEqual(scenarios.map((s) => s.id).sort());
   });

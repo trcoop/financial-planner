@@ -1,12 +1,12 @@
 # Federal tax reference fixtures (FIN-159)
 
-Frozen regression data for `../federalTax.reference.test.ts`, which runs 241 scenarios through
+Frozen regression data for `../federalTax.reference.test.ts`, which runs 250 scenarios through
 `computeFederalTax` and compares against PolicyEngine-US. Purpose: a bad table entry in
 `tables.ts` (e.g. FIN-158's stale age-65 addition) must fail a test the next time tables change.
 
 ## Files
 
-- `scenarios.json` - 241 scenarios: `id`, `category`, `description`, `neutral` (tool-agnostic
+- `scenarios.json` - 250 scenarios: `id`, `category`, `description`, `neutral` (tool-agnostic
   input) and `engineInput` (a `FederalTaxInput`). Categories: `bracket_wage`, `bracket_nonwage`,
   `preferential`, `age65`, `fica`, `typical`. Filing statuses: single, MFJ, HOH. **Static data,
   never regenerated from `tables.ts` at test time.**
@@ -33,7 +33,7 @@ deltas up to $0.50 are expected.
 
 ## Caveats
 
-- AMT is subtracted from PolicyEngine's before-credits figure (6 HOH preferential 15%->20%
+- AMT is subtracted from PolicyEngine's before-credits figure (6 HOH preferential 15%->20% (ord12/ord24 edges)
   scenarios trigger AMT there). The engine does not model AMT.
 - NIIT is excluded (separate PolicyEngine variable `net_investment_income_tax`).
 - The engine uses the IRS rate schedule, not the IRS Tax Table (which differs by up to ~$6 under
@@ -48,7 +48,7 @@ deltas up to $0.50 are expected.
 1. Add the new year's tables to `tables.ts` and verify them against the IRS Rev. Proc. first.
 2. Generate scenarios (frozen once checked in; `generateScenarios.ts` reads bracket edges from
    `tables.ts`, so review the output against the published tables, do not trust it blindly):
-   `npx tsx src/engine/tax/referenceFixtures/generateScenarios.ts <dir>/scenarios.json`
+   `npx --yes tsx src/engine/tax/referenceFixtures/generateScenarios.ts <dir>/scenarios.json`  (tsx is not a repo dependency; npx fetches it)
    (update the `2026` year literals in the script first).
 3. Set up Python outside the repo:
    `python3 -m venv venv && venv/bin/pip install policyengine-us==<pinned version>`
