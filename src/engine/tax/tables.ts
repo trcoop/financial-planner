@@ -133,13 +133,13 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
         ]),
       },
       policy: { kind: 'chained-cpi-u', baseYear: 2017, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.03 Table 1 (unmarried individuals)',
+      source: 'Rev. Proc. 2025-32 §4.03 (unmarried individuals)',
       confidence: 'confirmed',
     },
     standardDeductionBase: {
       published: { 2026: 16_100 },
       policy: { kind: 'chained-cpi-u', baseYear: 2016, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.02; IRC §63(c)(4)',
+      source: 'Rev. Proc. 2025-32 §4.14(1); IRC §63(c)(4)',
       confidence: 'confirmed',
     },
     ageAdditionPerQualifyingPerson: {
@@ -182,13 +182,13 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
         ]),
       },
       policy: { kind: 'chained-cpi-u', baseYear: 2017, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.03 Table 1 (married filing jointly / surviving spouses)',
+      source: 'Rev. Proc. 2025-32 §4.03 (married filing jointly / surviving spouses)',
       confidence: 'confirmed',
     },
     standardDeductionBase: {
       published: { 2026: 32_200 },
       policy: { kind: 'chained-cpi-u', baseYear: 2016, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.02; IRC §63(c)(4)',
+      source: 'Rev. Proc. 2025-32 §4.14(1); IRC §63(c)(4)',
       confidence: 'confirmed',
     },
     ageAdditionPerQualifyingPerson: {
@@ -246,7 +246,7 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
       // MFS standard deduction is a documented statutory carve-out to $50, not the general
       // MFS-truncates-to-$25 rule (§1(f)(7) generally; §1(f)(7)(B) here).
       policy: { kind: 'chained-cpi-u', baseYear: 2016, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.02; IRC §1(f)(7)(B)',
+      source: 'Rev. Proc. 2025-32 §4.14(1); IRC §1(f)(7)(B)',
       confidence: 'confirmed',
     },
     ageAdditionPerQualifyingPerson: {
@@ -290,13 +290,13 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
         ]),
       },
       policy: { kind: 'chained-cpi-u', baseYear: 2017, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.03 Table 2 (heads of households)',
+      source: 'Rev. Proc. 2025-32 §4.03 (heads of households)',
       confidence: 'confirmed',
     },
     standardDeductionBase: {
       published: { 2026: 24_150 },
       policy: { kind: 'chained-cpi-u', baseYear: 2016, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.02; IRC §63(c)(4)',
+      source: 'Rev. Proc. 2025-32 §4.14(1); IRC §63(c)(4)',
       confidence: 'confirmed',
     },
     ageAdditionPerQualifyingPerson: {
