@@ -277,4 +277,26 @@ describe('validateFederalTaxInput', () => {
       }
     });
   });
+
+  describe('Social Security inputs (FIN-161)', () => {
+    it.each([-1, NaN, Infinity, -Infinity])('rejects socialSecurityBenefits %s', (bad) => {
+      expect(() =>
+        validateFederalTaxInput(makeInput({ people: [{ age: 67, earnedIncome: 0, socialSecurityBenefits: bad }] })),
+      ).toThrowError(expect.objectContaining({ code: 'TAX_INVALID_SOCIAL_SECURITY_BENEFITS' }));
+    });
+
+    it.each([-1, NaN, Infinity])('rejects taxExemptInterest %s', (bad) => {
+      expect(() => validateFederalTaxInput(makeInput({ taxExemptInterest: bad }))).toThrowError(
+        expect.objectContaining({ code: 'TAX_INVALID_TAX_EXEMPT_INTEREST' }),
+      );
+    });
+
+    it('accepts zero and positive values', () => {
+      expect(() =>
+        validateFederalTaxInput(
+          makeInput({ taxExemptInterest: 500, people: [{ age: 67, earnedIncome: 0, socialSecurityBenefits: 0 }] }),
+        ),
+      ).not.toThrow();
+    });
+  });
 });

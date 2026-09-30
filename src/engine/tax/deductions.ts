@@ -19,13 +19,13 @@ export function seniorBonusAppliesInYear(year: number): boolean {
 }
 
 /**
- * v1's MAGI: gross ordinary + gross preferential income, because every addback that would
- * separate MAGI from AGI (taxable Social Security, tax-exempt interest, foreign income
- * exclusion) is an explicit non-goal. Named and exported so `federalTax.ts` (WP-F) and this
+ * v1's MAGI: gross ordinary + gross preferential income + taxable Social Security (the
+ * Pub 915 addback, FIN-161). Other addbacks (tax-exempt interest, foreign income exclusion)
+ * remain explicit non-goals. Named and exported so `federalTax.ts` (WP-F) and this
  * module share one definition of "what is MAGI" rather than each reinventing it.
  */
-export function magiForV1(ordinaryIncome: number, preferentialIncome: number): number {
-  return ordinaryIncome + preferentialIncome;
+export function magiForV1(ordinaryIncome: number, preferentialIncome: number, taxableSS = 0): number {
+  return ordinaryIncome + preferentialIncome + taxableSS;
 }
 
 /**
@@ -50,6 +50,7 @@ export function computeDeductions(
   year: number,
   ordinaryIncome: number,
   preferentialIncome: number,
+  taxableSS = 0,
 ): DeductionBreakdown {
   const qualifying = people.filter((p) => p.age >= 65).length;
 
@@ -59,7 +60,7 @@ export function computeDeductions(
 
   let seniorBonusDeduction = 0;
   if (seniorBonusAppliesInYear(year) && filingStatus !== 'mfs' && qualifying > 0) {
-    const magi = magiForV1(ordinaryIncome, preferentialIncome);
+    const magi = magiForV1(ordinaryIncome, preferentialIncome, taxableSS);
     const excess = Math.max(0, magi - tables.seniorBonus.phaseOutStart);
     const perPerson = Math.max(
       0,

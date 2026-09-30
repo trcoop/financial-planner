@@ -68,6 +68,24 @@ export function validateFederalTaxInput(input: FederalTaxInput): void {
   assertFinite(input.indexing.averageWageIndex, 'indexing.averageWageIndex');
 
   input.people.forEach((person: TaxPayer, i: number) => {
+    const b = person.socialSecurityBenefits;
+    if (b !== undefined && (typeof b !== 'number' || !Number.isFinite(b) || b < 0)) {
+      throw new InvalidProjectionInputError(
+        'TAX_INVALID_SOCIAL_SECURITY_BENEFITS',
+        `people[${i}].socialSecurityBenefits must be a finite, non-negative number, received ${String(b)}.`,
+      );
+    }
+  });
+
+  const tei = input.taxExemptInterest;
+  if (tei !== undefined && (typeof tei !== 'number' || !Number.isFinite(tei) || tei < 0)) {
+    throw new InvalidProjectionInputError(
+      'TAX_INVALID_TAX_EXEMPT_INTEREST',
+      `taxExemptInterest must be a finite, non-negative number, received ${String(tei)}.`,
+    );
+  }
+
+  input.people.forEach((person: TaxPayer, i: number) => {
     assertFinite(person.earnedIncome, `people[${i}].earnedIncome`);
     assertFinite(person.age, `people[${i}].age`);
   });

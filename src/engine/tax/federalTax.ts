@@ -7,6 +7,7 @@ import { InvalidProjectionInputError } from '../errors';
 import { bandRateAt, occupyLadder } from './brackets';
 import { computeDeductions, magiForV1 } from './deductions';
 import { computeFica } from './fica';
+import { computeTaxableSocialSecurity } from './socialSecurity';
 import { allocateRounding, roundHalfUp } from './rounding';
 import { resolveTables } from './tables';
 import { validateFederalTaxInput } from './validation';
@@ -60,7 +61,18 @@ function computeCore(input: FederalTaxInput): CoreResult {
 
   const grossOrdinaryIncome = input.ordinaryIncome;
   const grossPreferentialIncome = input.preferentialIncome;
-  const magi = magiForV1(grossOrdinaryIncome, grossPreferentialIncome);
+
+  // ERD §12.2: taxable SS is computed FIRST; it feeds MAGI, the senior-bonus phase-out and the
+  // ordinary ladder. `otherAgi` is exactly ordinary + preferential, as passed (excludes SS).
+  const grossSocialSecurity = input.people.reduce((s, p) => s + (p.socialSecurityBenefits ?? 0), 0);
+  const { provisionalIncome, taxable: taxableSocialSecurity } = computeTaxableSocialSecurity({
+    benefits: grossSocialSecurity,
+    otherAgi: grossOrdinaryIncome + grossPreferentialIncome,
+    taxExemptInterest: input.taxExemptInterest ?? 0,
+    filingStatus: input.filingStatus,
+  });
+  const ordinaryWithSs = grossOrdinaryIncome + taxableSocialSecurity;
+  const magi = magiForV1(grossOrdinaryIncome, grossPreferentialIncome, taxableSocialSecurity);
 
   const deduction = computeDeductions(
     tables,
@@ -69,14 +81,15 @@ function computeCore(input: FederalTaxInput): CoreResult {
     input.year,
     grossOrdinaryIncome,
     grossPreferentialIncome,
+    taxableSocialSecurity,
   );
 
   // §5.3: the deduction applies against ordinary income first. UNCLAMPED — the negative case
   // (unused deduction widening the 0% preferential band) is the entire point of the shift.
-  const shift = grossOrdinaryIncome - deduction.total;
+  const shift = ordinaryWithSs - deduction.total;
   const taxableOrdinaryIncome = Math.max(0, shift);
 
-  const taxableIncomeTotal = Math.max(0, grossOrdinaryIncome + grossPreferentialIncome - deduction.total);
+  const taxableIncomeTotal = Math.max(0, ordinaryWithSs + grossPreferentialIncome - deduction.total);
   const taxablePreferentialIncome = taxableIncomeTotal - taxableOrdinaryIncome;
   const taxableIncome = taxableOrdinaryIncome + taxablePreferentialIncome;
 
@@ -114,6 +127,9 @@ function computeCore(input: FederalTaxInput): CoreResult {
       grossOrdinaryIncome,
       grossPreferentialIncome,
       magi,
+      grossSocialSecurity,
+      taxableSocialSecurity,
+      provisionalIncome,
       deduction,
       taxableOrdinaryIncome,
       taxablePreferentialIncome,

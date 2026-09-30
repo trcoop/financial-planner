@@ -29,7 +29,8 @@ export type StoryScenarioName =
   | 'PreferentialHeavy'
   | 'Age65Single'
   | 'SeniorBonusPhaseOut'
-  | 'SeniorBonusPhaseOutMFJ';
+  | 'SeniorBonusPhaseOutMFJ'
+  | 'SocialSecurity';
 
 /**
  * One `FederalTaxInput` literal per named scenario. Each is asserted, in
@@ -112,6 +113,17 @@ export const STORY_FIXTURES: Readonly<Record<StoryScenarioName, FederalTaxInput>
       { age: 66, earnedIncome: 100_000 },
       { age: 65, earnedIncome: 70_000 },
     ],
+    indexing: STORY_INDEXING,
+  },
+  /** Single age-67 retiree: pension/IRA income plus benefits; proves 0 < taxable SS < gross SS
+   * (provisional income 30,000 + 12,000 = 42,000, so taxable = 4,500 + 85% x 8,000 = 11,300
+   * capped at 85% x 24,000 = 20,400 => 11,300). */
+  SocialSecurity: {
+    year: 2026,
+    filingStatus: 'single',
+    ordinaryIncome: 30_000,
+    preferentialIncome: 0,
+    people: [{ age: 67, earnedIncome: 0, socialSecurityBenefits: 24_000 }],
     indexing: STORY_INDEXING,
   },
 };

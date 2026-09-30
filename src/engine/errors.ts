@@ -168,7 +168,19 @@ export type ProjectionErrorCode =
   /** `topClaims` `n` is not a positive integer. */
   | 'SS_INVALID_TOP_N'
   /** A stubbed Social Security function whose owning work package has not landed yet. */
-  | 'SS_NOT_IMPLEMENTED';
+  | 'SS_NOT_IMPLEMENTED'
+  /**
+   * A `TaxPayer.socialSecurityBenefits` is negative, NaN or non-finite (ERD §12.2). Benefits
+   * are gross whole-dollar amounts and cannot be negative.
+   */
+  | 'TAX_INVALID_SOCIAL_SECURITY_BENEFITS'
+  /** `FederalTaxInput.taxExemptInterest` is negative, NaN or non-finite (FIN-161 round 6). */
+  | 'TAX_INVALID_TAX_EXEMPT_INTEREST'
+  /**
+   * `filingStatus === 'mfs'` with summed Social Security benefits > 0. The MFS worksheet
+   * (base amount 0, 85% treatment) is unverified and not shipped (ERD §12.2, PRD E16).
+   */
+  | 'TAX_UNSUPPORTED_FILING_STATUS_FOR_SOCIAL_SECURITY';
 
 /**
  * Thrown when caller-supplied engine input violates an invariant.

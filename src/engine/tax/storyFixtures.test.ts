@@ -10,10 +10,11 @@ const EXPECTED_SCENARIO_NAMES: StoryScenarioName[] = [
   'Age65Single',
   'SeniorBonusPhaseOut',
   'SeniorBonusPhaseOutMFJ',
+  'SocialSecurity',
 ];
 
 describe('STORY_FIXTURES', () => {
-  it('has exactly the seven StoryScenarioName members as keys', () => {
+  it('has exactly the eight StoryScenarioName members as keys', () => {
     expect(Object.keys(STORY_FIXTURES).sort()).toEqual([...EXPECTED_SCENARIO_NAMES].sort());
   });
 
@@ -65,5 +66,12 @@ describe('STORY_FIXTURES', () => {
     expect(result.deduction.seniorBonusDeduction).toBeLessThan(12_000);
     // Two people: strictly more than the single-person cap ($6,000) could ever yield.
     expect(result.deduction.seniorBonusDeduction).toBeGreaterThan(6_000);
+  });
+
+  it('SocialSecurity: benefits are partially taxable (0 < taxable < gross)', () => {
+    const result = computeFederalTax(STORY_FIXTURES.SocialSecurity);
+    expect(result.grossSocialSecurity).toBeGreaterThan(0);
+    expect(result.taxableSocialSecurity).toBeGreaterThan(0);
+    expect(result.taxableSocialSecurity).toBeLessThan(result.grossSocialSecurity);
   });
 });

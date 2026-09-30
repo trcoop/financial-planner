@@ -142,3 +142,19 @@ describe('computeDeductions', () => {
     expect(result.standardDeduction).not.toBe(result.total);
   });
 });
+
+describe('taxable Social Security addback (FIN-161)', () => {
+  it('magiForV1 adds taxable SS as an optional 3rd argument (default 0)', () => {
+    expect(magiForV1(50_000, 10_000)).toBe(60_000);
+    expect(magiForV1(50_000, 10_000, 7_000)).toBe(67_000);
+  });
+
+  it('computeDeductions phases the senior bonus out against MAGI including taxable SS', () => {
+    const tables = makeTables();
+    const args = [tables, [person(66)], 'single', 2026, 140_000, 0] as const;
+    const without = computeDeductions(...args);
+    const withSs = computeDeductions(...args, 20_000);
+    expect(without.seniorBonusDeduction).toBe(6000); // 140k is below the 150k stub start
+    expect(withSs.seniorBonusDeduction).toBeCloseTo(6000 - 0.06 * 10_000, 6);
+  });
+});
