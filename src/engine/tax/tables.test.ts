@@ -409,3 +409,14 @@ describe('resolveTables', () => {
     expect(resolved.seniorBonus.amountPerQualifyingPerson).toBe(0);
   });
 });
+
+describe('FIN-158: 2026 age-65 additional standard deduction (Rev. Proc. 2025-32 §4.14(3))', () => {
+  it.each([
+    ['single', 2_050],
+    ['hoh', 2_050],
+    ['mfj', 1_650],
+    ['mfs', 1_650],
+  ] as const)('%s resolves to %i', (status, expected) => {
+    expect(resolveTables(2026, status, ZERO_INDEXING).ageAdditionPerQualifyingPerson).toBe(expected);
+  });
+});

@@ -143,9 +143,9 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
       confidence: 'confirmed',
     },
     ageAdditionPerQualifyingPerson: {
-      published: { 2026: 2_000 },
+      published: { 2026: 2_050 },
       policy: { kind: 'chained-cpi-u', baseYear: 2016, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.02; IRC §63(c)(4)/(f); §151(d)(4)(A)',
+      source: 'Rev. Proc. 2025-32 §4.14(3); IRC §63(c)(4)/(f); §151(d)(4)(A)',
       confidence: 'confirmed',
     },
     seniorBonus: UNMARRIED_SENIOR_BONUS,
@@ -192,9 +192,9 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
       confidence: 'confirmed',
     },
     ageAdditionPerQualifyingPerson: {
-      published: { 2026: 1_600 },
+      published: { 2026: 1_650 },
       policy: { kind: 'chained-cpi-u', baseYear: 2016, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.02; IRC §63(c)(4)/(f); §151(d)(4)(A)',
+      source: 'Rev. Proc. 2025-32 §4.14(3); IRC §63(c)(4)/(f); §151(d)(4)(A)',
       confidence: 'confirmed',
     },
     seniorBonus: {
@@ -250,10 +250,10 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
       confidence: 'confirmed',
     },
     ageAdditionPerQualifyingPerson: {
-      published: { 2026: 1_600 },
+      published: { 2026: 1_650 },
       // Same §1(f)(7)(B) carve-out applies to the age-65 addition (§151(d)(4)(A)).
       policy: { kind: 'chained-cpi-u', baseYear: 2016, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.02; IRC §63(c)(4)/(f); §1(f)(7)(B); §151(d)(4)(A)',
+      source: 'Rev. Proc. 2025-32 §4.14(3); IRC §63(c)(4)/(f); §1(f)(7)(B); §151(d)(4)(A)',
       confidence: 'confirmed',
     },
     seniorBonus: MFS_SENIOR_BONUS,
@@ -300,15 +300,14 @@ export const TAX_TABLES: Readonly<Partial<Record<FilingStatus, RawFilingStatusTa
       confidence: 'confirmed',
     },
     ageAdditionPerQualifyingPerson: {
-      published: { 2026: 2_000 },
+      published: { 2026: 2_050 },
       policy: { kind: 'chained-cpi-u', baseYear: 2016, rounding: { kind: 'truncate', increment: 50 } },
-      source: 'Rev. Proc. 2025-32 §4.02; IRC §63(c)(4)/(f); §151(d)(4)(A)',
+      source: 'Rev. Proc. 2025-32 §4.14(3); IRC §63(c)(4)/(f); §151(d)(4)(A)',
       confidence: 'confirmed',
     },
     // HOH shares the UNMARRIED senior-bonus threshold with 'single' (IRC §151(d)(5)(C)(ii) applies
     // to any unmarried taxpayer, not solely single filers) — same figures, same source.
-    // UNCONFIRMED: no primary/statutory source located for HOH's $75k/$175k
-    // senior-bonus phase-out thresholds (secondary sources agree). See FIN-143.
+    // Confirmed: IRC §151(d)(5)(C) applies the unmarried $75k phase-out start to HOH.
     seniorBonus: UNMARRIED_SENIOR_BONUS,
     additionalMedicareThreshold: {
       published: { 2026: 200_000 },

@@ -288,9 +288,18 @@ describe('age-65 additional standard deduction', () => {
 
   it('age exactly 65 DOES qualify', () => {
     const result = computeFederalTax(makeInput({ ordinaryIncome: 60_000, people: [person(65, 60_000)] }));
-    expect(result.deduction.ageAddition).toBe(2_000);
+    expect(result.deduction.ageAddition).toBe(2_050);
     expect(result.deduction.seniorBonusDeduction).toBe(6_000);
-    expect(result.deduction.standardDeduction).toBe(18_100);
+    expect(result.deduction.standardDeduction).toBe(18_150);
+  });
+
+  it('FIN-158: single 65+ filer, hand-derived from Rev. Proc. 2025-32 (base $16,100 + §4.14(3) $2,050)', () => {
+    // Deduction: 16,100 + 2,050 = 18,150; senior bonus 6,000 (MAGI 60,000 < 75,000 start) -> 24,150.
+    // Taxable = 60,000 - 24,150 = 35,850. Tax: 10% x 12,400 = 1,240; 12% x (35,850 - 12,400) = 2,814.
+    const result = computeFederalTax(makeInput({ ordinaryIncome: 60_000, people: [person(65, 60_000)] }));
+    expect(result.deduction.ageAddition).toBe(2_050);
+    expect(result.taxableOrdinaryIncome).toBe(35_850);
+    expect(result.ordinaryTax).toBe(4_054);
   });
 
   it('mixed-age joint return: one spouse 65+, one 64 — one age-65 addition, one senior bonus, both phased against JOINT MAGI', () => {
@@ -301,12 +310,12 @@ describe('age-65 additional standard deduction', () => {
         people: [person(65, 50_000), person(64, 50_000)],
       }),
     );
-    // Only one qualifying taxpayer (age 65): one age addition ($1,600 for MFJ), one senior bonus
+    // Only one qualifying taxpayer (age 65): one age addition ($1,650 for MFJ, Rev. Proc. 2025-32 §4.14(3)), one senior bonus
     // (fully unphased at MAGI $100,000, well under the $150,000 MFJ phaseOutStart).
-    expect(result.deduction.ageAddition).toBe(1_600);
+    expect(result.deduction.ageAddition).toBe(1_650);
     expect(result.deduction.seniorBonusDeduction).toBe(6_000);
-    expect(result.deduction.standardDeduction).toBe(33_800);
-    expect(result.deduction.total).toBe(39_800);
+    expect(result.deduction.standardDeduction).toBe(33_850);
+    expect(result.deduction.total).toBe(39_850);
   });
 });
 
