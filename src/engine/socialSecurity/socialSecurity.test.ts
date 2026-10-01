@@ -48,7 +48,6 @@ describe('stubs throw SS_NOT_IMPLEMENTED with the typed error class', () => {
   const noDeath: Omit<SsInputs, 'deathAgeYears'> = inputs;
   const noClaim: Omit<SsInputs, 'claimMonth'> = inputs;
   const calls: [string, () => unknown][] = [
-    ['survivorBreakdown', () => ss.survivorBreakdown({} as ss.SurvivorArgs)],
     ['computeSocialSecurity', () => ss.computeSocialSecurity(inputs)],
     ['growthBalance', () => ss.growthBalance([1], null)],
     ['evaluateScenario', () => ss.evaluateScenario(inputs)],
