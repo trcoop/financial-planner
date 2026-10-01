@@ -10,6 +10,8 @@ export type { ProjectionErrorCode } from '../errors';
 export { occupyLadder, bandRateAt, ladderTax } from './brackets';
 export { computeDeductions, magiForV1, seniorBonusAppliesInYear } from './deductions';
 export { computeFica } from './fica';
+export { computeTaxableSocialSecurity, SOCIAL_SECURITY_THRESHOLDS } from './socialSecurity';
+export type { TaxableSocialSecurityArgs, TaxableSocialSecurityResult } from './socialSecurity';
 export { resolveIndexedAmount, resolveIndexedLadder } from './indexing';
 export { allocateRounding, roundHalfUp, roundToNearest, truncateTo } from './rounding';
 export {

@@ -49,6 +49,13 @@ export interface TaxPayer {
    * the PRIOR year. Stated here rather than left to be discovered.
    */
   age: number;
+  /**
+   * This person's gross annual Social Security benefits (whole nominal dollars). Per person, NOT
+   * part of `ordinaryIncome`: the engine sums all people, runs the Pub 915 worksheet, and adds
+   * only the taxable portion to ordinary income. FICA never applies to benefits. Omitted = 0.
+   * Negative/NaN/non-finite throws `TAX_INVALID_SOCIAL_SECURITY_BENEFITS`.
+   */
+  socialSecurityBenefits?: number;
 }
 
 /**
@@ -108,6 +115,9 @@ export interface FederalTaxInput {
    * 'hoh'. An empty array throws. */
   people: readonly TaxPayer[];
   indexing: IndexingRates;
+  /** Tax-exempt interest (whole nominal dollars); counts toward Social Security provisional
+   * income only. Omitted = 0. Negative/NaN throws `TAX_INVALID_TAX_EXEMPT_INTEREST`. */
+  taxExemptInterest?: number;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -191,13 +201,19 @@ export interface FederalTaxResult {
 
   grossOrdinaryIncome: number;
   grossPreferentialIncome: number;
-  /** Modified AGI, the base the senior bonus phases out against. In v1, MAGI == AGI ==
-   * `grossOrdinaryIncome + grossPreferentialIncome`, because every add-back that would separate
-   * them (taxable Social Security, tax-exempt interest, foreign-income exclusions) is a stated
-   * Non-Goal. DERIVED, never an input. There is no circularity: the bonus is below-the-line, so
+  /** Modified AGI, the base the senior bonus phases out against:
+   * `grossOrdinaryIncome + grossPreferentialIncome + taxableSocialSecurity`. Other add-backs
+   * (tax-exempt interest, foreign-income exclusions) are still non-goals for MAGI. DERIVED, never an input. There is no circularity: the bonus is below-the-line, so
    * it does not reduce the MAGI it phases out against. When any add-back lands, this stops
    * being a sum and becomes a real derivation with its own function. */
   magi: number;
+  /** Summed gross Social Security benefits across all people on the return. */
+  grossSocialSecurity: number;
+  /** Taxable portion per the Pub 915 worksheet, whole dollars; included in `magi` and taxed as
+   * ordinary income (but not in `grossOrdinaryIncome`). */
+  taxableSocialSecurity: number;
+  /** Pub 915 provisional income: other AGI + tax-exempt interest + half of benefits. */
+  provisionalIncome: number;
 
   deduction: DeductionBreakdown;
 
