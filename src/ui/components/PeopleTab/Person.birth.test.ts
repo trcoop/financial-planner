@@ -11,6 +11,7 @@ import {
   normalizePeople,
   personCalendarAge,
   seedPeople,
+  syncCoreWithPrimary,
 } from './Person'
 
 const ASOF = { year: 2026, month: 9 }
@@ -118,5 +119,30 @@ describe('calendar age callers (E4)', () => {
       const e = spouseMedicarePartBEvent(personCalendarAge(primary, ASOF), personCalendarAge(spouse, ASOF), 0.03)
       expect(e.startAge).toBe(67)
     }
+  })
+})
+
+describe('syncCoreWithPrimary uses calendar age', () => {
+  it('core.currentAge = asOf.year - birthYear even when stored age disagrees', () => {
+    const primary = { ...createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF), age: 30, birthYear: 1980 }
+    expect(syncCoreWithPrimary(DEFAULT_CORE_VALUES, [primary], ASOF).currentAge).toBe(46)
+  })
+})
+
+describe('normalizePerson birthMonth edges', () => {
+  it.each([0, 13, 1.5, -1, '3', NaN])('birthMonth %s normalizes to asOf.month', (bad) => {
+    expect(normalizePerson({ birthYear: 1990, birthMonth: bad }, ASOF).birthMonth).toBe(9)
+  })
+  it.each([1, 12])('keeps valid birthMonth %s', (m) => {
+    expect(normalizePerson({ birthYear: 1990, birthMonth: m }, ASOF).birthMonth).toBe(m)
+  })
+})
+
+describe('applyPeopleEdit guard', () => {
+  it('a salary-only edit leaves birthYear alone even when stored age disagrees with it', () => {
+    const prev = [{ ...createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF), age: 30, birthYear: 1980 }]
+    const next = applyPeopleEdit(prev, [{ ...prev[0], salary: 1 }], ASOF)
+    expect(next[0].birthYear).toBe(1980)
+    expect(next[0].age).toBe(30)
   })
 })

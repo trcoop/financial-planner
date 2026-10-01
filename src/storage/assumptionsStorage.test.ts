@@ -6,8 +6,9 @@ import { DEFAULT_ADVANCED_VALUES } from '../ui/components/AdvancedAssumptionsFor
 import { createPrimaryPerson, createSpouse } from '../ui/components/PeopleTab/Person'
 import { createAccount } from '../ui/components/AccountsTab/Account'
 import { DEFAULT_RETIREMENT_SPENDING_VALUES } from '../ui/components/RetirementSpendingTab/RetirementSpendingGoal'
+import { TEST_ASOF } from '../testAsOf'
 
-const DEFAULT_PEOPLE = [createPrimaryPerson(DEFAULT_CORE_VALUES)]
+const DEFAULT_PEOPLE = [createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF)]
 
 /** Minimal in-memory fake matching the `Storage` interface, swapped in for `window.localStorage`
  * per-test so tests don't depend on jsdom's real localStorage implementation (and so we can
@@ -70,10 +71,10 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
 
     const core = { ...DEFAULT_CORE_VALUES, currentAge: 40 }
     const advanced = { ...DEFAULT_ADVANCED_VALUES, annualReturnPercent: 6 }
-    const people = [createPrimaryPerson(core), createSpouse()]
+    const people = [createPrimaryPerson(core, TEST_ASOF), createSpouse(TEST_ASOF)]
     saveAssumptions(core, advanced, people)
 
-    expect(loadAssumptions()).toEqual({
+    expect(loadAssumptions(TEST_ASOF)).toEqual({
       core,
       advanced,
       people,
@@ -90,14 +91,14 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const advanced = { ...DEFAULT_ADVANCED_VALUES, stocksAllocationPercent: 85 }
     saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({
+    expect(loadAssumptions(TEST_ASOF)).toEqual({
       core,
       advanced,
       people: DEFAULT_PEOPLE,
       accounts: [],
       retirementSpending: DEFAULT_RETIREMENT_SPENDING_VALUES,
     })
-    expect(loadAssumptions()?.advanced.stocksAllocationPercent).toBe(85)
+    expect(loadAssumptions(TEST_ASOF)?.advanced.stocksAllocationPercent).toBe(85)
   })
 
   it('round-trips the FIN-57 bond return assumption field', () => {
@@ -108,14 +109,14 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
     const advanced = { ...DEFAULT_ADVANCED_VALUES, bondReturnPercent: 5.5 }
     saveAssumptions(core, advanced, DEFAULT_PEOPLE)
 
-    expect(loadAssumptions()).toEqual({
+    expect(loadAssumptions(TEST_ASOF)).toEqual({
       core,
       advanced,
       people: DEFAULT_PEOPLE,
       accounts: [],
       retirementSpending: DEFAULT_RETIREMENT_SPENDING_VALUES,
     })
-    expect(loadAssumptions()?.advanced.bondReturnPercent).toBe(5.5)
+    expect(loadAssumptions(TEST_ASOF)?.advanced.bondReturnPercent).toBe(5.5)
   })
 
   it('writes under the versioned STORAGE_KEY', () => {
@@ -131,17 +132,17 @@ describe('saveAssumptions / loadAssumptions round-trip', () => {
 describe('loadAssumptions edge cases', () => {
   it('returns undefined when no key has ever been saved', () => {
     vi.stubGlobal('localStorage', createFakeStorage())
-    expect(loadAssumptions()).toBeUndefined()
+    expect(loadAssumptions(TEST_ASOF)).toBeUndefined()
   })
 
   it('returns undefined for corrupted/unparseable JSON', () => {
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: '{not valid json' }))
-    expect(loadAssumptions()).toBeUndefined()
+    expect(loadAssumptions(TEST_ASOF)).toBeUndefined()
   })
 
   it('returns undefined when the parsed value is not an object', () => {
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: '"just a string"' }))
-    expect(loadAssumptions()).toBeUndefined()
+    expect(loadAssumptions(TEST_ASOF)).toBeUndefined()
   })
 
   it('partially merges when core/advanced are missing fields (schema drift)', () => {
@@ -149,8 +150,8 @@ describe('loadAssumptions edge cases', () => {
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: partial }))
 
     const mergedCore = { ...DEFAULT_CORE_VALUES, currentAge: 50 }
-    const primary = createPrimaryPerson(mergedCore)
-    const loaded = loadAssumptions()
+    const primary = createPrimaryPerson(mergedCore, TEST_ASOF)
+    const loaded = loadAssumptions(TEST_ASOF)
     expect(loaded?.core).toEqual(mergedCore)
     expect(loaded?.advanced).toEqual(DEFAULT_ADVANCED_VALUES)
     expect(loaded?.people).toEqual([primary])
@@ -181,7 +182,7 @@ describe('loadAssumptions edge cases', () => {
     })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin116 }))
 
-    const loaded = loadAssumptions()
+    const loaded = loadAssumptions(TEST_ASOF)
     expect(loaded?.people).toHaveLength(1)
     expect(loaded?.people[0]).toMatchObject({ isPrimary: true, age: 40, retirementAge: 65, salary: 90000 })
     expect(loaded?.people.some((p) => !p.isPrimary)).toBe(false)
@@ -191,15 +192,15 @@ describe('loadAssumptions edge cases', () => {
     const fake = createFakeStorage()
     vi.stubGlobal('localStorage', fake)
 
-    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF)
     const accounts = [createAccount(primary.id)]
     saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, [primary], accounts)
 
-    expect(loadAssumptions()?.accounts).toEqual(accounts)
+    expect(loadAssumptions(TEST_ASOF)?.accounts).toEqual(accounts)
   })
 
   it('repairs a persisted account still shaped like the pre-contribution-split Account (contributionValue, no contributionPercentage/contributionFixed) instead of propagating NaN', () => {
-    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF)
     const legacyShapedAccount = {
       id: 'acct-legacy',
       name: 'Primary account',
@@ -217,7 +218,7 @@ describe('loadAssumptions edge cases', () => {
     })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: persisted }))
 
-    const accounts = loadAssumptions()?.accounts
+    const accounts = loadAssumptions(TEST_ASOF)?.accounts
     expect(accounts).toHaveLength(1)
     const account = accounts?.[0]
     expect(account).toBeDefined()
@@ -233,7 +234,7 @@ describe('loadAssumptions edge cases', () => {
     const preFin117 = JSON.stringify({ core: DEFAULT_CORE_VALUES, advanced: DEFAULT_ADVANCED_VALUES, people: DEFAULT_PEOPLE })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin117 }))
 
-    const accounts = loadAssumptions()?.accounts
+    const accounts = loadAssumptions(TEST_ASOF)?.accounts
     expect(accounts).toHaveLength(1)
     expect(accounts?.[0]).toMatchObject({
       ownerId: DEFAULT_PEOPLE[0].id,
@@ -245,7 +246,7 @@ describe('loadAssumptions edge cases', () => {
   })
 
   it('returns an already-persisted people list unchanged (does not re-seed)', () => {
-    const people = [createPrimaryPerson(DEFAULT_CORE_VALUES), createSpouse()]
+    const people = [createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF), createSpouse(TEST_ASOF)]
     saveAssumptions(DEFAULT_CORE_VALUES, DEFAULT_ADVANCED_VALUES, people)
     vi.stubGlobal(
       'localStorage',
@@ -254,14 +255,14 @@ describe('loadAssumptions edge cases', () => {
       }),
     )
 
-    expect(loadAssumptions()?.people).toEqual(people)
+    expect(loadAssumptions(TEST_ASOF)?.people).toEqual(people)
   })
 
   it('falls back to defaults per-field when core/advanced are object-shaped but wrong type', () => {
     const wrongType = JSON.stringify({ core: 'not an object', advanced: ['also', 'wrong'] })
     vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: wrongType }))
 
-    const loaded = loadAssumptions()
+    const loaded = loadAssumptions(TEST_ASOF)
     expect(loaded?.core).toEqual(DEFAULT_CORE_VALUES)
     expect(loaded?.advanced).toEqual(DEFAULT_ADVANCED_VALUES)
     expect(loaded?.people).toEqual(DEFAULT_PEOPLE)
@@ -279,7 +280,7 @@ describe('loadAssumptions edge cases', () => {
       const fake = createFakeStorage()
       vi.stubGlobal('localStorage', fake)
 
-      const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+      const primary = createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF)
       const retirementSpending = {
         generalAmount: 60_000,
         generalAmountUnit: 'annual' as const,
@@ -290,7 +291,7 @@ describe('loadAssumptions edge cases', () => {
 
       // Round-trip-safe per ERD §4: an annual entry of $60,000 comes back as $60,000 annual,
       // not a monthly-derived $5,000.
-      expect(loadAssumptions()?.retirementSpending).toEqual(retirementSpending)
+      expect(loadAssumptions(TEST_ASOF)?.retirementSpending).toEqual(retirementSpending)
     })
 
     it('defaults to no goal set for a record persisted before this field existed', () => {
@@ -302,7 +303,7 @@ describe('loadAssumptions edge cases', () => {
       })
       vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: preFin135 }))
 
-      expect(loadAssumptions()?.retirementSpending).toEqual(DEFAULT_RETIREMENT_SPENDING_VALUES)
+      expect(loadAssumptions(TEST_ASOF)?.retirementSpending).toEqual(DEFAULT_RETIREMENT_SPENDING_VALUES)
     })
 
     it('falls back to the default when retirementSpending is present but wrong type', () => {
@@ -315,7 +316,7 @@ describe('loadAssumptions edge cases', () => {
       })
       vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: wrongType }))
 
-      expect(loadAssumptions()?.retirementSpending).toEqual(DEFAULT_RETIREMENT_SPENDING_VALUES)
+      expect(loadAssumptions(TEST_ASOF)?.retirementSpending).toEqual(DEFAULT_RETIREMENT_SPENDING_VALUES)
     })
 
     it('partially merges when retirementSpending is missing fields (schema drift)', () => {
@@ -328,13 +329,13 @@ describe('loadAssumptions edge cases', () => {
       })
       vi.stubGlobal('localStorage', createFakeStorage({ [STORAGE_KEY]: partial }))
 
-      expect(loadAssumptions()?.retirementSpending).toEqual({ generalAmount: 5_000, generalAmountUnit: 'monthly' })
+      expect(loadAssumptions(TEST_ASOF)?.retirementSpending).toEqual({ generalAmount: 5_000, generalAmountUnit: 'monthly' })
     })
   })
 
   it('returns undefined when getItem throws (storage disabled / private mode)', () => {
     vi.stubGlobal('localStorage', createThrowingStorage({ getItem: true }))
-    expect(loadAssumptions()).toBeUndefined()
+    expect(loadAssumptions(TEST_ASOF)).toBeUndefined()
     expect(warnSpy).not.toHaveBeenCalled()
   })
 })

@@ -12,7 +12,7 @@ import { isAdvancedInputValid, isCoreInputValid } from '../components'
 import type { Account, AdvancedAssumptionValues, CoreInputValues, Person } from '../components'
 import { medicarePartBEvent, spouseMedicarePartBEvent } from '../medicareEvent'
 import { personCalendarAge } from '../components/PeopleTab/Person'
-import { useAsOf } from '../AsOfContext'
+import { useAsOf } from '../useAsOf'
 import { useDebouncedValue } from './useDebouncedValue'
 
 /** Planning horizon is a call-site default per FIN-19 — not user input for the MVP. Exported so

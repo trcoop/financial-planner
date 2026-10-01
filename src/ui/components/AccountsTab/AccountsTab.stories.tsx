@@ -4,12 +4,13 @@ import { AccountsTab } from './AccountsTab'
 import type { Account } from './Account'
 import { createPrimaryPerson } from '../PeopleTab/Person'
 import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
+import { systemAsOf } from '../../../asOf'
 
 export default {
   title: 'Composite / AccountsTab',
 } satisfies StoryDefault
 
-const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES)
+const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES, systemAsOf())
 
 const ACCOUNTS: Account[] = [
   {

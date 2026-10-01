@@ -36,7 +36,7 @@ import { useDebouncedValue } from './hooks/useDebouncedValue'
 import { MEDICARE_PART_B_EVENT } from './medicareEvent'
 import { formatCurrency, formatPercent } from './utils/format'
 import { applyPeopleEdit } from './components/PeopleTab/Person'
-import { useAsOf } from './AsOfContext'
+import { useAsOf } from './useAsOf'
 import { clearAssumptions, loadAssumptions, saveAssumptions } from '../storage'
 import { RetirementSpendingTab } from './components/RetirementSpendingTab/RetirementSpendingTab'
 import {

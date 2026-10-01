@@ -1,5 +1,4 @@
 import type { AsOf } from '../engine/age'
-import { systemAsOf } from '../ui/AsOfContext'
 import type { CoreInputValues } from '../ui/coreInputs/types'
 import { DEFAULT_CORE_VALUES } from '../ui/coreInputs/defaults'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
@@ -28,7 +27,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * FIN-162: `asOf` is injected for the legacy `age` -> `birthYear` migration (never reads the
  * clock itself; the default is the UI's once-per-page-load read).
  */
-export function loadAssumptions(asOf: AsOf = systemAsOf()): PersistedAssumptions | undefined {
+export function loadAssumptions(asOf: AsOf): PersistedAssumptions | undefined {
   let raw: string | null
   try {
     raw = localStorage.getItem(STORAGE_KEY)

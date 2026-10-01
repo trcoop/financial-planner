@@ -1,7 +1,6 @@
 import type { CoreInputValues } from '../../coreInputs/types'
 import { rangeError } from '../../coreInputs/validation'
 import type { AsOf } from '../../../engine/age'
-import { systemAsOf } from '../../AsOfContext'
 
 /**
  * FIN-116: replaces the FIN-113 `hasSpouse`/`spouseAge` checkbox pair on `CoreInputValues` —
@@ -133,7 +132,7 @@ export function personFieldError(field: 'age' | 'retirementAge' | 'salary', valu
  * `core` fields (`retirementAge`/`currentAnnualIncome`) since those already exist and have
  * user-entered values, unlike a brand-new spouse which has nothing to seed from.
  */
-export function createPrimaryPerson(core: CoreInputValues, asOf: AsOf = systemAsOf()): Person {
+export function createPrimaryPerson(core: CoreInputValues, asOf: AsOf): Person {
   return {
     id: PERSON_ID_PRIMARY,
     name: 'You',
@@ -159,7 +158,7 @@ function generatePersonId(): string {
   return `person-${spouseIdCounter}`
 }
 
-export function createSpouse(asOf: AsOf = systemAsOf()): Person {
+export function createSpouse(asOf: AsOf): Person {
   return {
     id: generatePersonId(),
     isPrimary: false,
@@ -175,7 +174,7 @@ export function createSpouse(asOf: AsOf = systemAsOf()): Person {
  * persisted list as-is when it's a genuinely non-empty array, otherwise a freshly-seeded
  * primary-only list built from `core`. Never seeds a spouse — see {@link createPrimaryPerson}.
  */
-export function seedPeople(people: unknown, core: CoreInputValues, asOf: AsOf = systemAsOf()): Person[] {
+export function seedPeople(people: unknown, core: CoreInputValues, asOf: AsOf): Person[] {
   if (Array.isArray(people) && people.length > 0) {
     const normalized = normalizePeople(people, asOf)
     // Keep the input's identity when nothing needed repair (stable memo/effect deps).
@@ -204,7 +203,7 @@ export function primaryPerson(people: Person[]): Person | undefined {
  * Callers (PlanSection) should use this result everywhere the engine/persisted core needs the
  * canonical age/retirementAge/income, instead of raw `core`.
  */
-export function syncCoreWithPrimary(core: CoreInputValues, people: Person[], asOf: AsOf = systemAsOf()): CoreInputValues {
+export function syncCoreWithPrimary(core: CoreInputValues, people: Person[], asOf: AsOf): CoreInputValues {
   const primary = primaryPerson(people)
   if (!primary) return core
   return {

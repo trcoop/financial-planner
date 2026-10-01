@@ -1,6 +1,8 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
-import { AsOfProvider, FrozenAsOfProvider, useAsOf, systemAsOf } from './AsOfContext'
+import { AsOfProvider, FrozenAsOfProvider } from './AsOfContext'
+import { useAsOf } from './useAsOf'
+import { systemAsOf } from '../asOf'
 
 function Show() {
   const asOf = useAsOf()

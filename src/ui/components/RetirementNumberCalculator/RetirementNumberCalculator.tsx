@@ -9,7 +9,7 @@ import { loadAssumptions } from '../../../storage'
 import { primaryPerson, personCalendarAge, type Person } from '../PeopleTab/Person'
 import type { Account } from '../AccountsTab/Account'
 import { formatCurrency } from '../../utils/format'
-import { useAsOf } from '../../AsOfContext'
+import { useAsOf } from '../../useAsOf'
 import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
 import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
@@ -249,7 +249,7 @@ export function RetirementNumberCalculator() {
   // Lazily read once on mount — a plan saved *after* this calculator opens still won't show the
   // button until the calculator is reopened, matching the "read-only, one-time" (not a live
   // binding) contract the ticket specifies for this feature as a whole.
-  const [hasPlan] = useState(() => loadAssumptions() !== undefined)
+  const [hasPlan] = useState(() => loadAssumptions(asOf) !== undefined)
 
   const setNumericField = <K extends keyof FormValues>(key: K, value: number) => {
     setValues((prev) => ({ ...prev, [key]: value }))

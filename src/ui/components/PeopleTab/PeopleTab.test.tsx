@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { PeopleTab } from './PeopleTab'
 import { createPrimaryPerson, createSpouse, type Person } from './Person'
 import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
+import { TEST_ASOF } from '../../../testAsOf'
 
-const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES)
+const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF)
 
 function ControlledPeopleTab({ initial }: { initial: Person[] }) {
   const [people, setPeople] = useState(initial)
@@ -34,7 +35,7 @@ describe('PeopleTab', () => {
   })
 
   it('hides the "+ Spouse" button once a non-primary person exists', () => {
-    const spouse = createSpouse()
+    const spouse = createSpouse(TEST_ASOF)
     render(<PeopleTab people={[PRIMARY, spouse]} onChange={vi.fn()} />)
     expect(screen.queryByRole('button', { name: '+ Spouse' })).not.toBeInTheDocument()
   })
@@ -58,13 +59,13 @@ describe('PeopleTab', () => {
   })
 
   it('renders a remove control for a non-primary (spouse) person', () => {
-    const spouse = createSpouse()
+    const spouse = createSpouse(TEST_ASOF)
     render(<PeopleTab people={[PRIMARY, spouse]} onChange={vi.fn()} />)
     expect(screen.getByRole('button', { name: /remove spouse/i })).toBeInTheDocument()
   })
 
   it('removing the spouse (who has no accounts) deletes them directly with no dialog', () => {
-    const spouse = createSpouse()
+    const spouse = createSpouse(TEST_ASOF)
     const onChange = vi.fn()
     render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} />)
 
@@ -75,7 +76,7 @@ describe('PeopleTab', () => {
   })
 
   it('removing the spouse who owns an account shows the cascade-delete warning dialog instead of deleting immediately', () => {
-    const spouse = createSpouse()
+    const spouse = createSpouse(TEST_ASOF)
     const onChange = vi.fn()
     render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} accounts={[{ ownerId: spouse.id }]} />)
 
@@ -86,7 +87,7 @@ describe('PeopleTab', () => {
   })
 
   it('confirming the cascade-delete dialog removes the spouse', () => {
-    const spouse = createSpouse()
+    const spouse = createSpouse(TEST_ASOF)
     const onChange = vi.fn()
     render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} accounts={[{ ownerId: spouse.id }]} />)
 
@@ -97,7 +98,7 @@ describe('PeopleTab', () => {
   })
 
   it('does not show the cascade-delete dialog for a spouse whose accounts belong to someone else', () => {
-    const spouse = createSpouse()
+    const spouse = createSpouse(TEST_ASOF)
     const onChange = vi.fn()
     render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} accounts={[{ ownerId: PRIMARY.id }]} />)
 
@@ -108,7 +109,7 @@ describe('PeopleTab', () => {
   })
 
   it('editing a field for the correct person preserves the other person untouched', () => {
-    const spouse = createSpouse()
+    const spouse = createSpouse(TEST_ASOF)
     const onChange = vi.fn()
     render(<PeopleTab people={[PRIMARY, spouse]} onChange={onChange} />)
 

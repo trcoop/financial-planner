@@ -7,6 +7,8 @@ import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
 import { DEFAULT_ADVANCED_VALUES } from '../AdvancedAssumptionsForm/defaults'
 import { createAccount } from '../AccountsTab/Account'
 import type { Person } from '../PeopleTab/Person'
+import { FrozenAsOfProvider } from '../../AsOfContext'
+import { TEST_ASOF } from '../../../testAsOf'
 import { blendedPortfolioReturn } from '../../../engine'
 import { DEFAULT_RETIREMENT_SPENDING_VALUES } from '../RetirementSpendingTab/RetirementSpendingGoal'
 
@@ -490,5 +492,27 @@ describe('RetirementNumberCalculator', () => {
     await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
 
     expect(screen.getByLabelText(/desired monthly retirement spend/i)).toHaveValue('$2,500')
+  })
+
+  it('"Pull from my plan" pulls calendar age (asOf.year - birthYear), not the stored age', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        core: DEFAULT_CORE_VALUES,
+        advanced: DEFAULT_ADVANCED_VALUES,
+        people: [
+          { id: 'primary', name: 'You', age: 30, birthYear: 1980, birthMonth: 4, retirementAge: 67, salary: 90_000, isPrimary: true },
+        ],
+        accounts: [],
+      }),
+    )
+    render(
+      <FrozenAsOfProvider asOf={TEST_ASOF}>
+        <RetirementNumberCalculator />
+      </FrozenAsOfProvider>,
+    )
+    await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
+    expect(screen.getByLabelText(/current age/i)).toHaveValue('46')
   })
 })

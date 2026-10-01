@@ -3,6 +3,7 @@ import { NumberField } from '../NumberField/NumberField'
 import { TextField } from '../TextField/TextField'
 import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog'
 import { useState } from 'react'
+import { useAsOf } from '../../useAsOf'
 import {
   createSpouse,
   personFieldError,
@@ -27,6 +28,7 @@ interface PeopleTabProps {
  * spouse edit/remove. No contribution field (moved to Account, FIN-117).
  */
 export function PeopleTab({ people, onChange, accounts = [] }: PeopleTabProps) {
+  const asOf = useAsOf()
   const hasSpouse = people.some((person) => !person.isPrimary)
   const [pendingRemovalId, setPendingRemovalId] = useState<string | null>(null)
 
@@ -35,7 +37,7 @@ export function PeopleTab({ people, onChange, accounts = [] }: PeopleTabProps) {
   }
 
   const handleAddSpouse = () => {
-    onChange([...people, createSpouse()])
+    onChange([...people, createSpouse(asOf)])
   }
 
   const removePerson = (id: string) => {
