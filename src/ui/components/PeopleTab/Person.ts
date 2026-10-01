@@ -99,7 +99,7 @@ export function normalizePerson(raw: unknown, asOf: AsOf): NormalizedPerson {
     birthYear,
     age: asOf.year - birthYear,
     retirementAge: isFiniteNumber(r.retirementAge) ? r.retirementAge : NEW_SPOUSE_DEFAULTS.retirementAge,
-    salary: isFiniteNumber(r.salary) ? r.salary : NEW_SPOUSE_DEFAULTS.salary,
+    salary: isFiniteNumber(r.salary) ? r.salary : 0, // never invent a salary on load; defaults belong to create*
     isPrimary,
   }
 }

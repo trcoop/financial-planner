@@ -184,3 +184,20 @@ describe('normalizePerson malformed birth fields (PRD E3 / ERD 12.19.4)', () => 
     }
   })
 })
+
+describe('normalizePerson does not invent a salary (product decision)', () => {
+  it('missing / NaN / string / null salary becomes a finite 0, never 85000, and is idempotent', () => {
+    for (const salary of [undefined, NaN, 'abc', null, Infinity]) {
+      const p = normalizePerson({ id: 'primary', age: 40, retirementAge: 65, salary, isPrimary: true }, ASOF)
+      expect(Number.isFinite(p.salary)).toBe(true)
+      expect(p.salary).not.toBe(85_000)
+      expect(p.salary).toBe(0)
+      expect(normalizePerson(p, ASOF)).toEqual(p)
+    }
+    expect(normalizePerson({ age: 40 }, ASOF).salary).toBe(0)
+  })
+  it('a valid salary is kept; createPrimaryPerson/createSpouse still seed their defaults', () => {
+    expect(normalizePerson({ age: 40, salary: 120_000 }, ASOF).salary).toBe(120_000)
+    expect(createSpouse(ASOF).salary).toBe(85_000)
+  })
+})

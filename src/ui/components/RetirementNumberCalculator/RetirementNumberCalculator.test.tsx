@@ -393,9 +393,9 @@ describe('RetirementNumberCalculator', () => {
 
     await user.click(screen.getByRole('button', { name: /pull from my plan/i }))
 
-    // FIN-162: `seedPeople` now normalizes, repairing the missing salary to the default ($85,000,
-    // so 10% = $8,500) — still finite, never blank (NaN), which is what this test guards.
-    expect(screen.getByLabelText(/annual investment\/contribution amount/i)).toHaveValue('$8,500')
+    // Falls back to $0 rather than leaving the field blank (NaN) — a blank field after clicking
+    // "Pull from my plan" is indistinguishable from the pull silently doing nothing.
+    expect(screen.getByLabelText(/annual investment\/contribution amount/i)).toHaveValue('$0')
   })
 
   it('"Pull from my plan" clears the pulled fields\' required-blank state, so Calculate works immediately without re-touching them', async () => {
