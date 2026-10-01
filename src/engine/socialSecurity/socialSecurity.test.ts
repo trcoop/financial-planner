@@ -48,11 +48,6 @@ describe('stubs throw SS_NOT_IMPLEMENTED with the typed error class', () => {
   const noDeath: Omit<SsInputs, 'deathAgeYears'> = inputs;
   const noClaim: Omit<SsInputs, 'claimMonth'> = inputs;
   const calls: [string, () => unknown][] = [
-    ['fraMonths', () => ss.fraMonths(1964)],
-    ['survivorFraMonths', () => ss.survivorFraMonths(1964)],
-    ['legalClaimWindow', () => ss.legalClaimWindow(person, asOf)],
-    ['ownFactorSteady', () => ss.ownFactorSteady(804, 800)],
-    ['ownFactorAt', () => ss.ownFactorAt(person, 2030 * 12, 2031 * 12)],
     ['spousalAmount', () => ss.spousalAmount({ ownPia: 1, otherPia: 2, ownFraMonths: 804, spousalStart: 1 })],
     ['survivorBreakdown', () => ss.survivorBreakdown({} as ss.SurvivorArgs)],
     ['computeOwnAndSpousal', () => ss.computeOwnAndSpousal(noDeath)],
