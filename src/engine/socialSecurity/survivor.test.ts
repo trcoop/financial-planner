@@ -273,3 +273,98 @@ describe('validation', () => {
       codeOf(withArgs({ deceasedClaimMonth: mi(1960, 6) + 841, deathMonth: mi(2031, 1), survivorStartMonth: mi(2031, 1) })),
     ).toBe('SS_CLAIM_AFTER_70'));
 });
+
+describe('survivor reduction cohort grid (ERD §12.5 WP-D acceptance, §6 checkpoints)', () => {
+  // Independent oracle: literal survivor FRA (months) per representative birth year, no production helpers.
+  const cohorts: { year: number; sFra: number; at60y1m: number }[] = [
+    { year: 1943, sFra: 788, at60y1m: 71.9191 },
+    { year: 1944, sFra: 790, at60y1m: 71.9071 },
+    { year: 1945, sFra: 792, at60y1m: 71.8958 },
+    { year: 1957, sFra: 794, at60y1m: 71.8851 },
+    { year: 1958, sFra: 796, at60y1m: 71.875 },
+    { year: 1959, sFra: 798, at60y1m: 71.8654 },
+    { year: 1960, sFra: 800, at60y1m: 71.8563 },
+    { year: 1961, sFra: 802, at60y1m: 71.8476 },
+    { year: 1962, sFra: 804, at60y1m: 71.8393 },
+  ];
+  /** Percent of base received at survivor age `m` months, integer-month formula. */
+  const oracle = (sFra: number, m: number): number => (m >= sFra ? 100 : 100 - (28.5 * (sFra - m)) / (sFra - 720));
+  /** Survivor percent via the engine: PIA 100, deceased dies unclaimed long before FRA (base 100). */
+  const engine = (year: number, m: number): number => {
+    const start = mi(year, 6) + m;
+    const r = survivorBreakdown({
+      deceasedPia: 100,
+      deceasedBirthYear: 1990,
+      deceasedBirthMonth: 1,
+      deceasedClaimMonth: null,
+      deathMonth: start,
+      survivorBirthYear: year,
+      survivorBirthMonth: 6,
+      survivorStartMonth: start,
+    });
+    expect(r.base).toBe(100);
+    return (r.ageReduced / r.base) * 100;
+  };
+
+  it.each(cohorts)('cohort $year (sFRA $sFra): 60y1m, FRA-1, FRA, FRA+1', ({ year, sFra, at60y1m }) => {
+    expect(survivorFraMonths(year)).toBe(sFra);
+    expect(engine(year, 721)).toBeCloseTo(at60y1m, 3); // ERD table is rounded to 4 dp (1960: 71.85625)
+    expect(engine(year, 721)).toBeCloseTo(oracle(sFra, 721), 9);
+    expect(engine(year, sFra - 1)).toBeCloseTo(oracle(sFra, sFra - 1), 9);
+    expect(engine(year, sFra - 1)).toBeCloseTo(100 - 28.5 / (sFra - 720), 9);
+    expect(engine(year, sFra)).toBeCloseTo(100, 9);
+    expect(engine(year, sFra + 1)).toBeCloseTo(100, 9);
+  });
+
+  it('every month from 60y1m to FRA+2 matches the independent generator in every cohort', () => {
+    for (const { year, sFra } of cohorts) {
+      for (let m = 721; m <= sFra + 2; m++) expect(engine(year, m)).toBeCloseTo(oracle(sFra, m), 9);
+    }
+  });
+
+  it('ERD §6 checkpoint rows, survivor FRA 67', () => {
+    const rows: [number, number][] = [
+      [721, 71.8393],
+      [745, 79.9821],
+      [769, 88.125],
+      [781, 92.1964],
+      [793, 96.2679],
+      [803, 99.6607],
+      [804, 100],
+    ];
+    for (const [m, pct] of rows) expect(engine(1962, m)).toBeCloseTo(pct, 4);
+  });
+});
+
+describe('input edge cases (review follow-ups)', () => {
+  const ok: SurvivorArgs = {
+    deceasedPia: 2800,
+    deceasedBirthYear: 1960,
+    deceasedBirthMonth: 6,
+    deceasedClaimMonth: null,
+    deathMonth: mi(2030, 1),
+    survivorBirthYear: 1962,
+    survivorBirthMonth: 6,
+    survivorStartMonth: mi(2030, 1),
+  };
+
+  it('deceasedPia = 0 is valid and yields all zeros', () => {
+    expect(survivorBreakdown({ ...ok, deceasedPia: 0 })).toEqual({ base: 0, ageReduced: 0, cap: null, amount: 0 });
+  });
+  it('invalid deceased birth month throws SS_INVALID_BIRTH', () => {
+    expect(codeOf(() => survivorBreakdown({ ...ok, deceasedBirthMonth: 0 }))).toBe('SS_INVALID_BIRTH');
+    expect(codeOf(() => survivorBreakdown({ ...ok, deceasedBirthMonth: 13 }))).toBe('SS_INVALID_BIRTH');
+  });
+  it('non-integer survivorDeathMonth throws SS_INVALID_DEATH', () => {
+    expect(codeOf(() => survivorPaymentWindow(mi(2030, 5), 24400.5))).toBe('SS_INVALID_DEATH');
+  });
+  it('non-integer deathMonth to survivorStartMonth throws SS_INVALID_DEATH', () => {
+    expect(codeOf(() => survivorStartMonth(24400.5, 1962, 6))).toBe('SS_INVALID_DEATH');
+  });
+  it('non-integer deceasedClaimMonth (claimed branch) throws SS_INVALID_BIRTH (whole-month claim age)', () => {
+    expect(codeOf(() => survivorBreakdown({ ...ok, deceasedClaimMonth: mi(2027, 1) + 0.5 }))).toBe('SS_INVALID_BIRTH');
+  });
+  it('non-finite deceasedClaimMonth throws NON_FINITE_INPUT', () => {
+    expect(codeOf(() => survivorBreakdown({ ...ok, deceasedClaimMonth: NaN }))).toBe('NON_FINITE_INPUT');
+  });
+});

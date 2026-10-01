@@ -88,6 +88,7 @@ export function survivorBreakdown(a: SurvivorArgs): {
   }
 
   const claim = a.deceasedClaimMonth;
+  if (claim !== null) requireFinite(claim, 'deceasedClaimMonth');
   // A claim month after the death month means the deceased died unclaimed (PRD E42).
   const claimed = claim !== null && claim <= a.deathMonth;
   let base: number;
