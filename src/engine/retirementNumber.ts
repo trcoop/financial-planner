@@ -1,5 +1,5 @@
 /**
- * Standalone "Know Your Number" calculation engine.
+ * Standalone "Retirement Number" calculation engine.
  *
  * Per `architecture.md`, `src/engine/` holds pure, framework-agnostic calculation
  * functions that validate their own inputs. This module is a sibling of
@@ -8,8 +8,8 @@
  * projection engine — it has no dependency on `PlanAssumptions` and is fully
  * standalone/synchronous, so it defines its own typed-error pair rather than reusing
  * `ProjectionErrorCode`/`InvalidProjectionInputError`. It is shared, unmodified, by both
- * the standalone Know Your Number calculator and the Retirement Spending tab's on-track
- * readout — see ERD: Retirement Spending Goal & Know Your Number Calculator, §5/§6/§12.
+ * the standalone Retirement Number calculator and the Retirement Spending tab's on-track
+ * readout — see ERD: Retirement Spending Goal & Retirement Number Calculator, §5/§6/§12.
  */
 
 export interface RetirementNumberInput {

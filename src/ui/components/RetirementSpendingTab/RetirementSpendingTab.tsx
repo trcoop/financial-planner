@@ -80,7 +80,7 @@ interface RetirementSpendingTabProps {
  * a household spending goal (monthly or annual, today's dollars, round-trip-safe per ERD §4) plus
  * itemized Medicare overrides, and shows a read-only on-track readout + depletion callout driven
  * by the shared `retirementNumber` engine module (ERD §5/§8's shared-module assertion — the same
- * function the standalone Know Your Number calculator uses, not a re-implementation).
+ * function the standalone Retirement Number calculator uses, not a re-implementation).
  *
  * No inflation rate / return rate / life expectancy inputs here — those are read from
  * `assumptions` (sourced from the Rates tab), never re-collected (AC).
