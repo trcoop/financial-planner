@@ -73,11 +73,22 @@ export function personCalendarAge(person: Pick<Person, 'age' | 'birthYear'>, asO
  */
 export function normalizePerson(raw: unknown, asOf: AsOf): NormalizedPerson {
   const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
-  const birthYear = isFiniteNumber(r.birthYear)
-    ? r.birthYear
-    : asOf.year - (isFiniteNumber(r.age) ? r.age : NEW_SPOUSE_DEFAULTS.age)
+  const isValidBirthYear = (v: unknown): v is number => {
+    if (!isFiniteNumber(v) || !Number.isInteger(v)) return false
+    const { min, max } = birthYearRange(asOf)
+    return v >= min && v <= max
+  }
+  // PRD E3: a malformed birthYear (NaN, non-integer, out of range) falls back to the age-derived
+  // birth, month included (ERD 12.19.4: repair = asOf.year - age, asOf.month). Unusable age -> default.
+  const ageDerived = isFiniteNumber(r.age) ? asOf.year - r.age : NaN
+  const birthYearValid = isValidBirthYear(r.birthYear)
+  const birthYear = birthYearValid
+    ? (r.birthYear as number)
+    : isValidBirthYear(ageDerived)
+      ? ageDerived
+      : asOf.year - NEW_SPOUSE_DEFAULTS.age
   const birthMonth =
-    isFiniteNumber(r.birthMonth) && Number.isInteger(r.birthMonth) && r.birthMonth >= 1 && r.birthMonth <= 12
+    birthYearValid && isFiniteNumber(r.birthMonth) && Number.isInteger(r.birthMonth) && r.birthMonth >= 1 && r.birthMonth <= 12
       ? r.birthMonth
       : asOf.month
   const isPrimary = r.isPrimary === true

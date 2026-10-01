@@ -146,3 +146,41 @@ describe('applyPeopleEdit guard', () => {
     expect(next[0].age).toBe(30)
   })
 })
+
+describe('normalizePerson malformed birth fields (PRD E3 / ERD 12.19.4)', () => {
+  const y = (raw: unknown) => normalizePerson(raw, ASOF)
+  it('out-of-range low birthYear with valid age falls back to age-derived birth (month reset to asOf.month)', () => {
+    const p = y({ age: 40, birthYear: 1500, birthMonth: 5 })
+    expect(p.birthYear).toBe(1986)
+    expect(p.birthMonth).toBe(9)
+    expect(p.age).toBe(40)
+  })
+  it('out-of-range high birthYear falls back to age-derived', () => {
+    expect(y({ age: 40, birthYear: 2020, birthMonth: 5 }).birthYear).toBe(1986)
+  })
+  it('non-integer birthYear falls back to age-derived', () => {
+    expect(y({ age: 40, birthYear: 1986.5 }).birthYear).toBe(1986)
+  })
+  it('inclusive boundaries are kept (asOf.year-100 and asOf.year-18)', () => {
+    expect(y({ age: 40, birthYear: 1926, birthMonth: 5 })).toMatchObject({ birthYear: 1926, birthMonth: 5 })
+    expect(y({ age: 40, birthYear: 2008, birthMonth: 5 })).toMatchObject({ birthYear: 2008, birthMonth: 5 })
+    expect(y({ age: 40, birthYear: 1925 }).birthYear).toBe(1986)
+    expect(y({ age: 40, birthYear: 2009 }).birthYear).toBe(1986)
+  })
+  it('is idempotent for malformed inputs', () => {
+    for (const raw of [{ age: 40, birthYear: 1500 }, { age: 40, birthYear: 1986.5 }, { birthYear: 1500 }, { birthYear: 1500, age: 'x' }, { birthYear: NaN, age: NaN }]) {
+      const first = y(raw)
+      expect(y(first)).toEqual(first)
+    }
+  })
+  it('invalid birthYear and missing/invalid age never throws and yields a valid person', () => {
+    for (const raw of [{ birthYear: 1500 }, { birthYear: 1500, age: NaN }, { birthYear: 1986.5, age: 'x' }, { birthYear: 9999, age: null }, { birthYear: 1500, age: 1e9 }]) {
+      const p = y(raw)
+      expect(Number.isInteger(p.birthYear)).toBe(true)
+      expect(birthYearError(p.birthYear, ASOF)).toBeUndefined()
+      expect(p.birthMonth).toBeGreaterThanOrEqual(1)
+      expect(p.birthMonth).toBeLessThanOrEqual(12)
+      expect(p.age).toBe(ASOF.year - p.birthYear)
+    }
+  })
+})
