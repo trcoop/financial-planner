@@ -137,7 +137,38 @@ export type ProjectionErrorCode =
    * build cannot compute for it (a property of the build). When a status could hit both this
    * and `TAX_MFS_PREFERENTIAL_UNSUPPORTED`, this code fires first.
    */
-  | 'TAX_FILING_STATUS_UNVERIFIED';
+  | 'TAX_FILING_STATUS_UNVERIFIED'
+  // --- Social Security engine (`src/engine/socialSecurity/`), SS ERD §12.7 / §12.25.1 ---
+  /** `pia` or `check` < 0 ($0 is valid). */
+  | 'SS_NEGATIVE_BENEFIT'
+  /** `birthMonth` not an integer 1-12, or `birthYear` not an integer. */
+  | 'SS_INVALID_BIRTH'
+  /** `birthYear` < 1943 (survivor-FRA table is only defined for 1943+). */
+  | 'SS_UNSUPPORTED_BIRTH_YEAR'
+  /** `asOf.month` not an integer 1-12, or `asOf.year` not an integer. */
+  | 'SS_INVALID_AS_OF'
+  /** Claim earlier than 62y1m. */
+  | 'SS_CLAIM_BEFORE_ELIGIBLE'
+  /** Claim later than 70y0m, or an empty legal window (not collecting and already past 70). */
+  | 'SS_CLAIM_AFTER_70'
+  /** Not-collecting claim month at or before the asOf month (calculator path only). */
+  | 'SS_CLAIM_IN_PAST'
+  /** `sinceMonth` before the first legal month / after 70y0m / after asOf, or `claimMonth`/`benefit.kind` mismatch. */
+  | 'SS_INVALID_ALREADY_COLLECTING'
+  /** `colaRate` not in 0..0.20. */
+  | 'SS_INVALID_COLA'
+  /** `growthRate` not in 0..0.25 (`null` is valid). */
+  | 'SS_INVALID_GROWTH_RATE'
+  /** `deathAgeYears` below current age, > 120, or non-finite. */
+  | 'SS_INVALID_DEATH'
+  /** Two-person arrays or `claimMonth[1]` supplied for a one-person household. */
+  | 'SS_SPOUSAL_INPUT_ON_SINGLE'
+  /** `topClaims`/`evaluateGrid` axes are malformed (wrong person, unsorted, duplicate, outside the legal window). */
+  | 'SS_INVALID_CLAIM_AXES'
+  /** `topClaims` `n` is not a positive integer. */
+  | 'SS_INVALID_TOP_N'
+  /** A stubbed Social Security function whose owning work package has not landed yet. */
+  | 'SS_NOT_IMPLEMENTED';
 
 /**
  * Thrown when caller-supplied engine input violates an invariant.
