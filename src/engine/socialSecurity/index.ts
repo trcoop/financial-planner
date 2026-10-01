@@ -34,7 +34,7 @@ export type {
 
 export { fraMonths, legalClaimWindow, ownFactorAt, ownFactorSteady, survivorFraMonths } from './benefit';
 export { computeOwnAndSpousal, spousalAmount } from './spousal';
-export { survivorBreakdown } from './survivor';
+export { paidBenefit, survivorBreakdown, survivorPaymentWindow, survivorStartMonth } from './survivor';
 export {
   computeSocialSecurity,
   evaluateGrid,
