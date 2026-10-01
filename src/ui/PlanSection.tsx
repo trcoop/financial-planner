@@ -35,6 +35,8 @@ import { useProjectionState, PLANNING_HORIZON_END_AGE } from './hooks/useProject
 import { useDebouncedValue } from './hooks/useDebouncedValue'
 import { MEDICARE_PART_B_EVENT } from './medicareEvent'
 import { formatCurrency, formatPercent } from './utils/format'
+import { applyPeopleEdit } from './components/PeopleTab/Person'
+import { useAsOf } from './AsOfContext'
 import { clearAssumptions, loadAssumptions, saveAssumptions } from '../storage'
 import { RetirementSpendingTab } from './components/RetirementSpendingTab/RetirementSpendingTab'
 import {
@@ -85,21 +87,23 @@ interface PlanSectionProps {}
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function PlanSection(_props: PlanSectionProps) {
-  const [coreValues, setCoreValues] = useState(() => loadAssumptions()?.core ?? DEFAULT_CORE_VALUES)
+  // FIN-162: the once-per-page-load clock read, injected into every age calculation below.
+  const asOf = useAsOf()
+  const [coreValues, setCoreValues] = useState(() => loadAssumptions(asOf)?.core ?? DEFAULT_CORE_VALUES)
   const [advancedValues, setAdvancedValues] = useState(
-    () => loadAssumptions()?.advanced ?? DEFAULT_ADVANCED_VALUES,
+    () => loadAssumptions(asOf)?.advanced ?? DEFAULT_ADVANCED_VALUES,
   )
   // FIN-116: replaces the FIN-113 hasSpouse/spouseAge checkbox pair. Seeded once, lazily, from
   // whatever was persisted (or freshly from `coreValues` if nothing/nothing valid was) — see
   // `seedPeople`'s doc comment: it never seeds a spouse, only ever the primary Person.
-  const [people, setPeople] = useState<Person[]>(() => seedPeople(loadAssumptions()?.people, coreValues))
+  const [people, setPeople] = useState<Person[]>(() => seedPeople(loadAssumptions(asOf)?.people, coreValues, asOf))
   // FIN-117 bug-fix round: Accounts, same lazy-seed-from-persisted pattern as `people` above —
   // `seedAccounts` falls back to a single default account seeded from `coreValues`'s legacy
   // initialBalance/annualContributionRatePercent, owned by the primary Person, so a pre-FIN-117
   // record's data isn't silently lost.
   const [accounts, setAccounts] = useState<Account[]>(() => {
-    const loaded = loadAssumptions()
-    const seededPeople = seedPeople(loaded?.people, coreValues)
+    const loaded = loadAssumptions(asOf)
+    const seededPeople = seedPeople(loaded?.people, coreValues, asOf)
     const primaryId = primaryPerson(seededPeople)?.id ?? seededPeople[0]?.id ?? 'primary'
     return seedAccounts(loaded?.accounts, primaryId, coreValues)
   })
@@ -107,7 +111,7 @@ export function PlanSection(_props: PlanSectionProps) {
   // persisted pattern as `people`/`accounts` above. Absent-on-load resolves to
   // `DEFAULT_RETIREMENT_SPENDING_VALUES` (`{}`) — no goal set, matching the AC's opt-in default.
   const [retirementSpendingValues, setRetirementSpendingValues] = useState<RetirementSpendingValues>(
-    () => loadAssumptions()?.retirementSpending ?? DEFAULT_RETIREMENT_SPENDING_VALUES,
+    () => loadAssumptions(asOf)?.retirementSpending ?? DEFAULT_RETIREMENT_SPENDING_VALUES,
   )
   const [activeTab, setActiveTab] = useState<string>(TABS[0].id)
   // FIN-115: which Profile sub-section (People/Accounts/Rates) is showing. Plain React state,
@@ -171,11 +175,13 @@ export function PlanSection(_props: PlanSectionProps) {
   // `primaryAccount?.balance`.
   const totalAccountBalance = accounts.reduce((sum, account) => sum + account.balance, 0)
   const effectiveCoreValues = useMemo(
-    () => syncCoreWithPrimaryAccount(syncCoreWithPrimary(coreValues, people), accounts, primary?.id ?? ''),
+    () => syncCoreWithPrimaryAccount(syncCoreWithPrimary(coreValues, people, asOf), accounts, primary?.id ?? ''),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       coreValues,
       primary?.age,
+      primary?.birthYear,
+      asOf,
       primary?.retirementAge,
       primary?.salary,
       primary?.id,
@@ -284,7 +290,8 @@ export function PlanSection(_props: PlanSectionProps) {
     if (removedIds.length > 0) {
       setAccounts((prev) => prev.filter((account) => !removedIds.includes(account.ownerId)))
     }
-    setPeople(updatedPeople)
+    // FIN-162 transitional adapter: an `age` edit writes `birthYear` (removed by FIN-179).
+    setPeople(applyPeopleEdit(people, updatedPeople, asOf))
   }
 
   const handleReset = () => {
@@ -296,7 +303,7 @@ export function PlanSection(_props: PlanSectionProps) {
     clearAssumptions()
     setCoreValues(DEFAULT_CORE_VALUES)
     setAdvancedValues(DEFAULT_ADVANCED_VALUES)
-    const resetPrimary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+    const resetPrimary = createPrimaryPerson(DEFAULT_CORE_VALUES, asOf)
     setPeople([resetPrimary])
     setAccounts(seedAccounts(undefined, resetPrimary.id, DEFAULT_CORE_VALUES))
     setRetirementSpendingValues(DEFAULT_RETIREMENT_SPENDING_VALUES)

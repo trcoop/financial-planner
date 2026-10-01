@@ -11,6 +11,8 @@ import {
 import { isAdvancedInputValid, isCoreInputValid } from '../components'
 import type { Account, AdvancedAssumptionValues, CoreInputValues, Person } from '../components'
 import { medicarePartBEvent, spouseMedicarePartBEvent } from '../medicareEvent'
+import { personCalendarAge } from '../components/PeopleTab/Person'
+import { useAsOf } from '../AsOfContext'
 import { useDebouncedValue } from './useDebouncedValue'
 
 /** Planning horizon is a call-site default per FIN-19 — not user input for the MVP. Exported so
@@ -121,6 +123,8 @@ export function useProjectionState(
   // FIN-114: debounced like core/advanced, so a spouse add/remove settles on the same ~300ms
   // cadence as every other input this hook recomputes from, rather than firing immediately.
   const debouncedPeople = useDebouncedValue(people, debounceMs)
+  // FIN-162: outside Social Security, a Person's age is the calendar-year difference.
+  const asOf = useAsOf()
   // FIN-118: same debounce cadence as `people` above, for the same reason — an account edit
   // (contribution mode/value) shouldn't recompute the projection on every keystroke.
   const debouncedAccounts = useDebouncedValue(accounts, debounceMs)
@@ -135,7 +139,7 @@ export function useProjectionState(
   const additionalIncomes = useMemo((): AdditionalIncome[] => {
     const raiseRate = debouncedAdvancedValues.annualRaisePercent / 100
     return debouncedPeople
-      .filter((person) => !person.isPrimary && Number.isFinite(person.age) && Number.isFinite(person.retirementAge))
+      .filter((person) => !person.isPrimary && Number.isFinite(personCalendarAge(person, asOf)) && Number.isFinite(person.retirementAge))
       .map((person): AdditionalIncome => {
         const ownedAccounts = debouncedAccounts.filter((account) => account.ownerId === person.id)
         const contributionRate = ownedAccounts
@@ -153,10 +157,10 @@ export function useProjectionState(
           fixedContribution,
           // Same offset technique `spouseMedicarePartBEvent` uses for its own `startAge`: the
           // primary's age when THIS person reaches their own retirementAge.
-          retiresAtPrimaryAge: debouncedCoreValues.currentAge + (person.retirementAge - person.age),
+          retiresAtPrimaryAge: debouncedCoreValues.currentAge + (person.retirementAge - personCalendarAge(person, asOf)),
         }
       })
-  }, [debouncedPeople, debouncedAccounts, debouncedAdvancedValues.annualRaisePercent, debouncedCoreValues.currentAge])
+  }, [debouncedPeople, debouncedAccounts, debouncedAdvancedValues.annualRaisePercent, debouncedCoreValues.currentAge, asOf])
 
   // FIN-118 review fix: the primary's own account can be in `fixed` contribution mode too —
   // `syncCoreWithPrimaryAccount` (Account.ts) only ever populates `core.annualContributionRatePercent`
@@ -223,8 +227,8 @@ export function useProjectionState(
   // is ever added to `people`, this would silently treat the first one as "the spouse" for
   // Medicare purposes — revisit this line, not just the Person model, when that lands.
   const spouse = useMemo(
-    () => debouncedPeople.find((person) => !person.isPrimary && Number.isFinite(person.age)),
-    [debouncedPeople],
+    () => debouncedPeople.find((person) => !person.isPrimary && Number.isFinite(personCalendarAge(person, asOf))),
+    [debouncedPeople, asOf],
   )
 
   // FIN-114: constructed once, here — the single source both the deterministic `runProjection`
@@ -242,12 +246,13 @@ export function useProjectionState(
     // `spouseMedicarePartBEvent`'s doc comment for the offset math).
     return [
       ...base,
-      spouseMedicarePartBEvent(debouncedCoreValues.currentAge, spouse.age, assumptions.inflationRate, spouseMedicareAnnualAmount),
+      spouseMedicarePartBEvent(debouncedCoreValues.currentAge, personCalendarAge(spouse, asOf), assumptions.inflationRate, spouseMedicareAnnualAmount),
     ]
   }, [
     assumptions.inflationRate,
     debouncedCoreValues.currentAge,
     spouse,
+    asOf,
     primaryMedicareAnnualAmount,
     spouseMedicareAnnualAmount,
   ])

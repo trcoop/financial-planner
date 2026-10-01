@@ -1,3 +1,5 @@
+import type { AsOf } from '../engine/age'
+import { systemAsOf } from '../ui/AsOfContext'
 import type { CoreInputValues } from '../ui/coreInputs/types'
 import { DEFAULT_CORE_VALUES } from '../ui/coreInputs/defaults'
 import type { AdvancedAssumptionValues } from '../ui/components/AdvancedAssumptionsForm/AdvancedAssumptionsForm'
@@ -22,8 +24,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * Schema drift (missing or wrong-typed fields on an otherwise-parseable record) is handled by
  * a per-field merge against the current defaults rather than discarding the whole record — see
  * ERD §2.3.
+ *
+ * FIN-162: `asOf` is injected for the legacy `age` -> `birthYear` migration (never reads the
+ * clock itself; the default is the UI's once-per-page-load read).
  */
-export function loadAssumptions(): PersistedAssumptions | undefined {
+export function loadAssumptions(asOf: AsOf = systemAsOf()): PersistedAssumptions | undefined {
   let raw: string | null
   try {
     raw = localStorage.getItem(STORAGE_KEY)
@@ -56,7 +61,7 @@ export function loadAssumptions(): PersistedAssumptions | undefined {
   // primary Person from `core` (never a spouse — see its own doc comment). A pre-FIN-116
   // record's leftover `core.hasSpouse`/`core.spouseAge` (if present in the raw JSON) are never
   // read here — those fields are retired from `CoreInputValues` entirely.
-  const people: Person[] = seedPeople(parsed.people, core)
+  const people: Person[] = seedPeople(parsed.people, core, asOf)
   const primaryPersonId = primaryPerson(people)?.id ?? PERSON_ID_PRIMARY
 
   // FIN-117: `accounts` is a new field, same "absent on pre-this-ticket records" category as
