@@ -76,12 +76,13 @@ export function personCalendarAge(person: Pick<Person, 'age' | 'birthYear' | 'bi
   return asOf.year - personBirth(person, asOf).year
 }
 
-/** People-page validation for the birth fields: required (a pre-FIN-162 record has none), then range. */
+/** People-page validation: only "not chosen" is an error (a pre-FIN-162 record has no birth).
+ * The dropdowns cannot produce an invalid value, and stored data is never second-guessed. */
 export function birthMonthFieldError(person: Pick<Person, 'birthMonth'>): string | undefined {
-  return isBirthMonth(person.birthMonth) ? undefined : 'Birth month is required (1-12).'
+  return isBirthMonth(person.birthMonth) ? undefined : 'Birth month is required.'
 }
-export function birthYearFieldError(person: Pick<Person, 'birthYear'>, asOf: AsOf): string | undefined {
-  return isBirthYear(person.birthYear) ? birthYearError(person.birthYear, asOf) : 'Birth year is required.'
+export function birthYearFieldError(person: Pick<Person, 'birthYear'>): string | undefined {
+  return isBirthYear(person.birthYear) ? undefined : 'Birth year is required.'
 }
 
 /**

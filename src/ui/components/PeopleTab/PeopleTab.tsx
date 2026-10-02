@@ -1,5 +1,6 @@
 import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
+import { SelectField, type SelectFieldOption } from '../SelectField/SelectField'
 import { TextField } from '../TextField/TextField'
 import { ConfirmDialog } from '../ConfirmDialog/ConfirmDialog'
 import { useState } from 'react'
@@ -14,7 +15,26 @@ import {
   PERSON_FIELD_RANGES,
   type Person,
 } from './Person'
+import type { AsOf } from '../../../engine/age'
 import styles from './PeopleTab.module.css'
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+const MONTH_OPTIONS: SelectFieldOption[] = [
+  { value: '', label: 'Month' },
+  ...MONTH_NAMES.map((label, i) => ({ value: String(i + 1), label })),
+]
+
+/** Placeholder, then asOf.year-18 down to asOf.year-100. A stored year outside that range is
+ * kept as an extra option so existing data is never silently lost (and never repaired). */
+function birthYearOptions(stored: number | undefined, asOf: AsOf): SelectFieldOption[] {
+  const { min, max } = birthYearRange(asOf)
+  const options: SelectFieldOption[] = [{ value: '', label: 'Year' }]
+  for (let year = max; year >= min; year--) options.push({ value: String(year), label: String(year) })
+  if (stored !== undefined && Number.isFinite(stored) && (stored < min || stored > max || !Number.isInteger(stored))) {
+    options.push({ value: String(stored), label: String(stored) })
+  }
+  return options
+}
 
 interface PeopleTabProps {
   people: Person[]
@@ -94,21 +114,24 @@ export function PeopleTab({ people, onChange, accounts = [] }: PeopleTabProps) {
               error={personFieldError('age', person.age)}
               onChange={(value) => updatePerson(person.id, { age: value })}
             />
-            <NumberField
+            <SelectField
               label="Birth month"
-              value={person.birthMonth ?? NaN}
-              min={1}
-              max={12}
+              value={person.birthMonth === undefined ? '' : String(person.birthMonth)}
+              options={MONTH_OPTIONS}
               error={birthMonthFieldError(person)}
-              onChange={(value) => updatePerson(person.id, { birthMonth: value })}
+              onChange={(value) => updatePerson(person.id, { birthMonth: value === '' ? undefined : Number(value) })}
             />
-            <NumberField
+            <SelectField
               label="Birth year"
-              value={person.birthYear ?? NaN}
-              min={birthYearRange(asOf).min}
-              max={birthYearRange(asOf).max}
-              error={birthYearFieldError(person, asOf)}
-              onChange={(value) => updatePerson(person.id, { birthYear: value, age: asOf.year - value })}
+              value={person.birthYear === undefined ? '' : String(person.birthYear)}
+              options={birthYearOptions(person.birthYear, asOf)}
+              error={birthYearFieldError(person)}
+              onChange={(value) =>
+                updatePerson(
+                  person.id,
+                  value === '' ? { birthYear: undefined } : { birthYear: Number(value), age: asOf.year - Number(value) },
+                )
+              }
             />
             <NumberField
               label="Retirement age"

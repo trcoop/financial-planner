@@ -5,7 +5,6 @@ import { spouseMedicarePartBEvent } from '../../medicareEvent'
 import {
   applyPeopleEdit,
   birthMonthFieldError,
-  birthYearError,
   birthYearFieldError,
   createPrimaryPerson,
   createSpouse,
@@ -74,29 +73,15 @@ describe('creators set defaults (new-person creation only)', () => {
   })
 })
 
-describe('birthYearError', () => {
-  it('uses the spec copy and range', () => {
-    expect(birthYearError(1925, ASOF)).toBe('Birth year must be between 1926 and 2008.')
-    expect(birthYearError(2009, ASOF)).toBe('Birth year must be between 1926 and 2008.')
-    expect(birthYearError(1926, ASOF)).toBeUndefined()
-    expect(birthYearError(2008, ASOF)).toBeUndefined()
-    expect(birthYearError(NaN, ASOF)).toBe('Birth year must be between 1926 and 2008.')
-  })
-})
-
 describe('People page birth field validation', () => {
   it('missing birth month / year are flagged as required', () => {
-    expect(birthMonthFieldError({})).toBe('Birth month is required (1-12).')
-    expect(birthYearFieldError({}, ASOF)).toBe('Birth year is required.')
+    expect(birthMonthFieldError({})).toBe('Birth month is required.')
+    expect(birthYearFieldError({})).toBe('Birth year is required.')
   })
-  it('invalid month is flagged, valid month is not', () => {
-    expect(birthMonthFieldError({ birthMonth: 13 })).toBeDefined()
-    expect(birthMonthFieldError({ birthMonth: 1.5 })).toBeDefined()
-    expect(birthMonthFieldError({ birthMonth: 12 })).toBeUndefined()
-  })
-  it('out-of-range year gets the range error; in-range does not', () => {
-    expect(birthYearFieldError({ birthYear: 1500 }, ASOF)).toBe('Birth year must be between 1926 and 2008.')
-    expect(birthYearFieldError({ birthYear: 1986 }, ASOF)).toBeUndefined()
+  it('a present value (even out of range or odd) is never flagged: the dropdown cannot produce one', () => {
+    expect(birthMonthFieldError({ birthMonth: 4 })).toBeUndefined()
+    expect(birthYearFieldError({ birthYear: 1986 })).toBeUndefined()
+    expect(birthYearFieldError({ birthYear: 1500 })).toBeUndefined()
   })
 })
 
