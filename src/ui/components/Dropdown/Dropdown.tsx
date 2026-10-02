@@ -58,6 +58,9 @@ const VIEWPORT_MARGIN = 8
  * unreliable enough that focus didn't consistently land, or stay, on the listbox), even though
  * jsdom's `.focus()` in tests couldn't reproduce the gap. See ERD: Investment Calculator §1.
  */
+const PAGE_SIZE = 10
+const TYPEAHEAD_RESET_MS = 600
+
 export function Dropdown({
   options,
   selectedId,
@@ -82,6 +85,9 @@ export function Dropdown({
   const [position, setPosition] = useState<{ top: number; left: number } | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
+  // Type-ahead prefix buffer; cleared by a timer after TYPEAHEAD_RESET_MS of no typing.
+  const typeaheadBufferRef = useRef('')
+  const typeaheadTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const popoverId = useId()
   const optionIdPrefix = useId()
 
@@ -97,7 +103,15 @@ export function Dropdown({
 
   const optionId = (index: number) => `${optionIdPrefix}-option-${index}`
 
+  const resetTypeahead = () => {
+    clearTimeout(typeaheadTimerRef.current)
+    typeaheadBufferRef.current = ''
+  }
+
+  useEffect(() => () => clearTimeout(typeaheadTimerRef.current), [])
+
   const close = () => {
+    resetTypeahead()
     setIsOpen(false)
     // Closing by any path (selection, Escape, outside click) returns focus to the trigger.
     triggerRef.current?.focus()
@@ -120,6 +134,18 @@ export function Dropdown({
       close()
     } else {
       openAt(selectedIndex)
+    }
+  }
+
+  const typeahead = (char: string) => {
+    clearTimeout(typeaheadTimerRef.current)
+    typeaheadBufferRef.current += char.toLowerCase()
+    typeaheadTimerRef.current = setTimeout(resetTypeahead, TYPEAHEAD_RESET_MS)
+    const prefix = typeaheadBufferRef.current
+    const match = options.findIndex((option) => option.label.toLowerCase().startsWith(prefix))
+    if (match >= 0) {
+      setIsActiveHighlightVisible(true)
+      setActiveIndex(match)
     }
   }
 
@@ -156,8 +182,26 @@ export function Dropdown({
         setIsActiveHighlightVisible(true)
         setActiveIndex(options.length - 1)
         break
-      case 'Enter':
+      case 'PageDown':
+        event.preventDefault()
+        setIsActiveHighlightVisible(true)
+        setActiveIndex((index) => Math.min(index + PAGE_SIZE, options.length - 1))
+        break
+      case 'PageUp':
+        event.preventDefault()
+        setIsActiveHighlightVisible(true)
+        setActiveIndex((index) => Math.max(index - PAGE_SIZE, 0))
+        break
       case ' ':
+        if (typeaheadBufferRef.current !== '') {
+          event.preventDefault()
+          typeahead(' ')
+          break
+        }
+        event.preventDefault()
+        selectActive()
+        break
+      case 'Enter':
         event.preventDefault()
         selectActive()
         break
@@ -166,6 +210,10 @@ export function Dropdown({
         close()
         break
       default:
+        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          event.preventDefault()
+          typeahead(event.key)
+        }
         break
     }
   }
