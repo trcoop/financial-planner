@@ -41,15 +41,6 @@ export function birthYearRange(asOf: AsOf): { min: number; max: number } {
   return { min: asOf.year - 100, max: asOf.year - 18 }
 }
 
-/** Range error for a birth year, or `undefined` when valid. Live-validation copy (UI only). */
-export function birthYearError(birthYear: number, asOf: AsOf): string | undefined {
-  const { min, max } = birthYearRange(asOf)
-  if (!Number.isFinite(birthYear) || birthYear < min || birthYear > max) {
-    return `Birth year must be between ${min} and ${max}.`
-  }
-  return undefined
-}
-
 const isBirthMonth = (v: unknown): v is number => isFiniteNumber(v) && Number.isInteger(v) && v >= 1 && v <= 12
 const isBirthYear = (v: unknown): v is number => isFiniteNumber(v) && Number.isInteger(v)
 

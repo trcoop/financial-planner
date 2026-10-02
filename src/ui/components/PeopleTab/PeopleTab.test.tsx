@@ -217,5 +217,41 @@ describe('PeopleTab', () => {
       expect(out.age).toBe(40)
       expect(out.birthMonth).toBe(4)
     })
+
+    it('choosing the "Month" placeholder sets birthMonth to undefined (not NaN, not 0) and leaves age alone', async () => {
+      const user = userEvent.setup()
+      const onChange = vi.fn()
+      renderFrozen([{ ...legacy, birthMonth: 4, birthYear: 1986 }], onChange)
+      await user.click(screen.getByLabelText('Birth month'))
+      await user.click(screen.getByRole('option', { name: 'Month' }))
+      const out = onChange.mock.calls.at(-1)![0][0]
+      expect('birthMonth' in out).toBe(true)
+      expect(out.birthMonth).toBeUndefined()
+      expect(out.age).toBe(40)
+      expect(out.birthYear).toBe(1986)
+    })
+
+    it.each([
+      ['non-integer 1990.5', 1990.5, '1990.5'],
+      ['above max 2020', 2020, '2020'],
+    ])('a stored %s adds an extra selected option', async (_n, stored, label) => {
+      const user = userEvent.setup()
+      renderFrozen([{ ...legacy, birthMonth: 4, birthYear: stored }])
+      expect(screen.getByLabelText('Birth year')).toHaveTextContent(label)
+      await user.click(screen.getByLabelText('Birth year'))
+      const names = within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
+      expect(names).toHaveLength(1 + 83 + 1)
+      expect(names[names.length - 1]).toBe(label)
+    })
+
+    it('a stored NaN birthYear adds no extra option and shows the required error', async () => {
+      const user = userEvent.setup()
+      renderFrozen([{ ...legacy, birthMonth: 4, birthYear: NaN }])
+      expect(screen.getByText('Birth year is required.')).toBeInTheDocument()
+      await user.click(screen.getByLabelText('Birth year'))
+      const names = within(screen.getByRole('listbox')).getAllByRole('option').map((o) => o.textContent)
+      expect(names).toHaveLength(1 + 83)
+      expect(names).not.toContain('NaN')
+    })
   })
 })
