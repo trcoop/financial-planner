@@ -4,11 +4,12 @@ import { calendarAge } from '../../../engine/age'
 import { spouseMedicarePartBEvent } from '../../medicareEvent'
 import {
   applyPeopleEdit,
+  birthMonthFieldError,
   birthYearError,
+  birthYearFieldError,
   createPrimaryPerson,
   createSpouse,
-  normalizePerson,
-  normalizePeople,
+  personBirth,
   personCalendarAge,
   seedPeople,
   syncCoreWithPrimary,
@@ -16,58 +17,60 @@ import {
 
 const ASOF = { year: 2026, month: 9 }
 
-describe('normalizePerson', () => {
-  it('legacy record: {age:40} at asOf 2026-09 -> birthYear 1986, birthMonth 9; second load identical', () => {
-    const first = normalizePerson({ id: 'primary', name: 'You', age: 40, retirementAge: 65, salary: 1, isPrimary: true }, ASOF)
-    expect(first.birthYear).toBe(1986)
-    expect(first.birthMonth).toBe(9)
-    expect(first.age).toBe(40)
-    expect(normalizePerson(first, ASOF)).toEqual(first)
+describe('personBirth (consumer fallback, never persisted)', () => {
+  it('no birth fields: year = asOf.year - age, month = asOf.month', () => {
+    expect(personBirth({ age: 40 }, ASOF)).toEqual({ year: 1986, month: 9 })
   })
-
-  it('never throws on junk input', () => {
-    const junk: unknown[] = [null, undefined, NaN, 'x', 5, [], {}, { age: 'abc' }, { age: NaN, birthYear: null, birthMonth: 'z' }, { birthMonth: 99, birthYear: 'q' }]
-    for (const j of junk) {
-      expect(() => normalizePerson(j, ASOF)).not.toThrow()
-      const p = normalizePerson(j, ASOF)
-      expect(Number.isFinite(p.birthYear)).toBe(true)
-      expect(p.birthMonth).toBeGreaterThanOrEqual(1)
-      expect(p.birthMonth).toBeLessThanOrEqual(12)
-      expect(Number.isFinite(p.age)).toBe(true)
-      expect(normalizePerson(p, ASOF)).toEqual(p)
-    }
+  it('valid birth fields are used as-is, even when age disagrees', () => {
+    expect(personBirth({ age: 30, birthYear: 1980, birthMonth: 4 }, ASOF)).toEqual({ year: 1980, month: 4 })
   })
-
-  it('birthYear wins over a conflicting stored age', () => {
-    const p = normalizePerson({ age: 30, birthYear: 1980, birthMonth: 2 }, ASOF)
-    expect(p.birthYear).toBe(1980)
-    expect(p.birthMonth).toBe(2)
-    expect(p.age).toBe(46)
+  it.each([
+    [{ birthYear: 1980 }],
+    [{ birthMonth: 4 }],
+    [{ birthYear: 1980, birthMonth: 13 }],
+    [{ birthYear: 1980, birthMonth: 0 }],
+    [{ birthYear: 1980.5, birthMonth: 4 }],
+    [{ birthYear: NaN, birthMonth: 4 }],
+  ])('a missing/invalid half (%j) falls back to age for both', (birth) => {
+    expect(personBirth({ age: 40, ...birth }, ASOF)).toEqual({ year: 1986, month: 9 })
+  })
+  it('no usable age and no birth: year is NaN, never throws', () => {
+    expect(personBirth({ age: NaN }, ASOF).year).toBeNaN()
+    expect(() => personBirth({} as never, ASOF)).not.toThrow()
+  })
+  it('does not mutate the person', () => {
+    const p = { age: 40 }
+    personBirth(p, ASOF)
+    expect(p).toEqual({ age: 40 })
   })
 })
 
-describe('normalizePeople / seedPeople', () => {
-  it('absent or non-array people normalize to []', () => {
-    expect(normalizePeople(undefined, ASOF)).toEqual([])
-    expect(normalizePeople('x', ASOF)).toEqual([])
+describe('seedPeople passes persisted people through untouched (no load-time repair)', () => {
+  it('keeps the same array; missing salary/retirementAge/birth stay missing', () => {
+    const raw = [{ id: 'primary', name: 'You', age: 17, isPrimary: true }]
+    const out = seedPeople(raw, DEFAULT_CORE_VALUES, ASOF)
+    expect(out).toBe(raw)
+    expect(out[0]).toEqual({ id: 'primary', name: 'You', age: 17, isPrimary: true })
+    expect('salary' in out[0]).toBe(false)
+    expect('birthYear' in out[0]).toBe(false)
   })
-  it('seedPeople seeds a clock-based primary when absent', () => {
-    const [p] = seedPeople(undefined, { ...DEFAULT_CORE_VALUES, currentAge: 40 }, ASOF)
-    expect(p.birthYear).toBe(1986)
-    expect(p.birthMonth).toBe(9)
-  })
-  it('seedPeople returns the same array when already normalized', () => {
-    const existing = [createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF), createSpouse(ASOF)]
-    expect(seedPeople(existing, DEFAULT_CORE_VALUES, ASOF)).toBe(existing)
+  it('seeds a primary when absent', () => {
+    expect(seedPeople(undefined, { ...DEFAULT_CORE_VALUES, currentAge: 40 }, ASOF)[0]).toMatchObject({
+      isPrimary: true,
+      age: 40,
+      birthYear: 1986,
+      birthMonth: 9,
+    })
   })
 })
 
-describe('creators', () => {
-  it('createSpouse default is clock-based (35 years old at asOf)', () => {
+describe('creators set defaults (new-person creation only)', () => {
+  it('createSpouse default is clock-based (35 years old at asOf), salary 85,000', () => {
     const s = createSpouse(ASOF)
     expect(s.birthYear).toBe(1991)
     expect(s.birthMonth).toBe(9)
     expect(s.age).toBe(35)
+    expect(s.salary).toBe(85_000)
   })
 })
 
@@ -81,14 +84,34 @@ describe('birthYearError', () => {
   })
 })
 
+describe('People page birth field validation', () => {
+  it('missing birth month / year are flagged as required', () => {
+    expect(birthMonthFieldError({})).toBe('Birth month is required (1-12).')
+    expect(birthYearFieldError({}, ASOF)).toBe('Birth year is required.')
+  })
+  it('invalid month is flagged, valid month is not', () => {
+    expect(birthMonthFieldError({ birthMonth: 13 })).toBeDefined()
+    expect(birthMonthFieldError({ birthMonth: 1.5 })).toBeDefined()
+    expect(birthMonthFieldError({ birthMonth: 12 })).toBeUndefined()
+  })
+  it('out-of-range year gets the range error; in-range does not', () => {
+    expect(birthYearFieldError({ birthYear: 1500 }, ASOF)).toBe('Birth year must be between 1926 and 2008.')
+    expect(birthYearFieldError({ birthYear: 1986 }, ASOF)).toBeUndefined()
+  })
+})
+
 describe('transitional age adapter', () => {
-  it('editing age writes birthYear = asOf.year - age, keeping birthMonth, and is not reverted on reload', () => {
+  it('editing age writes birthYear = asOf.year - age, keeping birthMonth', () => {
     const prev = [{ ...createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF), birthMonth: 3 }]
-    const edited = [{ ...prev[0], age: 50 }]
-    const next = applyPeopleEdit(prev, edited, ASOF)
+    const next = applyPeopleEdit(prev, [{ ...prev[0], age: 50 }], ASOF)
     expect(next[0].birthYear).toBe(1976)
     expect(next[0].birthMonth).toBe(3)
-    expect(normalizePerson(next[0], ASOF).age).toBe(50)
+  })
+  it('an age edit on a person with no birthYear leaves birth absent (age stays the source)', () => {
+    const prev = [{ id: 'primary', name: 'You', age: 40, retirementAge: 65, salary: 1, isPrimary: true }]
+    const next = applyPeopleEdit(prev, [{ ...prev[0], age: 50 }], ASOF)
+    expect('birthYear' in next[0]).toBe(false)
+    expect(next[0].age).toBe(50)
   })
   it('a blank (NaN) age edit is left as typed', () => {
     const prev = [createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF)]
@@ -96,50 +119,7 @@ describe('transitional age adapter', () => {
     expect(next[0].age).toBeNaN()
     expect(next[0].birthYear).toBe(prev[0].birthYear)
   })
-  it('non-age edits pass through untouched', () => {
-    const prev = [createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF)]
-    const edited = [{ ...prev[0], salary: 5 }]
-    expect(applyPeopleEdit(prev, edited, ASOF)).toEqual(edited)
-  })
-})
-
-describe('calendar age callers (E4)', () => {
-  it('personCalendarAge = asOf.year - birthYear regardless of birth month', () => {
-    const p = normalizePerson({ birthYear: 1986, birthMonth: 12 }, ASOF)
-    expect(personCalendarAge(p, ASOF)).toBe(40)
-    expect(personCalendarAge({ age: p.age, birthYear: p.birthYear }, ASOF)).toBe(calendarAge(1986, ASOF))
-  })
-  it('falls back to stored age when birthYear is absent (transitional)', () => {
-    expect(personCalendarAge({ age: 33 } as never, ASOF)).toBe(33)
-  })
-  it('spouse Medicare offset uses calendar ages: primary 1986, spouse 1988 -> startAge 67 in any birth month', () => {
-    for (const m of [1, 9, 12]) {
-      const primary = normalizePerson({ birthYear: 1986, birthMonth: m }, ASOF)
-      const spouse = normalizePerson({ birthYear: 1988, birthMonth: 13 - m }, ASOF)
-      const e = spouseMedicarePartBEvent(personCalendarAge(primary, ASOF), personCalendarAge(spouse, ASOF), 0.03)
-      expect(e.startAge).toBe(67)
-    }
-  })
-})
-
-describe('syncCoreWithPrimary uses calendar age', () => {
-  it('core.currentAge = asOf.year - birthYear even when stored age disagrees', () => {
-    const primary = { ...createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF), age: 30, birthYear: 1980 }
-    expect(syncCoreWithPrimary(DEFAULT_CORE_VALUES, [primary], ASOF).currentAge).toBe(46)
-  })
-})
-
-describe('normalizePerson birthMonth edges', () => {
-  it.each([0, 13, 1.5, -1, '3', NaN])('birthMonth %s normalizes to asOf.month', (bad) => {
-    expect(normalizePerson({ birthYear: 1990, birthMonth: bad }, ASOF).birthMonth).toBe(9)
-  })
-  it.each([1, 12])('keeps valid birthMonth %s', (m) => {
-    expect(normalizePerson({ birthYear: 1990, birthMonth: m }, ASOF).birthMonth).toBe(m)
-  })
-})
-
-describe('applyPeopleEdit guard', () => {
-  it('a salary-only edit leaves birthYear alone even when stored age disagrees with it', () => {
+  it('a salary-only edit leaves birthYear alone even when stored age disagrees', () => {
     const prev = [{ ...createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF), age: 30, birthYear: 1980 }]
     const next = applyPeopleEdit(prev, [{ ...prev[0], salary: 1 }], ASOF)
     expect(next[0].birthYear).toBe(1980)
@@ -147,57 +127,33 @@ describe('applyPeopleEdit guard', () => {
   })
 })
 
-describe('normalizePerson malformed birth fields (PRD E3 / ERD 12.19.4)', () => {
-  const y = (raw: unknown) => normalizePerson(raw, ASOF)
-  it('out-of-range low birthYear with valid age falls back to age-derived birth (month reset to asOf.month)', () => {
-    const p = y({ age: 40, birthYear: 1500, birthMonth: 5 })
-    expect(p.birthYear).toBe(1986)
-    expect(p.birthMonth).toBe(9)
-    expect(p.age).toBe(40)
+describe('calendar age callers (E4)', () => {
+  it('personCalendarAge = asOf.year - birthYear regardless of birth month', () => {
+    expect(personCalendarAge({ age: 1, birthYear: 1986, birthMonth: 12 }, ASOF)).toBe(40)
+    expect(personCalendarAge({ age: 1, birthYear: 1986, birthMonth: 12 }, ASOF)).toBe(calendarAge(1986, ASOF))
   })
-  it('out-of-range high birthYear falls back to age-derived', () => {
-    expect(y({ age: 40, birthYear: 2020, birthMonth: 5 }).birthYear).toBe(1986)
+  it('falls back to stored age when birth is absent', () => {
+    expect(personCalendarAge({ age: 33 }, ASOF)).toBe(33)
   })
-  it('non-integer birthYear falls back to age-derived', () => {
-    expect(y({ age: 40, birthYear: 1986.5 }).birthYear).toBe(1986)
-  })
-  it('inclusive boundaries are kept (asOf.year-100 and asOf.year-18)', () => {
-    expect(y({ age: 40, birthYear: 1926, birthMonth: 5 })).toMatchObject({ birthYear: 1926, birthMonth: 5 })
-    expect(y({ age: 40, birthYear: 2008, birthMonth: 5 })).toMatchObject({ birthYear: 2008, birthMonth: 5 })
-    expect(y({ age: 40, birthYear: 1925 }).birthYear).toBe(1986)
-    expect(y({ age: 40, birthYear: 2009 }).birthYear).toBe(1986)
-  })
-  it('is idempotent for malformed inputs', () => {
-    for (const raw of [{ age: 40, birthYear: 1500 }, { age: 40, birthYear: 1986.5 }, { birthYear: 1500 }, { birthYear: 1500, age: 'x' }, { birthYear: NaN, age: NaN }]) {
-      const first = y(raw)
-      expect(y(first)).toEqual(first)
-    }
-  })
-  it('invalid birthYear and missing/invalid age never throws and yields a valid person', () => {
-    for (const raw of [{ birthYear: 1500 }, { birthYear: 1500, age: NaN }, { birthYear: 1986.5, age: 'x' }, { birthYear: 9999, age: null }, { birthYear: 1500, age: 1e9 }]) {
-      const p = y(raw)
-      expect(Number.isInteger(p.birthYear)).toBe(true)
-      expect(birthYearError(p.birthYear, ASOF)).toBeUndefined()
-      expect(p.birthMonth).toBeGreaterThanOrEqual(1)
-      expect(p.birthMonth).toBeLessThanOrEqual(12)
-      expect(p.age).toBe(ASOF.year - p.birthYear)
+  it('spouse Medicare offset uses calendar ages: primary 1986, spouse 1988 -> startAge 67 in any birth month', () => {
+    for (const m of [1, 9, 12]) {
+      const primary = { age: 0, birthYear: 1986, birthMonth: m }
+      const spouse = { age: 0, birthYear: 1988, birthMonth: 13 - m }
+      const e = spouseMedicarePartBEvent(personCalendarAge(primary, ASOF), personCalendarAge(spouse, ASOF), 0.03)
+      expect(e.startAge).toBe(67)
     }
   })
 })
 
-describe('normalizePerson does not invent a salary (product decision)', () => {
-  it('missing / NaN / string / null salary becomes a finite 0, never 85000, and is idempotent', () => {
-    for (const salary of [undefined, NaN, 'abc', null, Infinity]) {
-      const p = normalizePerson({ id: 'primary', age: 40, retirementAge: 65, salary, isPrimary: true }, ASOF)
-      expect(Number.isFinite(p.salary)).toBe(true)
-      expect(p.salary).not.toBe(85_000)
-      expect(p.salary).toBe(0)
-      expect(normalizePerson(p, ASOF)).toEqual(p)
-    }
-    expect(normalizePerson({ age: 40 }, ASOF).salary).toBe(0)
+describe('syncCoreWithPrimary', () => {
+  it('core.currentAge = asOf.year - birthYear even when stored age disagrees', () => {
+    const primary = { ...createPrimaryPerson(DEFAULT_CORE_VALUES, ASOF), age: 30, birthYear: 1980 }
+    expect(syncCoreWithPrimary(DEFAULT_CORE_VALUES, [primary], ASOF).currentAge).toBe(46)
   })
-  it('a valid salary is kept; createPrimaryPerson/createSpouse still seed their defaults', () => {
-    expect(normalizePerson({ age: 40, salary: 120_000 }, ASOF).salary).toBe(120_000)
-    expect(createSpouse(ASOF).salary).toBe(85_000)
+  it('a legacy primary (age only) keeps its age; a missing salary passes through as undefined, not an invented value', () => {
+    const primary = { id: 'primary', name: 'You', age: 40, retirementAge: 65, isPrimary: true } as never
+    const core = syncCoreWithPrimary(DEFAULT_CORE_VALUES, [primary], ASOF)
+    expect(core.currentAge).toBe(40)
+    expect(core.currentAnnualIncome).not.toBe(85_000)
   })
 })

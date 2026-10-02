@@ -5,6 +5,7 @@ import { PeopleTab } from './PeopleTab'
 import { createPrimaryPerson, createSpouse, type Person } from './Person'
 import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
 import { TEST_ASOF } from '../../../testAsOf'
+import { FrozenAsOfProvider } from '../../AsOfContext'
 
 const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF)
 
@@ -129,5 +130,46 @@ describe('PeopleTab', () => {
     render(<ControlledPeopleTab initial={[PRIMARY]} />)
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Travis' } })
     expect(screen.getByLabelText('Name')).toHaveValue('Travis')
+  })
+
+  describe('birth fields (FIN-162)', () => {
+    const legacy: Person = { id: 'primary', name: 'You', age: 40, retirementAge: 65, salary: 1, isPrimary: true }
+    const renderFrozen = (people: Person[]) =>
+      render(
+        <FrozenAsOfProvider asOf={TEST_ASOF}>
+          <PeopleTab people={people} onChange={vi.fn()} />
+        </FrozenAsOfProvider>,
+      )
+
+    it('a person with no birth month/year shows a required error on each field', () => {
+      renderFrozen([legacy])
+      expect(screen.getByLabelText('Birth month')).toHaveAttribute('aria-invalid', 'true')
+      expect(screen.getByLabelText('Birth year')).toHaveAttribute('aria-invalid', 'true')
+      expect(screen.getByText('Birth month is required (1-12).')).toBeInTheDocument()
+      expect(screen.getByText('Birth year is required.')).toBeInTheDocument()
+    })
+
+    it('a person with valid birth shows no birth error and the stored values', () => {
+      renderFrozen([{ ...legacy, birthMonth: 4, birthYear: 1986 }])
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Birth month')).toHaveValue('4')
+      expect(screen.getByLabelText('Birth year')).toHaveValue('1,986')
+    })
+
+    it('an out-of-range birth year shows the range error', () => {
+      renderFrozen([{ ...legacy, birthMonth: 4, birthYear: 1500 }])
+      expect(screen.getByText('Birth year must be between 1926 and 2008.')).toBeInTheDocument()
+    })
+
+    it('editing birth year writes birthYear and keeps age in step', () => {
+      const onChange = vi.fn()
+      render(
+        <FrozenAsOfProvider asOf={TEST_ASOF}>
+          <PeopleTab people={[{ ...legacy, birthMonth: 4, birthYear: 1986 }]} onChange={onChange} />
+        </FrozenAsOfProvider>,
+      )
+      fireEvent.change(screen.getByLabelText('Birth year'), { target: { value: '1990' } })
+      expect(onChange).toHaveBeenLastCalledWith([{ ...legacy, birthMonth: 4, birthYear: 1990, age: 36 }])
+    })
   })
 })

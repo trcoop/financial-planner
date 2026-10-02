@@ -11,21 +11,17 @@ import type { AsOf } from '../../../engine/age'
 export interface Person {
   id: string
   name: string
-  /** FIN-162: birth month (1-12) and year. The source of truth for age going forward. */
+  /** FIN-162: birth month (1-12) and year. Optional: records saved before FIN-162 have neither.
+   * Nothing writes them on load; consumers use {@link personBirth} (falls back to `age`). */
   birthMonth?: number
   birthYear?: number
-  /** TRANSITIONAL (FIN-162 -> FIN-179 removes it): calendar age `asOf.year - birthYear`, kept
-   * stored so the People tab keeps working. {@link normalizePerson} keeps it in sync, and
-   * {@link applyPeopleEdit} turns an edit of it into a `birthYear` write. */
+  /** TRANSITIONAL (FIN-162 -> FIN-179 removes it): the stored age the People tab edits.
+   * {@link applyPeopleEdit} turns an edit of it into a `birthYear` write when birth is present. */
   age: number
   retirementAge: number
   salary: number
   isPrimary: boolean
 }
-
-/** A Person whose birth fields are guaranteed present (output of {@link normalizePerson}). The
- * fields are optional on `Person` only while FIN-179 is pending (hand-built partials in tests). */
-export type NormalizedPerson = Person & { birthMonth: number; birthYear: number }
 
 export const PERSON_ID_PRIMARY = 'primary'
 
@@ -54,59 +50,38 @@ export function birthYearError(birthYear: number, asOf: AsOf): string | undefine
   return undefined
 }
 
+const isBirthMonth = (v: unknown): v is number => isFiniteNumber(v) && Number.isInteger(v) && v >= 1 && v <= 12
+const isBirthYear = (v: unknown): v is number => isFiniteNumber(v) && Number.isInteger(v)
+
 /**
- * Calendar-year age `asOf.year - birthYear` (E26) — what projection axis, spouse offset, Medicare,
- * retirement gates and `TaxPayer.age` use outside Social Security. Transitional: a Person with no
- * usable `birthYear` (a hand-built partial) falls back to its stored `age`, else NaN.
+ * Birth for consumers. A person with a valid `birthYear` AND `birthMonth` uses them as-is;
+ * otherwise (pre-FIN-162 record) birth is derived from `age`: year `asOf.year - age`, month
+ * `asOf.month`. Pure and never persisted. Year is NaN when neither source is usable.
  */
-export function personCalendarAge(person: Pick<Person, 'age' | 'birthYear'>, asOf: AsOf): number {
-  if (isFiniteNumber(person.birthYear)) return asOf.year - person.birthYear
-  return isFiniteNumber(person.age) ? person.age : NaN
+export function personBirth(
+  person: Pick<Person, 'age' | 'birthYear' | 'birthMonth'>,
+  asOf: AsOf,
+): { year: number; month: number } {
+  if (isBirthYear(person.birthYear) && isBirthMonth(person.birthMonth)) {
+    return { year: person.birthYear, month: person.birthMonth }
+  }
+  return { year: isFiniteNumber(person.age) ? asOf.year - person.age : NaN, month: asOf.month }
 }
 
 /**
- * Never throws. Repairs one untrusted persisted/partial Person into a full one (FIN-117 crash
- * history). Birth fields: a finite `birthYear` wins; else legacy `age` migrates via
- * `birthYear = asOf.year - age`; else the new-spouse default age. `birthMonth` defaults to
- * `asOf.month` (reproduces the stored age in any month). `age` is re-derived from `birthYear`, so
- * the result is idempotent. `asOf` is injected — this never reads the clock.
+ * Calendar-year age `asOf.year - birth year` (E26) — what projection axis, spouse offset, Medicare,
+ * retirement gates and `TaxPayer.age` use outside Social Security.
  */
-export function normalizePerson(raw: unknown, asOf: AsOf): NormalizedPerson {
-  const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>
-  const isValidBirthYear = (v: unknown): v is number => {
-    if (!isFiniteNumber(v) || !Number.isInteger(v)) return false
-    const { min, max } = birthYearRange(asOf)
-    return v >= min && v <= max
-  }
-  // PRD E3: a malformed birthYear (NaN, non-integer, out of range) falls back to the age-derived
-  // birth, month included (ERD 12.19.4: repair = asOf.year - age, asOf.month). Unusable age -> default.
-  const ageDerived = isFiniteNumber(r.age) ? asOf.year - r.age : NaN
-  const birthYearValid = isValidBirthYear(r.birthYear)
-  const birthYear = birthYearValid
-    ? (r.birthYear as number)
-    : isValidBirthYear(ageDerived)
-      ? ageDerived
-      : asOf.year - NEW_SPOUSE_DEFAULTS.age
-  const birthMonth =
-    birthYearValid && isFiniteNumber(r.birthMonth) && Number.isInteger(r.birthMonth) && r.birthMonth >= 1 && r.birthMonth <= 12
-      ? r.birthMonth
-      : asOf.month
-  const isPrimary = r.isPrimary === true
-  return {
-    id: typeof r.id === 'string' && r.id !== '' ? r.id : isPrimary ? PERSON_ID_PRIMARY : generatePersonId(),
-    name: typeof r.name === 'string' ? r.name : isPrimary ? 'You' : NEW_SPOUSE_DEFAULTS.name,
-    birthMonth,
-    birthYear,
-    age: asOf.year - birthYear,
-    retirementAge: isFiniteNumber(r.retirementAge) ? r.retirementAge : NEW_SPOUSE_DEFAULTS.retirementAge,
-    salary: isFiniteNumber(r.salary) ? r.salary : 0, // never invent a salary on load; defaults belong to create*
-    isPrimary,
-  }
+export function personCalendarAge(person: Pick<Person, 'age' | 'birthYear' | 'birthMonth'>, asOf: AsOf): number {
+  return asOf.year - personBirth(person, asOf).year
 }
 
-/** Never throws: an absent/non-array `people` is `[]`; entries are each normalized. */
-export function normalizePeople(raw: unknown, asOf: AsOf): NormalizedPerson[] {
-  return Array.isArray(raw) ? raw.map((entry) => normalizePerson(entry, asOf)) : []
+/** People-page validation for the birth fields: required (a pre-FIN-162 record has none), then range. */
+export function birthMonthFieldError(person: Pick<Person, 'birthMonth'>): string | undefined {
+  return isBirthMonth(person.birthMonth) ? undefined : 'Birth month is required (1-12).'
+}
+export function birthYearFieldError(person: Pick<Person, 'birthYear'>, asOf: AsOf): string | undefined {
+  return isBirthYear(person.birthYear) ? birthYearError(person.birthYear, asOf) : 'Birth year is required.'
 }
 
 /**
@@ -119,6 +94,7 @@ export function applyPeopleEdit(prev: Person[], next: Person[], asOf: AsOf): Per
   return next.map((person) => {
     const before = prev.find((p) => p.id === person.id)
     if (!before || Object.is(before.age, person.age) || !Number.isFinite(person.age)) return person
+    if (!isBirthYear(person.birthYear)) return person // pre-FIN-162 record: age stays the source
     return { ...person, birthYear: asOf.year - person.age }
   })
 }
@@ -187,13 +163,7 @@ export function createSpouse(asOf: AsOf): Person {
  */
 export function seedPeople(people: unknown, core: CoreInputValues, asOf: AsOf): Person[] {
   if (Array.isArray(people) && people.length > 0) {
-    const normalized = normalizePeople(people, asOf)
-    // Keep the input's identity when nothing needed repair (stable memo/effect deps).
-    const unchanged = normalized.every((person, i) => {
-      const original = people[i] as Record<string, unknown>
-      return (Object.keys(person) as (keyof Person)[]).every((key) => Object.is(person[key], original?.[key]))
-    })
-    return unchanged ? (people as Person[]) : normalized
+    return people as Person[]
   }
   return [createPrimaryPerson(core, asOf)]
 }

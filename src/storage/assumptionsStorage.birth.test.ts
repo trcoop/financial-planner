@@ -4,26 +4,25 @@ import { STORAGE_KEY } from './schema'
 
 const ASOF = { year: 2026, month: 9 }
 
-describe('loadAssumptions birth migration (injected asOf)', () => {
+describe('loadAssumptions does not repair or migrate people', () => {
   beforeEach(() => localStorage.clear())
 
-  it('legacy stored {age:40} -> birthYear 1986, birthMonth 9; second load identical', () => {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        core: {},
-        people: [{ id: 'primary', name: 'You', age: 40, retirementAge: 65, salary: 90000, isPrimary: true }],
-      }),
-    )
-    const first = loadAssumptions(ASOF)!
-    expect(first.people[0].birthYear).toBe(1986)
-    expect(first.people[0].birthMonth).toBe(9)
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(first))
-    expect(loadAssumptions(ASOF)!.people).toEqual(first.people)
+  it('a legacy {age} record loads with no birth fields invented, and nothing is written back', () => {
+    const raw = JSON.stringify({
+      core: {},
+      people: [{ id: 'primary', name: 'You', age: 40, retirementAge: 65, isPrimary: true }],
+    })
+    localStorage.setItem(STORAGE_KEY, raw)
+    const loaded = loadAssumptions(ASOF)!
+    expect(loaded.people[0]).toEqual({ id: 'primary', name: 'You', age: 40, retirementAge: 65, isPrimary: true })
+    expect(localStorage.getItem(STORAGE_KEY)).toBe(raw)
   })
 
-  it('the migration follows the injected asOf, not the clock', () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ people: [{ age: 40, isPrimary: true, id: 'primary' }] }))
-    expect(loadAssumptions({ year: 2030, month: 2 })!.people[0].birthYear).toBe(1990)
+  it('a record with birth fields keeps them as stored', () => {
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ people: [{ id: 'primary', age: 40, birthYear: 1500, birthMonth: 99, isPrimary: true }] }),
+    )
+    expect(loadAssumptions(ASOF)!.people[0]).toMatchObject({ birthYear: 1500, birthMonth: 99 })
   })
 })

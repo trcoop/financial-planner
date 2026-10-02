@@ -7,6 +7,9 @@ import { useAsOf } from '../../useAsOf'
 import {
   createSpouse,
   personFieldError,
+  birthMonthFieldError,
+  birthYearFieldError,
+  birthYearRange,
   spouseHasAccounts,
   PERSON_FIELD_RANGES,
   type Person,
@@ -90,6 +93,22 @@ export function PeopleTab({ people, onChange, accounts = [] }: PeopleTabProps) {
               max={PERSON_FIELD_RANGES.age.max}
               error={personFieldError('age', person.age)}
               onChange={(value) => updatePerson(person.id, { age: value })}
+            />
+            <NumberField
+              label="Birth month"
+              value={person.birthMonth ?? NaN}
+              min={1}
+              max={12}
+              error={birthMonthFieldError(person)}
+              onChange={(value) => updatePerson(person.id, { birthMonth: value })}
+            />
+            <NumberField
+              label="Birth year"
+              value={person.birthYear ?? NaN}
+              min={birthYearRange(asOf).min}
+              max={birthYearRange(asOf).max}
+              error={birthYearFieldError(person, asOf)}
+              onChange={(value) => updatePerson(person.id, { birthYear: value, age: asOf.year - value })}
             />
             <NumberField
               label="Retirement age"

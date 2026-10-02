@@ -24,8 +24,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * a per-field merge against the current defaults rather than discarding the whole record — see
  * ERD §2.3.
  *
- * FIN-162: `asOf` is injected for the legacy `age` -> `birthYear` migration (never reads the
- * clock itself; the default is the UI's once-per-page-load read).
+ * FIN-162: `asOf` is injected only for seeding a brand-new primary Person (never reads the clock).
+ * Persisted people are passed through untouched.
  */
 export function loadAssumptions(asOf: AsOf): PersistedAssumptions | undefined {
   let raw: string | null
