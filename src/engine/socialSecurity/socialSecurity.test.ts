@@ -45,12 +45,10 @@ describe('stubs throw SS_NOT_IMPLEMENTED with the typed error class', () => {
     claimMonth: [2030 * 12],
     endYear: 2050,
   };
-  const noDeath: Omit<SsInputs, 'deathAgeYears'> = inputs;
   const noClaim: Omit<SsInputs, 'claimMonth'> = inputs;
   const calls: [string, () => unknown][] = [
     ['evaluateGrid', () => ss.evaluateGrid(noClaim, [])],
     ['topClaims', () => ss.topClaims(noClaim, [])],
-    ['buildSsAnnualSchedule', () => ss.buildSsAnnualSchedule(noDeath)],
   ];
   it.each(calls)('%s', (_name, fn) => {
     let caught: unknown;
