@@ -32,6 +32,13 @@ export interface DropdownProps {
 }
 
 const VIEWPORT_MARGIN = 8
+// PageUp/PageDown step, in options.
+const PAGE_SIZE = 10
+// Type-ahead prefix buffer resets after this long without a keystroke.
+const TYPEAHEAD_RESET_MS = 600
+
+// Ctrl/Meta/Alt chords belong to the browser/OS (shortcuts), never to type-ahead or selection.
+const isUnmodified = (event: React.KeyboardEvent) => !event.ctrlKey && !event.metaKey && !event.altKey
 
 /**
  * Generic trigger-button + portaled-popover-listbox control (FIN-106, generalized in FIN-110).
@@ -58,9 +65,6 @@ const VIEWPORT_MARGIN = 8
  * unreliable enough that focus didn't consistently land, or stay, on the listbox), even though
  * jsdom's `.focus()` in tests couldn't reproduce the gap. See ERD: Investment Calculator §1.
  */
-const PAGE_SIZE = 10
-const TYPEAHEAD_RESET_MS = 600
-
 export function Dropdown({
   options,
   selectedId,
@@ -151,7 +155,10 @@ export function Dropdown({
 
   // Select-only-combobox pattern: the trigger's onKeyDown handles every key, whether the popover
   // is open or closed, because DOM focus never leaves the trigger. When closed, ArrowDown/Up/
-  // Enter/Space open the popover; when already open they move or activate the highlighted option.
+  // Enter/Space open the popover; when already open they move (arrows, Home/End, PageUp/PageDown
+  // by PAGE_SIZE, or type-ahead by label prefix) or activate (Enter/Space) the highlighted option.
+  // Type-ahead is prefix-accumulating only: repeating the same letter ("jj") does not cycle
+  // through options that share that initial, it just extends the prefix (and finds no match).
   const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (!isOpen) {
       if (event.key === 'Enter' || event.key === ' ' || event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -193,6 +200,7 @@ export function Dropdown({
         setActiveIndex((index) => Math.max(index - PAGE_SIZE, 0))
         break
       case ' ':
+        if (!isUnmodified(event)) break
         if (typeaheadBufferRef.current !== '') {
           event.preventDefault()
           typeahead(' ')
@@ -210,7 +218,7 @@ export function Dropdown({
         close()
         break
       default:
-        if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        if (event.key.length === 1 && isUnmodified(event)) {
           event.preventDefault()
           typeahead(event.key)
         }
@@ -232,6 +240,14 @@ export function Dropdown({
     return () => document.removeEventListener('pointerdown', handlePointerDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen])
+
+  // Keep the active option visible inside the scrollable listbox (on open, and whenever
+  // keyboard type-ahead/paging/arrows or hover change it).
+  useEffect(() => {
+    if (!isOpen) return
+    document.getElementById(optionId(activeIndex))?.scrollIntoView({ block: 'nearest' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activeIndex])
 
   useLayoutEffect(() => {
     if (!isOpen) {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
-import { act, cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Dropdown } from './Dropdown'
 
@@ -425,6 +425,119 @@ describe('Dropdown', () => {
       await user.keyboard('{ArrowDown}')
       await user.keyboard('{PageUp}')
       expect(trigger).toHaveAttribute('aria-activedescendant', opts[0].id)
+    })
+
+    describe('modifier keys, preventDefault and non-printable keys', () => {
+      const MODS = [
+        ['Ctrl', { ctrlKey: true }],
+        ['Meta', { metaKey: true }],
+        ['Alt', { altKey: true }],
+      ] as const
+
+      it.each(MODS)('%s+letter does not type-ahead and is not preventDefault-ed', async (_n, mod) => {
+        const { trigger, opts } = await openList(MONTHS, 'January')
+        const notPrevented = fireEvent.keyDown(trigger, { key: 'm', ...mod })
+        expect(notPrevented).toBe(true)
+        expect(trigger).toHaveAttribute('aria-activedescendant', opts[0].id)
+      })
+
+      it.each(MODS)('%s+Space is ignored: does not select and is not preventDefault-ed', async (_n, mod) => {
+        const { trigger } = await openList(MONTHS, 'January')
+        const notPrevented = fireEvent.keyDown(trigger, { key: ' ', ...mod })
+        expect(notPrevented).toBe(true)
+        expect(screen.getByRole('listbox')).toBeInTheDocument()
+      })
+
+      it.each(MODS)('%s+Space does not extend a non-empty buffer', async (_n, mod) => {
+        const { user, trigger, opts } = await openList(MONTHS, 'January')
+        await user.keyboard('Ju')
+        fireEvent.keyDown(trigger, { key: ' ', ...mod })
+        await user.keyboard('l')
+        // buffer is still "ju" + "l", not "ju l"
+        expect(trigger).toHaveAttribute('aria-activedescendant', opts[6].id)
+      })
+
+      it('preventDefaults a handled typed character', async () => {
+        const { trigger } = await openList(MONTHS, 'January')
+        expect(fireEvent.keyDown(trigger, { key: 'j' })).toBe(false)
+      })
+
+      it('preventDefaults PageDown and PageUp', async () => {
+        const { trigger } = await openList(YEARS, '2008')
+        expect(fireEvent.keyDown(trigger, { key: 'PageDown' })).toBe(false)
+        expect(fireEvent.keyDown(trigger, { key: 'PageUp' })).toBe(false)
+      })
+
+      it('does not consume non-printable keys (Tab, F-keys, Shift)', async () => {
+        const { trigger } = await openList(MONTHS, 'March')
+        for (const key of ['Tab', 'F1', 'F5', 'F12', 'Shift', 'Control', 'CapsLock']) {
+          expect(fireEvent.keyDown(trigger, { key })).toBe(true)
+        }
+        expect(trigger).toHaveAttribute('aria-activedescendant', expect.stringMatching(/-option-2$/))
+      })
+
+      it('Tab moves focus away from the trigger', async () => {
+        const user = userEvent.setup({ delay: null })
+        render(
+          <>
+            <Dropdown options={MONTHS} selectedId="January" onSelect={vi.fn()} ariaLabel="Month" />
+            <button type="button">after</button>
+          </>,
+        )
+        screen.getByRole('button', { name: 'January' }).focus()
+        await user.keyboard('{Enter}')
+        await user.tab()
+        expect(screen.getByRole('button', { name: 'after' })).toHaveFocus()
+      })
+
+      it('arrow keys still move the active option', async () => {
+        const { user, trigger, opts } = await openList(MONTHS, 'January')
+        await user.keyboard('{ArrowDown}')
+        expect(trigger).toHaveAttribute('aria-activedescendant', opts[1].id)
+        await user.keyboard('{ArrowUp}')
+        expect(trigger).toHaveAttribute('aria-activedescendant', opts[0].id)
+      })
+
+      it('clears the pending type-ahead timer on unmount', async () => {
+        const { user } = await openList(MONTHS, 'January')
+        await user.keyboard('Ju')
+        expect(vi.getTimerCount()).toBeGreaterThan(0)
+        cleanup()
+        expect(vi.getTimerCount()).toBe(0)
+      })
+    })
+
+    describe('scrolling the active option into view', () => {
+      it('scrolls the active option (nearest) when type-ahead, PageDown and PageUp change it', async () => {
+        const spy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+        try {
+          const { user, trigger, opts } = await openList(YEARS, '2008')
+          spy.mockClear()
+          await user.keyboard('1990')
+          const lastTyped = spy.mock.contexts.at(-1) as HTMLElement
+          expect(lastTyped.id).toBe(opts[18].id)
+          expect(trigger).toHaveAttribute('aria-activedescendant', opts[18].id)
+          expect(spy).toHaveBeenLastCalledWith({ block: 'nearest' })
+          spy.mockClear()
+          await user.keyboard('{PageDown}')
+          expect((spy.mock.contexts.at(-1) as HTMLElement).id).toBe(opts[28].id)
+          spy.mockClear()
+          await user.keyboard('{PageUp}')
+          expect((spy.mock.contexts.at(-1) as HTMLElement).id).toBe(opts[18].id)
+        } finally {
+          spy.mockRestore()
+        }
+      })
+
+      it('scrolls the selected option into view on open', async () => {
+        const spy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+        try {
+          const { opts } = await openList(YEARS, '1990')
+          expect((spy.mock.contexts.at(-1) as HTMLElement).id).toBe(opts[18].id)
+        } finally {
+          spy.mockRestore()
+        }
+      })
     })
   })
 })
