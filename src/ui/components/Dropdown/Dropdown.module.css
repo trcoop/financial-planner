@@ -80,8 +80,8 @@
   flex-direction: column;
   /* Long lists (e.g. 83 birth years) scroll inside the popover instead of overflowing the
      viewport. The scroll lives on the listbox, not .popover, so the popover's border/radius/
-     padding frame stays fixed. 8 * --space-8 = 512px, so a 12-item month list fits unscrolled. */
-  max-height: min(60vh, calc(var(--space-8) * 8));
+     padding frame stays fixed. 9 * --space-8 = 576px (70vh binds on short screens), so a 12-item month list fits unscrolled on normal heights. */
+  max-height: min(70vh, calc(var(--space-8) * 9));
   overflow-y: auto;
 }
 
