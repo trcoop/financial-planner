@@ -127,7 +127,8 @@ export function computeSocialSecurity(inputs: SsInputs): SsResult {
   });
 
   // 4. Starts: drop own/spousal starts at/after the person's death (and the survivor's spousal start
-  //    at/after the deceased's death month), then add the survivor start.
+  //    at/after the deceased's death month), then add the survivor start. The survivor's OWN start stays
+  //    (the own claim month is the real filing event) even when the survivor amount wins.
   const starts = base.starts.filter((s) => {
     const d = deaths[s.personIndex];
     if (d !== null && s.month >= d) return false;

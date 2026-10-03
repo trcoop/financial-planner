@@ -81,6 +81,25 @@ describe('O17 option (b): calculator totals, growth and crossings start at the a
   });
 });
 
+describe('evaluateScenario against a hand-computed total with spousal and survivor components', () => {
+  // E29 fixture (asOf Sep 2026, COLA 0, growth null, endYear 2035): husband PIA 2,800 b. June 1960 claims
+  // June 2030 at 70 (3,472) and dies June 2032 (paid Jun 2030..May 2032 = 24 months). Wife PIA 1,000
+  // b. June 1962 claims June 2029 at FRA (1,000). Her spousal top-up = 0.5 x 2,800 - 1,000 = 400, unreduced
+  // (start June 2030 >= her FRA), paid Jun 2030..May 2032. From June 2032 the 3,472 survivor amount
+  // replaces her own and spousal: Jun 2032..Dec 2035 = 7 + 36 = 43 months.
+  //   husband   24 x 3,472                = 83,328
+  //   wife own  12 x 1,000 (Jun29..May30) = 12,000
+  //   wife own+spousal 24 x 1,400         = 33,600
+  //   wife survivor 43 x 3,472            = 149,296
+  //   total                               = 278,224
+  it('totals 278,224', () => {
+    const { inputs } = GOLDEN_FIXTURES.E29;
+    expect(evaluateScenario(inputs)).toBeCloseTo(278224, 2);
+    const slice = calculatorHouseholdMonthly(computeSocialSecurity(inputs), inputs.asOf);
+    expect(slice.reduce((a, b) => a + b, 0)).toBeCloseTo(278224, 2);
+  });
+});
+
 describe('evaluateScenario basics', () => {
   it('equals the last growthBalance value of the calculator slice (growth on and off)', () => {
     const inputs: SsInputs = { ...GOLDEN_FIXTURES.E29.inputs, growthRate: 0.04 };

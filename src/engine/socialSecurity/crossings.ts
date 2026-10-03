@@ -7,6 +7,7 @@ import type { MonthIndex } from './types';
  * crossing is recorded only at the first month `d` takes the strictly OPPOSITE sign from the last
  * nonzero sign. Identical prefixes set the initial sign without an event; touch-and-return gives
  * none. `leader` is the plan that just took the lead. Result is ordered by month, then pair order.
+ * Ragged lengths and non-finite values throw `NON_FINITE_INPUT` (ERD §12.7 has no better code).
  * `firstMonth` is the calendar month of index 0 (the calculator passes `calculatorStartMonth(asOf)`).
  */
 export function findCrossings(

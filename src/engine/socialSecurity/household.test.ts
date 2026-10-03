@@ -63,6 +63,7 @@ describe('computeSocialSecurity: composition', () => {
 
   it('annual is exactly the sum of each year\'s 12 series months, household = sum of persons', () => {
     const r = computeSocialSecurity({ ...base, deathAgeYears: [75, 80] });
+    expect(r.annual.length).toBeGreaterThan(0);
     for (const row of r.annual) {
       let household = 0;
       row.perPerson.forEach((p, i) => {
@@ -168,6 +169,19 @@ describe('computeSocialSecurity: death and survivor rules (PRD E10, E37)', () =>
     expect('deferredTo60' in (surv ?? {})).toBe(false);
     const months = r.starts.map((s) => s.month);
     expect(months).toEqual([...months].sort((a, b) => a - b));
+  });
+
+  it('starts: own before survivor in the same month; a survivor spousal start at/after the death month is dropped', () => {
+    // Wife (PIA 1,000, b. June 1962) claims June 2032 (age 70) = the husband's death month, so her own
+    // start, her would-be spousal start (400 top-up) and the survivor start all land in June 2032.
+    const r = computeSocialSecurity({ ...e29, claimMonth: [mi(2030, 6), mi(2032, 6)] });
+    expect(r.starts).toEqual([
+      { personIndex: 0, kind: 'own', month: mi(2030, 6) },
+      { personIndex: 1, kind: 'own', month: dm },
+      { personIndex: 1, kind: 'survivor', month: dm },
+    ]);
+    // the survivor's own start stays an event even though the survivor amount wins (the own claim is the real filing)
+    expect(at(r, 1, dm).own).toBe(0);
   });
 
   it('a collecting person dies: only their remaining months are cut off', () => {
