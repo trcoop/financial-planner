@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { InvalidProjectionInputError } from '../errors';
 import type { ProjectionErrorCode } from '../errors';
 import * as ss from './index';
-import type { SsErrorCode, SsInputs } from './index';
+import type { SsErrorCode } from './index';
 
 const asOf = { year: 2026, month: 9 };
 const person = { birthYear: 1964, birthMonth: 9, benefit: { kind: 'pia' as const, pia: 2000 } };
@@ -33,32 +33,6 @@ describe('barrel re-exports age helpers', () => {
     expect(ss.planCalendarYear(asOf, 2)).toBe(2028);
     expect(ss.calculatorStartMonth(asOf)).toBe(2026 * 12 + 8);
     expect(ss.firstClaimableMonth(asOf)).toBe(2026 * 12 + 9);
-  });
-});
-
-describe('stubs throw SS_NOT_IMPLEMENTED with the typed error class', () => {
-  const inputs: SsInputs = {
-    asOf,
-    colaRate: 0.025,
-    growthRate: null,
-    people: [person],
-    claimMonth: [2030 * 12],
-    endYear: 2050,
-  };
-  const noClaim: Omit<SsInputs, 'claimMonth'> = inputs;
-  const calls: [string, () => unknown][] = [
-    ['evaluateGrid', () => ss.evaluateGrid(noClaim, [])],
-    ['topClaims', () => ss.topClaims(noClaim, [])],
-  ];
-  it.each(calls)('%s', (_name, fn) => {
-    let caught: unknown;
-    try {
-      fn();
-    } catch (e) {
-      caught = e;
-    }
-    expect(caught).toBeInstanceOf(InvalidProjectionInputError);
-    expect((caught as InvalidProjectionInputError).code).toBe('SS_NOT_IMPLEMENTED');
   });
 });
 
