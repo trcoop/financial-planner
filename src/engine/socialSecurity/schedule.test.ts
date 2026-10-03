@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { InvalidProjectionInputError } from '../errors';
 import { computeOwnAndSpousal } from './spousal';
 import { buildSsAnnualSchedule } from './schedule';
 import type { SsInputs, SsPerson } from './types';
@@ -89,16 +90,51 @@ describe('buildSsAnnualSchedule', () => {
     expect(later[0].nominalAnnual).toBe(0);
   });
 
-  it('does not clamp other invalid claims (before 62y1m still throws)', () => {
-    expect(() => buildSsAnnualSchedule(base([piaPerson(1990, 5, 2000)], [mi(2026, 3)]), 2028)).toThrow();
+  it('does not clamp other invalid claims: non-stale pre-62 and post-70 claims throw their own codes', () => {
+    expect(codeOf(() => buildSsAnnualSchedule(base([piaPerson(1990, 5, 2000)], [mi(2030, 1)]), 2040))).toBe(
+      'SS_CLAIM_BEFORE_ELIGIBLE',
+    );
+    expect(codeOf(() => buildSsAnnualSchedule(base([piaPerson(1962, 5, 2000)], [mi(2033, 1)]), 2040))).toBe(
+      'SS_CLAIM_AFTER_70',
+    );
   });
 
-  it('survivor is always 0 (no death age)', () => {
+  it('emits one row per person-year (year-major) for a couple with a $0-PIA spouse', () => {
     const s = buildSsAnnualSchedule(
       base([piaPerson(1962, 5, 2000), piaPerson(1962, 5, 0)], [mi(2027, 6), mi(2027, 6)]),
       2030,
     );
-    expect(s.filter((r) => r.personIndex === 1).every((r) => r.nominalAnnual >= 0)).toBe(true);
-    expect(s.length).toBe(10);
+    expect(s.map((r) => [r.year, r.personIndex])).toEqual(
+      [2026, 2027, 2028, 2029, 2030].flatMap((y) => [
+        [y, 0],
+        [y, 1],
+      ]),
+    );
+  });
+
+  it.each<[string, Inputs['people'] | null, number, string]>([
+    ['horizon before asOf year', null, 2025, 'SS_INVALID_AS_OF'],
+    ['non-integer horizon', null, 2026.5, 'SS_INVALID_AS_OF'],
+    ['NaN horizon', null, Number.NaN, 'NON_FINITE_INPUT'],
+    ['empty people', [] as unknown as Inputs['people'], 2030, 'SS_SPOUSAL_INPUT_ON_SINGLE'],
+    [
+      'three people',
+      [piaPerson(1962, 5, 1), piaPerson(1962, 5, 1), piaPerson(1962, 5, 1)] as unknown as Inputs['people'],
+      2030,
+      'SS_SPOUSAL_INPUT_ON_SINGLE',
+    ],
+  ])('validates: %s', (_name, people, horizon, code) => {
+    const args = base(people ?? [piaPerson(1962, 5, 2000)], people ? [] : [mi(2027, 1)]);
+    expect(codeOf(() => buildSsAnnualSchedule(args, horizon))).toBe(code);
   });
 });
+
+function codeOf(fn: () => unknown): string | undefined {
+  try {
+    fn();
+  } catch (e) {
+    if (e instanceof InvalidProjectionInputError) return e.code;
+    throw e;
+  }
+  return undefined;
+}
