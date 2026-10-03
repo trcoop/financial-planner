@@ -107,6 +107,14 @@ export interface PlanAssumptions {
     /** Annual amount, today's dollars. */
     annualAmount: number;
   };
+  /**
+   * Nominal whole-dollar Social Security income per plan year, indexed by plan offset (index 0 =
+   * the calendar year of `asOf`; `planCalendarYear(asOf, offset)` is the only year mapping and
+   * lives in the schedule builder, never here). Default `[]`; an offset beyond the array is 0.
+   * Reduces the retirement withdrawal need but is display-only before retirement and never folds
+   * into `priorWithdrawal` (FIN-168, ERD 12.10). Identical across Monte Carlo trials.
+   */
+  socialSecurityIncomeByYear?: readonly number[];
 }
 
 /**
@@ -142,6 +150,12 @@ export interface ProjectionRow {
   investmentReturn: number;
   /** Dollars withdrawn this year. Always 0 pre-retirement. */
   annualWithdrawal: number;
+  /**
+   * Social Security income received this year (nominal), `socialSecurityIncomeByYear[year] ?? 0`.
+   * Full calendar-year amount even in the retirement-straddle year (no proration). Display-only
+   * pre-retirement; in retirement it is netted against the withdrawal need (FIN-168).
+   */
+  socialSecurityIncome: number;
   /** Balance at the end of the year. May go negative — that is a valid failure state. */
   endingBalance: PortfolioValue;
   /**

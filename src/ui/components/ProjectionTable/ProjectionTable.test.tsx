@@ -11,6 +11,7 @@ function makeRow(overrides: Partial<ProjectionRow> = {}): ProjectionRow {
     annualContribution: 12750,
     investmentReturn: 17500,
     annualWithdrawal: 0,
+    socialSecurityIncome: 0,
     endingBalance: 280250,
     eventCosts: [],
     ...overrides,

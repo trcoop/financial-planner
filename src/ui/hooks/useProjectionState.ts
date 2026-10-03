@@ -84,6 +84,9 @@ export type ProjectionState = ProjectionResult & {
   events: PlanEvent[]
 }
 
+/** Stable default so an omitted schedule does not bust the `assumptions` memo each render. */
+const NO_SOCIAL_SECURITY: readonly number[] = []
+
 /**
  * Owns the debounced projection recalculation that used to live inline in App.tsx: fields
  * update immediately for typing/validation feedback, but the projection recalculation itself
@@ -117,6 +120,12 @@ export function useProjectionState(
   /** Spouse's own override, same terms as `primaryMedicareAnnualAmount` above — only consulted
    * when a spouse is present in `people` (see `events` below). */
   spouseMedicareAnnualAmount?: number,
+  /**
+   * FIN-168: nominal whole-dollar Social Security income per plan offset, passed straight into
+   * `PlanAssumptions.socialSecurityIncomeByYear`. Defaults to `[]` (no SS). FIN-176 owns the
+   * call site that builds this from `buildSsAnnualSchedule`.
+   */
+  socialSecurityIncomeByYear: readonly number[] = NO_SOCIAL_SECURITY,
 ): ProjectionState {
   const debouncedCoreValues = useDebouncedValue(coreValues, debounceMs)
   const debouncedAdvancedValues = useDebouncedValue(advancedValues, debounceMs)
@@ -210,6 +219,7 @@ export function useProjectionState(
       retirementSpendingGoal: retirementSpendingGoalAnnualAmount
         ? { annualAmount: retirementSpendingGoalAnnualAmount }
         : undefined,
+      socialSecurityIncomeByYear,
     }
   }, [
     debouncedCoreValues,
@@ -218,6 +228,7 @@ export function useProjectionState(
     primaryFixedContribution,
     primaryContributionRate,
     retirementSpendingGoalAnnualAmount,
+    socialSecurityIncomeByYear,
   ])
 
   // FIN-114: the non-primary Person in the Profile People list, if any, with a usable (finite)

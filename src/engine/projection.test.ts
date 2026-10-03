@@ -77,6 +77,7 @@ describe('runProjection shape', () => {
           'endingBalance',
           'eventCosts',
           'investmentReturn',
+          'socialSecurityIncome',
           'year',
         ].sort(),
       );

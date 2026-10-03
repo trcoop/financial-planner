@@ -23,6 +23,10 @@ import type { AdditionalIncome, PeriodState, PipelineStage, PlanAssumptions, Run
  * (`retirementAge <= currentAge`) are therefore in drawdown from year 0 — a valid, supported
  * scenario rather than an input error (Story 1 PRD, Edge Cases).
  */
+/** Social Security income for a plan offset; beyond-the-array (or absent schedule) is 0. */
+const socialSecurityForYear = (assumptions: PlanAssumptions, year: number): number =>
+  assumptions.socialSecurityIncomeByYear?.[year] ?? 0;
+
 const isRetired = (age: number, assumptions: PlanAssumptions): boolean => age >= assumptions.retirementAge;
 
 /**
@@ -326,7 +330,12 @@ export const computeWithdrawals: PipelineStage = (state, input) => {
         : state.beginningBalance * assumptions.withdrawalRateInRetirement
       : state.priorWithdrawal * (1 + inflationRate);
 
-  const requested = baseRequested + state.retirementEventCostTotal;
+  // SS nets against the need AFTER `priorWithdrawal` is fixed from `baseRequested` alone, so it
+  // never feeds the inflation chain; clamped at 0 before the strategy's balance cutback.
+  const requested = Math.max(
+    0,
+    baseRequested + state.retirementEventCostTotal - socialSecurityForYear(assumptions, state.year),
+  );
 
   const plan = withdrawalStrategy(state, requested);
 
@@ -358,7 +367,7 @@ export const applyTax: PipelineStage = (state, input) => {
 };
 
 /** Appends this period's `ProjectionRow` to the accumulated output. */
-export const recordPeriod: PipelineStage = (state, _input) => ({
+export const recordPeriod: PipelineStage = (state, input) => ({
   ...state,
   // A projection of the state the earlier stages built, with no arithmetic of its own —
   // every figure here was computed by the stage that owns it. A new array rather than a
@@ -372,6 +381,7 @@ export const recordPeriod: PipelineStage = (state, _input) => ({
       annualContribution: state.annualContribution,
       investmentReturn: state.investmentReturn,
       annualWithdrawal: state.annualWithdrawal,
+      socialSecurityIncome: socialSecurityForYear(input.assumptions, state.year),
       endingBalance: state.balance,
       eventCosts: state.eventCosts,
     },

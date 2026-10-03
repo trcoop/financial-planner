@@ -758,7 +758,7 @@ describe('recordPeriod', () => {
 
   it('appends exactly one row per period', () => {
     const existing: ProjectionRow[] = [
-      { age: 34, year: -1, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
+      { age: 34, year: -1, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, socialSecurityIncome: 0, endingBalance: 0, eventCosts: [] },
     ];
 
     const result = recordPeriod(periodState({ rows: existing }), runPeriodInput());
