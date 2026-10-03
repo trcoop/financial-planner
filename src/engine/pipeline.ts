@@ -332,10 +332,11 @@ export const computeWithdrawals: PipelineStage = (state, input) => {
 
   // SS nets against the need AFTER `priorWithdrawal` is fixed from `baseRequested` alone, so it
   // never feeds the inflation chain; clamped at 0 before the strategy's balance cutback.
-  const requested = Math.max(
-    0,
-    baseRequested + state.retirementEventCostTotal - socialSecurityForYear(assumptions, state.year),
-  );
+  // Only in spending-goal mode: in rate mode (no goal) SS is display-only (ERD 12.10(8)). Keyed
+  // off the goal itself, not `priorWithdrawal === null`, which is non-null after year one.
+  const socialSecurityOffset =
+    assumptions.retirementSpendingGoal !== undefined ? socialSecurityForYear(assumptions, state.year) : 0;
+  const requested = Math.max(0, baseRequested + state.retirementEventCostTotal - socialSecurityOffset);
 
   const plan = withdrawalStrategy(state, requested);
 

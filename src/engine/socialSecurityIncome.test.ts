@@ -74,12 +74,28 @@ describe('socialSecurityIncome plumbing (FIN-168)', () => {
     expect(rows[5].annualWithdrawal).toBeCloseTo(none[5].annualWithdrawal - 10_000, 6);
   });
 
-  it('straddle: retirement mid-year at offset 1 uses the FULL annual amount, no proration', () => {
-    const rows = runProjection(
-      withSs([0, 12_000, 24_000], { currentAge: 64, retirementAge: 65, planningHorizonEndAge: 70 }),
-    );
+  it('straddle (asOf 2026-09, retire mid-year at offset 1): FULL annual SS, no proration, in display and withdrawal', () => {
+    const asOf = { year: 2026, month: 9 };
+    expect(planCalendarYear(asOf, 1)).toBe(2027);
+    const plan = { currentAge: 64, retirementAge: 65, planningHorizonEndAge: 70 };
+    const none = runProjection(base(plan));
+    const rows = runProjection(withSs([0, 12_000, 24_000], plan));
     expect(rows[1].socialSecurityIncome).toBe(12_000);
     expect(rows[2].socialSecurityIncome).toBe(24_000);
+    expect(rows[1].annualWithdrawal).toBeCloseTo(none[1].annualWithdrawal - 12_000, 6);
+    expect(rows[2].annualWithdrawal).toBeCloseTo(none[2].annualWithdrawal - 24_000, 6);
+  });
+
+  it('rate mode (no spending goal): SS is display-only, first and later retirement years', () => {
+    const plan = { retirementSpendingGoal: undefined };
+    const none = runProjection(base(plan));
+    const rows = runProjection(withSs(Array(31).fill(20_000), plan));
+    expect(rows[5].annualWithdrawal).toBeCloseTo(rows[5].beginningBalance * 0.04, 6);
+    for (const i of [5, 6, 7]) {
+      expect(rows[i].annualWithdrawal).toBe(none[i].annualWithdrawal);
+      expect(rows[i].endingBalance).toBe(none[i].endingBalance);
+      expect(rows[i].socialSecurityIncome).toBe(20_000);
+    }
   });
 
   it('deflates socialSecurityIncome in toTodaysDollarRows', () => {
@@ -89,7 +105,16 @@ describe('socialSecurityIncome plumbing (FIN-168)', () => {
   });
 
   it('rejects non-finite or negative entries', () => {
-    expect(() => runProjection(withSs([Number.NaN]))).toThrow();
-    expect(() => runProjection(withSs([-1]))).toThrow();
+    const codeOf = (byYear: number[]) => {
+      try {
+        runProjection(withSs(byYear));
+      } catch (error) {
+        return (error as { code?: string }).code;
+      }
+      return undefined;
+    };
+    expect(codeOf([Number.NaN])).toBe('NON_FINITE_INPUT');
+    expect(codeOf([Number.POSITIVE_INFINITY])).toBe('NON_FINITE_INPUT');
+    expect(codeOf([-1])).toBe('SS_NEGATIVE_BENEFIT');
   });
 });
