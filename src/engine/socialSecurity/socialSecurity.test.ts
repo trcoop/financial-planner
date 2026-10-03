@@ -47,12 +47,8 @@ describe('stubs throw SS_NOT_IMPLEMENTED with the typed error class', () => {
   };
   const noClaim: Omit<SsInputs, 'claimMonth'> = inputs;
   const calls: [string, () => unknown][] = [
-    ['computeSocialSecurity', () => ss.computeSocialSecurity(inputs)],
-    ['growthBalance', () => ss.growthBalance([1], null)],
-    ['evaluateScenario', () => ss.evaluateScenario(inputs)],
     ['evaluateGrid', () => ss.evaluateGrid(noClaim, [])],
     ['topClaims', () => ss.topClaims(noClaim, [])],
-    ['findCrossings', () => ss.findCrossings([[1]], 0)],
   ];
   it.each(calls)('%s', (_name, fn) => {
     let caught: unknown;
