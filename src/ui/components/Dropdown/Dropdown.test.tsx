@@ -427,6 +427,13 @@ describe('Dropdown', () => {
       expect(trigger).toHaveAttribute('aria-activedescendant', opts[0].id)
     })
 
+    it('a prefix matching the first option moves the active option back to index 0', async () => {
+      const { user, trigger, opts } = await openList(MONTHS, 'March')
+      expect(trigger).toHaveAttribute('aria-activedescendant', opts[2].id)
+      await user.keyboard('ja')
+      expect(trigger).toHaveAttribute('aria-activedescendant', opts[0].id)
+    })
+
     describe('modifier keys, preventDefault and non-printable keys', () => {
       const MODS = [
         ['Ctrl', { ctrlKey: true }],
@@ -508,6 +515,24 @@ describe('Dropdown', () => {
     })
 
     describe('scrolling the active option into view', () => {
+      it('scrolls the active option into view again when reopened with the same active index', async () => {
+        const spy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+        try {
+          // Selected option is non-first, so reopening lands on the same activeIndex as before
+          // closing: only `isOpen` changing can retrigger the scroll.
+          const { user, trigger } = await openList(MONTHS, 'March')
+          await user.keyboard('{Escape}')
+          expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+          spy.mockClear()
+          await user.keyboard('{Enter}')
+          const opts = within(screen.getByRole('listbox')).getAllByRole('option')
+          expect(trigger).toHaveAttribute('aria-activedescendant', opts[2].id)
+          expect((spy.mock.contexts.at(-1) as HTMLElement).id).toBe(opts[2].id)
+        } finally {
+          spy.mockRestore()
+        }
+      })
+
       it('scrolls the active option (nearest) when type-ahead, PageDown and PageUp change it', async () => {
         const spy = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
         try {
