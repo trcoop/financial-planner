@@ -86,6 +86,7 @@ export function evaluateGrid(base: Omit<SsInputs, 'claimMonth'>, axes: TopClaims
   const n = base.people.length;
   // The first cell goes through the real `evaluateScenario`, which validates rates, death ages and
   // benefits for the whole grid; the remaining cells use the lighter per-cell path (see gridCell.ts).
+  // NOTE: that first cell is the ONLY place rates, death ages and benefits get validated.
   const fast = makeCellEvaluator(base);
   let first = true;
   const total = (months: MonthIndex[]): number => {

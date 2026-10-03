@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
 
 import { InvalidProjectionInputError } from '../errors';
 import { legalClaimWindow } from './benefit';
@@ -8,6 +9,18 @@ import type { GoldenKey } from './goldenFixtures';
 import { evaluateScenario } from './scenario';
 import { selectTopClaims } from './topClaimsSelect';
 import type { MonthIndex, SsInputs, SsPerson, TopClaimsAxis } from './types';
+
+const heavyCalls = vi.hoisted(() => ({ count: 0 }));
+
+vi.mock('./household', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./household')>();
+  // A plain counter (not vi.fn): vi.fn retains every result, which OOMs on 9,216-cell grids.
+  const counted = (inputs: Parameters<typeof actual.computeSocialSecurity>[0]) => {
+    heavyCalls.count++;
+    return actual.computeSocialSecurity(inputs);
+  };
+  return { ...actual, computeSocialSecurity: counted };
+});
 
 const asOf = { year: 2026, month: 9 };
 const piaPerson = (birthYear: number, birthMonth: number, pia: number): SsPerson => ({
@@ -94,6 +107,7 @@ describe('evaluateGrid', () => {
     ['person 1 dies first', { deathAgeYears: [95, 78] }],
     ['no deaths, growth off', { deathAgeYears: undefined, growthRate: null, colaRate: 0 }],
     ['only person 0 has a death age', { deathAgeYears: [80, null] }],
+    ['fractional death ages (round vs floor differ)', { deathAgeYears: [83.72, 83.72] }],
     ['same-month-ish deaths', { deathAgeYears: [80, 80.75] }],
   ])('couple sub-grid matches evaluateScenario: %s', (_n, overrides) => {
     const base = couple(overrides);
@@ -288,7 +302,7 @@ describe('topClaims (ERD 12.25.2)', () => {
     it.each<[string, () => unknown, string]>([
       ['empty axes', () => topClaims(couple(), []), 'SS_INVALID_CLAIM_AXES'],
       ['missing pia person', () => topClaims(couple(), [okAxis]), 'SS_INVALID_CLAIM_AXES'],
-      ['duplicate personIndex', () => topClaims(couple(), [okAxis, okAxis]), 'SS_INVALID_CLAIM_AXES'],
+      ['duplicate personIndex', () => topClaims(couple(), [okAxis, okAxis1, okAxis]), 'SS_INVALID_CLAIM_AXES'],
       [
         'empty months',
         () => topClaims(couple(), [okAxis, { personIndex: 1, months: [] }]),
@@ -327,6 +341,21 @@ describe('topClaims (ERD 12.25.2)', () => {
         },
         'SS_CLAIM_IN_PAST',
       ],
+      [
+        'later month after 70 (only the last month is bad)',
+        () => topClaims(single, [{ personIndex: 0, months: [...axisOf(0, singlePerson, 5).months, window(singlePerson).latest + 1] }]),
+        'SS_CLAIM_AFTER_70',
+      ],
+      [
+        'only the first month is before 62y1m',
+        () => topClaims(single, [{ personIndex: 0, months: [window(singlePerson).earliest - 1, ...axisOf(0, singlePerson, 5).months] }]),
+        'SS_CLAIM_BEFORE_ELIGIBLE',
+      ],
+      [
+        'evaluateGrid also rejects a bad last month',
+        () => evaluateGrid(single, [{ personIndex: 0, months: [...axisOf(0, singlePerson, 5).months, window(singlePerson).latest + 1] }]),
+        'SS_CLAIM_AFTER_70',
+      ],
       ['n = 0', () => topClaims(single, singleAxis(), 0), 'SS_INVALID_TOP_N'],
       ['n = 1.5', () => topClaims(single, singleAxis(), 1.5), 'SS_INVALID_TOP_N'],
       ['n = NaN', () => topClaims(single, singleAxis(), Number.NaN), 'SS_INVALID_TOP_N'],
@@ -354,12 +383,32 @@ describe('O2 performance: 96 x 96 couple grid', () => {
     deathAgeYears: [100, 100],
     endYear: 2071,
   });
-  // O2 budget is 200 ms (isolated median ~110 ms). The hard ceiling is 4x because `npm test` runs files in
-  // parallel workers and a saturated CPU measured ~490 ms for the same code; the full evaluateScenario path
-  // (no lighter per-cell path) measured ~570 ms isolated, so this still catches that regression.
+  // O2 budget: 200 ms for 96 x 96 (stated target, logged below). Wall-clock absolutes are load-sensitive,
+  // so the pass/fail guards are (1) structural and (2) a same-run ratio against the plain path.
   const BUDGET_MS = 200;
-  const CEILING = 4;
-  it('evaluateGrid median of 5 runs stays within budget (200 ms, loaded-CI ceiling 4x)', () => {
+  it('cells after the first never run the heavy computeSocialSecurity path (structural guard)', () => {
+    heavyCalls.count = 0;
+    const axes = [axisOf(0, p0, 6), axisOf(1, p1, 6)];
+    evaluateGrid(worst(), axes);
+    expect(heavyCalls.count).toBe(1);
+  });
+  it('per-cell grid time is well under the plain evaluateScenario path (same-run ratio)', () => {
+    const axes = [axisOf(0, p0), axisOf(1, p1)];
+    const base = worst();
+    evaluateGrid(base, axes); // warm-up
+    const t0 = performance.now();
+    evaluateGrid(base, axes);
+    const gridPerCell = (performance.now() - t0) / (96 * 96);
+    const plainN = 300;
+    const t1 = performance.now();
+    for (let k = 0; k < plainN; k++) {
+      evaluateScenario({ ...base, claimMonth: [axes[0].months[k % 96], axes[1].months[(k * 7) % 96]] });
+    }
+    const plainPerCell = (performance.now() - t1) / plainN;
+    console.info(`O2 per-cell grid ${(gridPerCell * 1000).toFixed(1)} us vs plain ${(plainPerCell * 1000).toFixed(1)} us`);
+    expect(gridPerCell).toBeLessThan(plainPerCell * 0.6);
+  }, 120000);
+  it('logs the 96 x 96 median of 5 runs against the 200 ms target', () => {
     const axes = [axisOf(0, p0), axisOf(1, p1)];
     evaluateGrid(worst(), axes); // warm-up
     const times: number[] = [];
@@ -369,8 +418,9 @@ describe('O2 performance: 96 x 96 couple grid', () => {
       times.push(performance.now() - t0);
     }
     times.sort((a, b) => a - b);
-    const median = times[2];
-    console.info(`O2 evaluateGrid 96x96 median ${median.toFixed(1)} ms (sorted runs: ${times.map((t) => t.toFixed(0)).join(', ')})`);
-    expect(median).toBeLessThan(BUDGET_MS * CEILING);
+    console.info(
+      `O2 evaluateGrid 96x96 median ${times[2].toFixed(1)} ms of ${BUDGET_MS} ms target (sorted runs: ${times.map((t) => t.toFixed(0)).join(', ')})`,
+    );
+    expect(times[2]).toBeGreaterThan(0);
   }, 120000);
 });
