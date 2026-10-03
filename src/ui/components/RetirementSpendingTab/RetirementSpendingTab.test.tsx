@@ -268,7 +268,7 @@ describe('RetirementSpendingTab — on-track readout (FIN-142 redesign: shared M
 describe('RetirementSpendingTab — plan depleted callout (ERD §5/§11, inline derivation)', () => {
   it('shows nothing when the plan never depletes', () => {
     const rows: ProjectionRow[] = [
-      { age: 65, year: 0, beginningBalance: 100, annualContribution: 0, investmentReturn: 5, annualWithdrawal: 4, endingBalance: 101, eventCosts: [] },
+      { age: 65, year: 0, beginningBalance: 100, annualContribution: 0, investmentReturn: 5, annualWithdrawal: 4, socialSecurityIncome: 0, endingBalance: 101, eventCosts: [] },
     ]
     renderTab({ rows })
     expect(screen.queryByText(/depleted/i)).not.toBeInTheDocument()
@@ -277,8 +277,8 @@ describe('RetirementSpendingTab — plan depleted callout (ERD §5/§11, inline 
   it('ignores a pre-retirement zero balance (defensive age >= retirementAge guard)', () => {
     const assumptions: PlanAssumptions = { ...BASE_ASSUMPTIONS, currentAge: 30, retirementAge: 65 }
     const rows: ProjectionRow[] = [
-      { age: 30, year: 0, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, endingBalance: 0, eventCosts: [] },
-      { age: 65, year: 35, beginningBalance: 500, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 400, eventCosts: [] },
+      { age: 30, year: 0, beginningBalance: 0, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 0, socialSecurityIncome: 0, endingBalance: 0, eventCosts: [] },
+      { age: 65, year: 35, beginningBalance: 500, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, socialSecurityIncome: 0, endingBalance: 400, eventCosts: [] },
     ]
     renderTab({ assumptions, rows })
     expect(screen.queryByText(/depleted/i)).not.toBeInTheDocument()
@@ -307,7 +307,7 @@ describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142, Mo
   // derivation) — give it a row consistent with the assumptions above so both the callout and
   // the new suggestions render together, the way `PlanSection.tsx` threads the real `rows`.
   const DEPLETED_ROWS: ProjectionRow[] = [
-    { age: 60, year: 5, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 0, eventCosts: [] },
+    { age: 60, year: 5, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, socialSecurityIncome: 0, endingBalance: 0, eventCosts: [] },
   ]
 
   it('shows an extra-years suggestion alongside the bare depleted callout', () => {
@@ -341,7 +341,7 @@ describe('RetirementSpendingTab — actionable guidance suggestions (FIN-142, Mo
       retirementSpendingGoal: { annualAmount: 60_000 },
     }
     const rows: ProjectionRow[] = [
-      { age: 62, year: 27, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 0, eventCosts: [] },
+      { age: 62, year: 27, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, socialSecurityIncome: 0, endingBalance: 0, eventCosts: [] },
     ]
     renderTab({ assumptions, rows })
     expect(screen.getByText(/save \$\d+(,\d{3})* more per month to stay on track to retire at 62/i)).toBeInTheDocument()

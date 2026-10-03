@@ -102,6 +102,21 @@ export const validatePlanAssumptions = (assumptions: PlanAssumptions): void => {
     );
   }
 
+  for (const amount of assumptions.socialSecurityIncomeByYear ?? []) {
+    if (typeof amount !== 'number' || !Number.isFinite(amount)) {
+      throw new InvalidProjectionInputError(
+        'NON_FINITE_INPUT',
+        `socialSecurityIncomeByYear entries must be finite numbers, received ${String(amount)}.`,
+      );
+    }
+    if (amount < 0) {
+      throw new InvalidProjectionInputError(
+        'SS_NEGATIVE_BENEFIT',
+        `socialSecurityIncomeByYear entries must be non-negative, received ${amount}.`,
+      );
+    }
+  }
+
   const {
     currentAge,
     retirementAge,
@@ -461,6 +476,7 @@ export const toTodaysDollarRows = (
       annualContribution: row.annualContribution / priceLevel,
       investmentReturn: row.investmentReturn / priceLevel,
       annualWithdrawal: row.annualWithdrawal / priceLevel,
+      socialSecurityIncome: row.socialSecurityIncome / priceLevel,
       endingBalance: row.endingBalance / priceLevel,
       // Events & Medicare Cost ERD §5: the same price level deflates each event's entry, so a
       // deflated Medicare figure sits alongside the deflated withdrawal total it is part of.

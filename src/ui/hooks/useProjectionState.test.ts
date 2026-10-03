@@ -825,4 +825,19 @@ describe('useProjectionState retirementSpendingGoal wiring (FIN-138)', () => {
 
     expect(result.current.assumptions.retirementSpendingGoal).toEqual({ annualAmount: 45_000 })
   })
+
+  it('threads socialSecurityIncomeByYear into assumptions (default [])', () => {
+    const { result: dflt } = renderHook(() => useProjectionState(CORE, ADVANCED, DEBOUNCE_MS))
+    expect(dflt.current.assumptions.socialSecurityIncomeByYear).toEqual([])
+
+    const schedule = [0, 12_000]
+    const people = [PRIMARY_PERSON]
+    const accounts: Account[] = []
+    const { result } = renderHook(() =>
+      useProjectionState(CORE, ADVANCED, DEBOUNCE_MS, people, accounts, undefined, undefined, undefined, schedule),
+    )
+    expect(result.current.assumptions.socialSecurityIncomeByYear).toEqual(schedule)
+    // rows are in today's dollars: deflated by (1 + 2.5%) ** (year + 1)
+    expect(result.current.rows[1].socialSecurityIncome).toBeCloseTo(12_000 / 1.025 ** 2, 6)
+  })
 })
