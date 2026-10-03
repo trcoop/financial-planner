@@ -184,6 +184,30 @@ describe('computeSocialSecurity: death and survivor rules (PRD E10, E37)', () =>
     expect(at(r, 1, dm).own).toBe(0);
   });
 
+  it('starts are sorted by month: a survivor start precedes the survivor\'s later own start', () => {
+    // Wife b. June 1966 (66y0m at the June 2032 death) claims at 70 (June 2036); survivor pays from June 2032.
+    const r = computeSocialSecurity({
+      ...e29,
+      people: [piaPerson(1960, 6, 2800), piaPerson(1966, 6, 1000)],
+      claimMonth: [mi(2030, 6), mi(2036, 6)],
+      endYear: 2040,
+    });
+    expect(r.starts).toEqual([
+      { personIndex: 0, kind: 'own', month: mi(2030, 6) },
+      { personIndex: 1, kind: 'survivor', month: dm },
+      { personIndex: 1, kind: 'own', month: mi(2036, 6) },
+    ]);
+  });
+
+  it('a start in exactly the person\'s death month is not listed (they are never paid that month)', () => {
+    // Husband claims June 2030 at 70 and dies June 2030 (age 70.0): his own start == his death month.
+    const r = computeSocialSecurity({ ...e29, deathAgeYears: [70, null] });
+    expect(r.starts).toEqual([
+      { personIndex: 1, kind: 'own', month: mi(2029, 6) },
+      { personIndex: 1, kind: 'survivor', month: mi(2030, 6) },
+    ]);
+  });
+
   it('a collecting person dies: only their remaining months are cut off', () => {
     const r = computeSocialSecurity(GOLDEN_FIXTURES.G4.inputs);
     expect(r.deathMonths[0]).toBe(mi(2027, 5));
