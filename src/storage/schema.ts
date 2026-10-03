@@ -20,7 +20,9 @@ export const STORAGE_KEY = 'financial-planner:v1'
 export interface PersistedAssumptions {
   core: CoreInputValues
   advanced: AdvancedAssumptionValues
-  /** FIN-116: replaces the retired `core.hasSpouse`/`core.spouseAge` fields. Absent on any
+  /** FIN-162: a Person may store optional `birthMonth`/`birthYear`; older records have only `age`
+   * and are NOT rewritten on load (consumers derive birth from `age` via `personBirth`).
+   * FIN-116: replaces the retired `core.hasSpouse`/`core.spouseAge` fields. Absent on any
    * record persisted before this ticket — `loadAssumptions` seeds it via `seedPeople`. */
   people: Person[]
   /** FIN-117: additive field, same category as `people` above. Absent on any record persisted

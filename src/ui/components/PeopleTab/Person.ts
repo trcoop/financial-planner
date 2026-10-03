@@ -1,5 +1,6 @@
 import type { CoreInputValues } from '../../coreInputs/types'
 import { rangeError } from '../../coreInputs/validation'
+import type { AsOf } from '../../../engine/age'
 
 /**
  * FIN-116: replaces the FIN-113 `hasSpouse`/`spouseAge` checkbox pair on `CoreInputValues` —
@@ -10,6 +11,12 @@ import { rangeError } from '../../coreInputs/validation'
 export interface Person {
   id: string
   name: string
+  /** FIN-162: birth month (1-12) and year. Optional: records saved before FIN-162 have neither.
+   * Nothing writes them on load; consumers use {@link personBirth} (falls back to `age`). */
+  birthMonth?: number
+  birthYear?: number
+  /** TRANSITIONAL (FIN-162 -> FIN-179 removes it): the stored age the People tab edits.
+   * {@link applyPeopleEdit} turns an edit of it into a `birthYear` write when birth is present. */
   age: number
   retirementAge: number
   salary: number
@@ -20,11 +27,68 @@ export const PERSON_ID_PRIMARY = 'primary'
 
 /** New-Person defaults for a freshly-added spouse — there's no prior data to seed from, unlike
  * the primary (see {@link createPrimaryPerson}). */
-export const NEW_SPOUSE_DEFAULTS: Omit<Person, 'id' | 'isPrimary'> = {
+export const NEW_SPOUSE_DEFAULTS = {
   name: 'Spouse',
   age: 35,
   retirementAge: 65,
   salary: 85_000,
+}
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
+
+/** Valid birth-year bounds at `asOf` (PRD E2): age 18 through 100 in calendar-year terms. */
+export function birthYearRange(asOf: AsOf): { min: number; max: number } {
+  return { min: asOf.year - 100, max: asOf.year - 18 }
+}
+
+const isBirthMonth = (v: unknown): v is number => isFiniteNumber(v) && Number.isInteger(v) && v >= 1 && v <= 12
+const isBirthYear = (v: unknown): v is number => isFiniteNumber(v) && Number.isInteger(v)
+
+/**
+ * Birth for consumers. A person with a valid `birthYear` AND `birthMonth` uses them as-is;
+ * otherwise (pre-FIN-162 record) birth is derived from `age`: year `asOf.year - age`, month
+ * `asOf.month`. Pure and never persisted. Year is NaN when neither source is usable.
+ */
+export function personBirth(
+  person: Pick<Person, 'age' | 'birthYear' | 'birthMonth'>,
+  asOf: AsOf,
+): { year: number; month: number } {
+  if (isBirthYear(person.birthYear) && isBirthMonth(person.birthMonth)) {
+    return { year: person.birthYear, month: person.birthMonth }
+  }
+  return { year: isFiniteNumber(person.age) ? asOf.year - person.age : NaN, month: asOf.month }
+}
+
+/**
+ * Calendar-year age `asOf.year - birth year` (E26) — what projection axis, spouse offset, Medicare,
+ * retirement gates and `TaxPayer.age` use outside Social Security.
+ */
+export function personCalendarAge(person: Pick<Person, 'age' | 'birthYear' | 'birthMonth'>, asOf: AsOf): number {
+  return asOf.year - personBirth(person, asOf).year
+}
+
+/** People-page validation: only "not chosen" is an error (a pre-FIN-162 record has no birth).
+ * The dropdowns cannot produce an invalid value, and stored data is never second-guessed. */
+export function birthMonthFieldError(person: Pick<Person, 'birthMonth'>): string | undefined {
+  return isBirthMonth(person.birthMonth) ? undefined : 'Birth month is required.'
+}
+export function birthYearFieldError(person: Pick<Person, 'birthYear'>): string | undefined {
+  return isBirthYear(person.birthYear) ? undefined : 'Birth year is required.'
+}
+
+/**
+ * TRANSITIONAL adapter (removed by FIN-179): the People tab still edits `age`. When a person's
+ * `age` changed between `prev` and `next`, write `birthYear = asOf.year - age` (keeping
+ * `birthMonth`) so the "birthYear wins" rule doesn't revert the edit. A non-finite (blank)
+ * age is left as typed, with `birthYear` untouched.
+ */
+export function applyPeopleEdit(prev: Person[], next: Person[], asOf: AsOf): Person[] {
+  return next.map((person) => {
+    const before = prev.find((p) => p.id === person.id)
+    if (!before || Object.is(before.age, person.age) || !Number.isFinite(person.age)) return person
+    if (!isBirthYear(person.birthYear)) return person // pre-FIN-162 record: age stays the source
+    return { ...person, birthYear: asOf.year - person.age }
+  })
 }
 
 export const PERSON_FIELD_RANGES = {
@@ -47,10 +111,12 @@ export function personFieldError(field: 'age' | 'retirementAge' | 'salary', valu
  * `core` fields (`retirementAge`/`currentAnnualIncome`) since those already exist and have
  * user-entered values, unlike a brand-new spouse which has nothing to seed from.
  */
-export function createPrimaryPerson(core: CoreInputValues): Person {
+export function createPrimaryPerson(core: CoreInputValues, asOf: AsOf): Person {
   return {
     id: PERSON_ID_PRIMARY,
     name: 'You',
+    birthMonth: asOf.month,
+    birthYear: asOf.year - core.currentAge,
     age: core.currentAge,
     retirementAge: core.retirementAge,
     salary: core.currentAnnualIncome,
@@ -71,11 +137,13 @@ function generatePersonId(): string {
   return `person-${spouseIdCounter}`
 }
 
-export function createSpouse(): Person {
+export function createSpouse(asOf: AsOf): Person {
   return {
     id: generatePersonId(),
     isPrimary: false,
     ...NEW_SPOUSE_DEFAULTS,
+    birthMonth: asOf.month,
+    birthYear: asOf.year - NEW_SPOUSE_DEFAULTS.age,
   }
 }
 
@@ -85,11 +153,11 @@ export function createSpouse(): Person {
  * persisted list as-is when it's a genuinely non-empty array, otherwise a freshly-seeded
  * primary-only list built from `core`. Never seeds a spouse — see {@link createPrimaryPerson}.
  */
-export function seedPeople(people: unknown, core: CoreInputValues): Person[] {
+export function seedPeople(people: unknown, core: CoreInputValues, asOf: AsOf): Person[] {
   if (Array.isArray(people) && people.length > 0) {
     return people as Person[]
   }
-  return [createPrimaryPerson(core)]
+  return [createPrimaryPerson(core, asOf)]
 }
 
 /** Finds the primary Person in a list, if any. */
@@ -108,12 +176,12 @@ export function primaryPerson(people: Person[]): Person | undefined {
  * Callers (PlanSection) should use this result everywhere the engine/persisted core needs the
  * canonical age/retirementAge/income, instead of raw `core`.
  */
-export function syncCoreWithPrimary(core: CoreInputValues, people: Person[]): CoreInputValues {
+export function syncCoreWithPrimary(core: CoreInputValues, people: Person[], asOf: AsOf): CoreInputValues {
   const primary = primaryPerson(people)
   if (!primary) return core
   return {
     ...core,
-    currentAge: primary.age,
+    currentAge: personCalendarAge(primary, asOf),
     retirementAge: primary.retirementAge,
     currentAnnualIncome: primary.salary,
   }

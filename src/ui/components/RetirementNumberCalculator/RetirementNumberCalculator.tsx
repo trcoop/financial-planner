@@ -6,9 +6,10 @@ import {
 } from '../../../engine/retirementNumber'
 import { blendedPortfolioReturn } from '../../../engine'
 import { loadAssumptions } from '../../../storage'
-import { primaryPerson, type Person } from '../PeopleTab/Person'
+import { primaryPerson, personCalendarAge, type Person } from '../PeopleTab/Person'
 import type { Account } from '../AccountsTab/Account'
 import { formatCurrency } from '../../utils/format'
+import { useAsOf } from '../../useAsOf'
 import { Button } from '../Button/Button'
 import { NumberField } from '../NumberField/NumberField'
 import { CollapsibleSection } from '../CollapsibleSection/CollapsibleSection'
@@ -232,6 +233,7 @@ function describeResult(result: RetirementNumberResult, lifeExpectancy: number):
  * which never writes back to storage.
  */
 export function RetirementNumberCalculator() {
+  const asOf = useAsOf()
   const [values, setValues] = useState<FormValues>(DEFAULT_VALUES)
   const [blankFields, setBlankFields] = useState<ReadonlySet<RequiredField>>(new Set(REQUIRED_FIELDS))
   const [hasAttemptedCalculate, setHasAttemptedCalculate] = useState(false)
@@ -247,7 +249,7 @@ export function RetirementNumberCalculator() {
   // Lazily read once on mount — a plan saved *after* this calculator opens still won't show the
   // button until the calculator is reopened, matching the "read-only, one-time" (not a live
   // binding) contract the ticket specifies for this feature as a whole.
-  const [hasPlan] = useState(() => loadAssumptions() !== undefined)
+  const [hasPlan] = useState(() => loadAssumptions(asOf) !== undefined)
 
   const setNumericField = <K extends keyof FormValues>(key: K, value: number) => {
     setValues((prev) => ({ ...prev, [key]: value }))
@@ -316,7 +318,7 @@ export function RetirementNumberCalculator() {
   // goal has ever been set, the field is left untouched, same as the other pulled fields when their
   // source data is absent.
   const handlePullFromPlan = () => {
-    const persisted = loadAssumptions()
+    const persisted = loadAssumptions(asOf)
     if (!persisted) return
 
     const primary = primaryPerson(persisted.people)
@@ -331,7 +333,7 @@ export function RetirementNumberCalculator() {
 
     setValues((prev) => ({
       ...prev,
-      currentAge: primary ? primary.age : prev.currentAge,
+      currentAge: primary ? personCalendarAge(primary, asOf) : prev.currentAge,
       retirementAge: primary ? primary.retirementAge : prev.retirementAge,
       desiredMonthlySpend: monthlySpend !== undefined ? monthlySpend : prev.desiredMonthlySpend,
       currentBalance: totalBalance,

@@ -9,22 +9,23 @@ import {
   spouseHasAccounts,
   PERSON_ID_PRIMARY,
 } from './Person'
+import { TEST_ASOF } from '../../../testAsOf'
 
 describe('createPrimaryPerson', () => {
   it('seeds age from core.currentAge (not blank)', () => {
     const core = { ...DEFAULT_CORE_VALUES, currentAge: 47 }
-    expect(createPrimaryPerson(core).age).toBe(47)
+    expect(createPrimaryPerson(core, TEST_ASOF).age).toBe(47)
   })
 
   it('seeds retirementAge and salary from the corresponding core fields', () => {
     const core = { ...DEFAULT_CORE_VALUES, retirementAge: 62, currentAnnualIncome: 120000 }
-    const primary = createPrimaryPerson(core)
+    const primary = createPrimaryPerson(core, TEST_ASOF)
     expect(primary.retirementAge).toBe(62)
     expect(primary.salary).toBe(120000)
   })
 
   it('is marked isPrimary and non-deletable by convention (id === PERSON_ID_PRIMARY)', () => {
-    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES)
+    const primary = createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF)
     expect(primary.isPrimary).toBe(true)
     expect(primary.id).toBe(PERSON_ID_PRIMARY)
   })
@@ -32,7 +33,7 @@ describe('createPrimaryPerson', () => {
 
 describe('createSpouse', () => {
   it('creates a non-primary person with sensible new-person defaults', () => {
-    const spouse = createSpouse()
+    const spouse = createSpouse(TEST_ASOF)
     expect(spouse.isPrimary).toBe(false)
     expect(spouse.age).toBeGreaterThan(0)
     expect(spouse.retirementAge).toBeGreaterThan(0)
@@ -40,20 +41,20 @@ describe('createSpouse', () => {
   })
 
   it('generates a unique id per call', () => {
-    const a = createSpouse()
-    const b = createSpouse()
+    const a = createSpouse(TEST_ASOF)
+    const b = createSpouse(TEST_ASOF)
     expect(a.id).not.toBe(b.id)
   })
 
   it('defaults salary to $85,000, matching the primary person default', () => {
-    expect(createSpouse().salary).toBe(85000)
+    expect(createSpouse(TEST_ASOF).salary).toBe(85000)
   })
 })
 
 describe('seedPeople (migration)', () => {
   it('seeds only a primary person when no people have ever been persisted', () => {
     const core = { ...DEFAULT_CORE_VALUES, currentAge: 40 }
-    const people = seedPeople(undefined, core)
+    const people = seedPeople(undefined, core, TEST_ASOF)
 
     expect(people).toHaveLength(1)
     expect(people[0].isPrimary).toBe(true)
@@ -70,7 +71,7 @@ describe('seedPeople (migration)', () => {
     }
     core.hasSpouse = true
     core.spouseAge = 38
-    const people = seedPeople(undefined, core)
+    const people = seedPeople(undefined, core, TEST_ASOF)
 
     expect(people).toHaveLength(1)
     expect(people[0].isPrimary).toBe(true)
@@ -79,14 +80,14 @@ describe('seedPeople (migration)', () => {
   })
 
   it('returns an already-persisted non-empty people list unchanged', () => {
-    const existing = [createPrimaryPerson(DEFAULT_CORE_VALUES), createSpouse()]
-    expect(seedPeople(existing, DEFAULT_CORE_VALUES)).toBe(existing)
+    const existing = [createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF), createSpouse(TEST_ASOF)]
+    expect(seedPeople(existing, DEFAULT_CORE_VALUES, TEST_ASOF)).toBe(existing)
   })
 
   it('re-seeds when the persisted value is not a non-empty array (malformed/empty)', () => {
-    expect(seedPeople([], DEFAULT_CORE_VALUES)).toHaveLength(1)
-    expect(seedPeople('not-an-array', DEFAULT_CORE_VALUES)).toHaveLength(1)
-    expect(seedPeople(null, DEFAULT_CORE_VALUES)).toHaveLength(1)
+    expect(seedPeople([], DEFAULT_CORE_VALUES, TEST_ASOF)).toHaveLength(1)
+    expect(seedPeople('not-an-array', DEFAULT_CORE_VALUES, TEST_ASOF)).toHaveLength(1)
+    expect(seedPeople(null, DEFAULT_CORE_VALUES, TEST_ASOF)).toHaveLength(1)
   })
 })
 

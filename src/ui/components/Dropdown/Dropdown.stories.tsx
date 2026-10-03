@@ -38,3 +38,14 @@ export const Invalid: Story = () => {
     />
   )
 }
+
+const yearOptions: DropdownOption[] = Array.from({ length: 83 }, (_, i) => {
+  const year = String(2008 - i)
+  return { id: year, label: year }
+})
+
+// Long list: open it, then try typing "1990", PageUp/PageDown, Home/End.
+export const LongList: Story = () => {
+  const [selectedId, setSelectedId] = useState('2008')
+  return <Dropdown options={yearOptions} selectedId={selectedId} onSelect={setSelectedId} ariaLabel="Birth year" />
+}

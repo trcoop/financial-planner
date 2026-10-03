@@ -41,6 +41,16 @@ A thin `src/storage/` module handles localStorage read/write, decoupled from bot
 the engine and the UI, with defensive error handling (quota exceeded, storage
 disabled) that falls back to in-memory-only rather than crashing.
 
+**Age model (FIN-162).** A Person may carry `birthMonth`/`birthYear`; records saved before
+this have only `age`. Nothing is repaired, migrated or rewritten on load. Consumers call
+`personBirth`/`personCalendarAge` (`Person.ts`): valid birth fields are used as-is, otherwise
+birth is derived from `age` (`year = asOf.year - age`, `month = asOf.month`) and never
+persisted. Outside Social Security, age is the calendar-year difference `asOf.year - birthYear`
+(`calendarAge` in `src/engine/age.ts`). The People tab flags a missing birth month/year so the
+user fills it in. The engine and storage never read a clock: the UI reads it once per page load
+(`src/asOf.ts`, `useAsOf()`) and injects `asOf`. Defaults (salary, etc.) apply only on new-person
+creation. Transitional: `age` stays stored until FIN-179 removes it.
+
 A thin `src/workers/` module owns Web Worker lifecycle for Tier 2 (instantiate,
 `postMessage`, `terminate`/respawn on cancel), and reconstructs typed errors that
 cross the worker boundary back into real engine error instances before resolving

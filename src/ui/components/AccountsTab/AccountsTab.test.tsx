@@ -4,9 +4,10 @@ import { AccountsTab } from './AccountsTab'
 import { createAccount, type Account } from './Account'
 import { createPrimaryPerson, createSpouse } from '../PeopleTab/Person'
 import { DEFAULT_CORE_VALUES } from '../../coreInputs/defaults'
+import { TEST_ASOF } from '../../../testAsOf'
 
-const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES)
-const SPOUSE = createSpouse()
+const PRIMARY = createPrimaryPerson(DEFAULT_CORE_VALUES, TEST_ASOF)
+const SPOUSE = createSpouse(TEST_ASOF)
 const PEOPLE = [PRIMARY, SPOUSE]
 
 describe('AccountsTab', () => {
