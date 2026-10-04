@@ -33,6 +33,8 @@ export interface ChartRow {
   investmentReturn: number
   /** Dollars withdrawn this year. Zero pre-retirement. */
   annualWithdrawal: number
+  /** Social Security income this year (nominal). Optional until FIN-176 makes it required. */
+  socialSecurityIncome?: number
   /** Balance at the end of the year. */
   endingBalance: number
   /** Per-event cost breakdown for this year (e.g. Medicare). Empty array, never `undefined`,

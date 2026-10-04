@@ -106,3 +106,29 @@ describe('handleMonteCarloRequest', () => {
     expect(() => handleMonteCarloRequest(validRequest())).toThrow(TypeError);
   });
 });
+
+describe('socialSecurityIncomeByYear over the worker boundary (FIN-168)', () => {
+  const retiredPlan = (extra: Partial<PlanAssumptions> = {}) =>
+    assumptions({
+      currentAge: 65,
+      retirementAge: 65,
+      initialBalance: 400_000,
+      planningHorizonEndAge: 95,
+      retirementSpendingGoal: { annualAmount: 60_000 },
+      ...extra,
+    });
+
+  it('request survives structuredClone with the schedule intact', () => {
+    const request = validRequest({ assumptions: retiredPlan({ socialSecurityIncomeByYear: [1, 2, 3] }) });
+    expect(structuredClone(request).assumptions.socialSecurityIncomeByYear).toEqual([1, 2, 3]);
+  });
+
+  it('the schedule reaches the engine: SS raises the success rate, identically per seed', () => {
+    const without = handleMonteCarloRequest(validRequest({ assumptions: retiredPlan() }));
+    const withSs = handleMonteCarloRequest(
+      validRequest({ assumptions: retiredPlan({ socialSecurityIncomeByYear: Array(31).fill(40_000) }) }),
+    );
+    if (without.type !== 'success' || withSs.type !== 'success') throw new Error('expected success');
+    expect(withSs.result.successRate).toBeGreaterThan(without.result.successRate);
+  });
+});

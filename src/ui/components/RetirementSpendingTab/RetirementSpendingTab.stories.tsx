@@ -99,7 +99,7 @@ const DEPLETED_YEARS_ONLY_ASSUMPTIONS: PlanAssumptions = {
  * own inline derivation needs — the real depletion age it displays comes from this row, while
  * the two suggestion lines come from `computeDepletionGuidance` re-running the real engine. */
 const depletedRow = (age: number): ProjectionRow[] => [
-  { age, year: age, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, endingBalance: 0, eventCosts: [] },
+  { age, year: age, beginningBalance: 100, annualContribution: 0, investmentReturn: 0, annualWithdrawal: 100, socialSecurityIncome: 0, endingBalance: 0, eventCosts: [] },
 ]
 
 export const OnTrack: Story = () => <Wrapper assumptions={ON_TRACK_ASSUMPTIONS} rows={[]} successRate={92} />
