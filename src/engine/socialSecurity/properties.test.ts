@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { birthMonthIndex } from '../age';
 import { fraMonths, legalClaimWindow, ownFactorSteady } from './benefit';
 import { evaluateGrid, topClaims } from './evaluate';
+import { selectTopClaims } from './topClaimsSelect';
 import { computeSocialSecurity } from './household';
 import { calculatorHouseholdMonthly, evaluateScenario } from './scenario';
 import { survivorBreakdown, survivorStartMonth } from './survivor';
@@ -246,5 +247,32 @@ describe('death age drives the best claim month (single, PIA $1,000, FRA 67, no 
     expect(near.length).toBeGreaterThanOrEqual(2);
     expect(Math.abs(grid[1] - grid[2])).toBeLessThan(1);
     expect(best(age)).toBe(months[Math.min(...near)]);
+  });
+
+  it('fractional-month death age rounds (not floors): 80.875y = 970.5 months -> death month 971', () => {
+    // Claim at 70y0m (840 months): paid months are 840..970 = 131 months at 1.24 x PIA. Floor would give 130.
+    const total = evaluateScenario({ ...base(80.875), claimMonth: [mi(1970, 4) + 840] });
+    expect(total).toBeCloseTo(131 * 1240, 6);
+  });
+});
+
+describe('selectTopClaims exact ties (synthetic)', () => {
+  const tc = (total: number, a: number, b: number) => ({ claimMonths: [a, b], total }) as never;
+  const sel = (c: unknown[], n: number) => selectTopClaims(c as never[], [0, 1], n) as unknown as { claimMonths: number[] }[];
+
+  it('equal totals: smaller sum of claim months wins, regardless of input order', () => {
+    // [100,200] sum 300 listed first; [150,120] sum 270 must win. Person-0 order alone would pick [100,200].
+    const r = sel([tc(5, 100, 200), tc(5, 150, 120)], 1);
+    expect(r[0].claimMonths).toEqual([150, 120]);
+  });
+
+  it('equal totals and equal sums: smaller person-0 month wins, regardless of input order', () => {
+    const r = sel([tc(5, 200, 100), tc(5, 100, 200)], 1);
+    expect(r[0].claimMonths).toEqual([100, 200]);
+  });
+
+  it('totals within a cent but not equal still rank by total (cent key)', () => {
+    const r = sel([tc(5.001, 100, 100), tc(5.009, 300, 300)], 1);
+    expect(r[0].claimMonths).toEqual([300, 300]);
   });
 });

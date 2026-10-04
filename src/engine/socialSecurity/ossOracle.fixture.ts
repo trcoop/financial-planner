@@ -121,3 +121,22 @@ export const OSS_COUPLE_TOP3 = {
     { claimMonths: [24434, 24431], total: 1246588, ossPv: 1246618, e9Delta: 30 }, // B 12/2035
   ],
 } as const;
+
+/**
+ * E40 delayed-credit survivor base, deceased at the death month. Couple Y: A born 1966-03-15 PIA 900
+ * (OSS death age 90, engine 90.8333), B born 1968-09-15 PIA 2800 (OSS death age 68, engine 68.3333 ->
+ * death month Jan 2037). A claims 3/2033 (= A's FRA); B "claims" 1/2037, the death month (OSS's own
+ * recommended B date). Survivor base = PIA 2800 x (1 + 16 credit months x 2/3 %) = $3,098.67/mo; OSS shows the
+ * $2,198.67 top-up over A's own $900 = $26,384/yr from 2037. OSS PV $785,080.
+ * (OSS divergence, not asserted: with B's date 3/2037, after death, OSS keeps earning credits to the filing
+ * month and pays $26,832/yr; the engine stops credits at death - ERD E42.)
+ */
+export const OSS_E40_DELAYED_BASE = {
+  a: { birthYear: 1966, birthMonth: 3, pia: 900 },
+  b: { birthYear: 1968, birthMonth: 9, pia: 2800 },
+  deathAgeYears: [90.8333, 68.3333] as [number, number],
+  claim: { a: [2033, 3], b: [2037, 1] },
+  ossPv: 785080,
+  annualTotals: { 2033: 9000, 2034: 10800, 2035: 10800, 2036: 10800, 2037: 37184, 2038: 37184, 2039: 37184, 2056: 37184 } as Record<number, number>,
+  survivorAnnual: 26384,
+} as const;

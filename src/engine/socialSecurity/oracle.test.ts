@@ -10,6 +10,7 @@ import {
   OSS_COUPLE_TOP3,
   OSS_COUPLE_X,
   OSS_E40_CAP,
+  OSS_E40_DELAYED_BASE,
   OSS_SINGLE,
 } from './ossOracle.fixture';
 import type { MonthIndex, SsInputs, SsPerson } from './types';
@@ -77,6 +78,17 @@ function expectAnnualMatchesOss(inputs: SsInputs, oss: Record<number, number>, s
   }
 }
 
+/**
+ * OSS PV minus engine total, per delayed (FRA < claim < 70y0m) claim month, born 1970-04, PIA $1,000, FRA 67.
+ * Each gap is the E9 January rule alone: OSS pays the full delayed credits from the claim month, the
+ * engine posts only the credits earned through December of the prior year until the next January.
+ *  - 12/2037: 1 claim-year month at 1,000 (0 credits yet) vs OSS 1,053.33 -> $53
+ *  - 1/2038: 12 months at 1,053.33 (8 credits) vs OSS 1,060 (9 credits) -> 12 x 6.67 = $80
+ *  - 6/2038: 7 months at 1,053.33 (8 credits) vs OSS 1,093.33 (14 credits) -> 7 x 40 = $280 (OSS $279.67 after its rounding)
+ *  - 11/2039: 2 months at 1,133.33 (20 credits) vs OSS 1,206.67 (31 credits) -> 2 x 73.33 = $146.67 (OSS $146.33 after its rounding)
+ */
+const E9_DELTA: Record<string, number> = { '12/2037': 53, '1/2038': 80, '6/2038': 279.67, '11/2039': 146.33 };
+
 describe('independent oracle: single', () => {
   const person = pia(OSS_SINGLE.birthYear, OSS_SINGLE.birthMonth, OSS_SINGLE.pia);
   const inputsFor = (month: number, year: number): SsInputs => ({
@@ -107,21 +119,11 @@ describe('independent oracle: single', () => {
       if (!cell.delayedBeforeSeventy) {
         expect(Math.abs(engine - cell.ossPv)).toBeLessThan(1);
       } else {
-        // Documented E9 divergence: engine never exceeds OSS, and the gap is under one year of credits.
-        expect(engine).toBeLessThanOrEqual(cell.ossPv + 0.5);
-        expect(cell.ossPv - engine).toBeLessThan(300);
-        expect(cell.ossPv - engine).toBeGreaterThan(1);
+        // Documented E9 divergence: the gap is exactly the pinned delta below, within $1 of OSS rounding.
+        expect(cell.ossPv - engine).toBeCloseTo(E9_DELTA[`${cell.month}/${cell.year}`], 0);
       }
     });
   }
-
-  it('frozen E9 deltas (OSS PV - engine) are the documented ones', () => {
-    const expected: Record<string, number> = { '12/2037': 53, '1/2038': 80, '6/2038': 279.67, '11/2039': 146.33 };
-    for (const cell of OSS_SINGLE.cells.filter((c) => c.delayedBeforeSeventy)) {
-      const engine = evaluateScenario(inputsFor(cell.month, cell.year));
-      expect(cell.ossPv - engine).toBeCloseTo(expected[`${cell.month}/${cell.year}`], 0);
-    }
-  });
 });
 
 describe('independent oracle: couple X exact cells', () => {
@@ -216,6 +218,59 @@ describe('E37 death-month rule and E40 survivor base against OSS', () => {
   });
 });
 
+describe('E40/E41/E42 survivor base, OSS-frozen and oracle-checked', () => {
+  const Y = OSS_E40_DELAYED_BASE;
+  const yPeople: [SsPerson, SsPerson] = [pia(Y.a.birthYear, Y.a.birthMonth, Y.a.pia), pia(Y.b.birthYear, Y.b.birthMonth, Y.b.pia)];
+  const yInputs = (claimB: MonthIndex): SsInputs => ({
+    asOf,
+    colaRate: 0,
+    growthRate: null,
+    people: yPeople,
+    claimMonth: [mi(Y.claim.a[0], Y.claim.a[1]), claimB],
+    deathAgeYears: [...Y.deathAgeYears],
+    endYear: 2062,
+  });
+  const base16 = 2800 * (1 + (16 * 2) / 3 / 100);
+
+  it('deceased dies at the claim month: base = PIA x (1 + 16 credits x 2/3%) = $3,098.67, matches OSS', () => {
+    const inputs = yInputs(mi(Y.claim.b[0], Y.claim.b[1]));
+    expectAnnualMatchesOss(inputs, Y.annualTotals);
+    const r = computeSocialSecurity(inputs);
+    expect(r.deathMonths[1]).toBe(mi(2037, 1));
+    const m = r.series[0][mi(2037, 1) - r.firstMonth];
+    expect(m.own + m.survivor).toBeCloseTo(base16, 6);
+    expect(r.annual.find((a) => a.year === 2037)!.household).toBeCloseTo(Y.survivorAnnual + 900 * 12, 6);
+    expect(Math.abs(evaluateScenario(inputs) - Y.ossPv)).toBeLessThan(1);
+  });
+
+  it('deceased dies BEFORE claiming (E42): credits stop at the death month; engine == independent oracle', () => {
+    expectEngineMatchesOracle(yInputs(mi(2038, 9)));
+    const r = computeSocialSecurity(yInputs(mi(2038, 9)));
+    const m = r.series[0][mi(2037, 1) - r.firstMonth];
+    expect(m.own + m.survivor).toBeCloseTo(base16, 6);
+    expect(evaluateScenario(yInputs(mi(2038, 9)))).toBeCloseTo(evaluateScenario(yInputs(mi(2037, 1))), 6);
+  });
+
+  it('survivor starts before survivor FRA (E41 age reduction): engine == independent oracle', () => {
+    // A (PIA 2800) claims 62y1m and dies Jan 2031; B (born 1968-09) is 62y4m = 748 months -> reduction
+    // 0.285 x (804 - 748) / 84 = 19%. Base PIA 2800 -> 2,268, under the cap 2,310. OSS only starts a
+    // survivor benefit at the survivor's FRA, so this cell is oracle-only (see docs/FIN-169-oss-divergences.md).
+    const inputs: SsInputs = {
+      asOf,
+      colaRate: 0,
+      growthRate: null,
+      people: [pia(1966, 3, 2800), pia(1968, 9, 900)],
+      claimMonth: [mi(2028, 4), mi(2031, 1)],
+      deathAgeYears: [64.8333, 90.3333],
+      endYear: 2062,
+    };
+    expectEngineMatchesOracle(inputs);
+    const r = computeSocialSecurity(inputs);
+    const m = r.series[1][mi(2031, 1) - r.firstMonth];
+    expect(m.own + m.spousal + m.survivor).toBeCloseTo(2800 * (1 - (0.285 * 56) / 84), 6);
+  });
+});
+
 describe('couple top-3 golden (frozen couple, OSS oracle)', () => {
   const people: [SsPerson, SsPerson] = [
     pia(OSS_COUPLE_TOP3.a.birthYear, OSS_COUPLE_TOP3.a.birthMonth, OSS_COUPLE_TOP3.a.pia),
@@ -250,10 +305,11 @@ describe('couple top-3 golden (frozen couple, OSS oracle)', () => {
     expect(OSS_COUPLE_TOP3.ossRecommended.ossPv).toBeGreaterThan(pvs[0]);
   });
 
-  it('A at 70y0m in every top cell: no January-rule effect on A; B alone differs from OSS', () => {
-    for (const t of OSS_COUPLE_TOP3.top3) {
-      expect(t.claimMonths[0]).toBe(mi(2036, 3));
-    }
+  it('the three cells are 12+ months apart in B (the only varying claim), A fixed at 70y0m', () => {
+    const bs = OSS_COUPLE_TOP3.top3.map((t) => t.claimMonths[1]);
+    expect(bs).toEqual([mi(2037, 12), mi(2036, 12), mi(2035, 12)]);
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) expect(Math.abs(bs[i] - bs[j])).toBeGreaterThanOrEqual(12);
+    OSS_COUPLE_TOP3.top3.forEach((t) => expect(t.claimMonths[0] - mi(OSS_COUPLE_TOP3.a.birthYear, OSS_COUPLE_TOP3.a.birthMonth)).toBe(840));
   });
 
   it('each top cell matches the independent oracle month by month', () => {
