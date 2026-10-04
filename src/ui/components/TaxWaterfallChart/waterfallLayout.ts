@@ -12,7 +12,14 @@ import type { FederalTaxResult } from '../../../engine'
  * income→taxable-income bar and the tax-before-credits→tax-owed bar.
  */
 
-export type SegmentRole = 'base' | 'reduction' | 'reductionBonus'
+export type SegmentRole =
+  | 'base'
+  | 'reduction'
+  | 'reductionBonus'
+  | 'ordinary'
+  | 'preferential'
+  | 'ssTaxable'
+  | 'ssNotTaxed'
 
 export interface WaterfallSegment {
   key: string
@@ -48,6 +55,35 @@ export function buildIncomeSegments(result: FederalTaxResult): WaterfallSegment[
       role: 'reductionBonus',
     },
     { key: 'taxableIncome', label: 'Taxable income', value: result.taxableIncome, role: 'base' },
+  ]
+}
+
+/** Builds the ordered segments for the income-sources bar, whose total INCLUDES gross Social
+ * Security: ordinary, preferential, taxable SS, not-taxed SS remainder. The remainder is
+ * `Math.round(gross) - taxable` (taxable is already whole-dollar) so the two SS segments sum
+ * exactly to the displayed gross SS. Segment values are the legend's displayed figures. */
+export function buildSourceSegments(result: FederalTaxResult): WaterfallSegment[] {
+  const grossSs = Math.round(result.grossSocialSecurity)
+  return [
+    { key: 'ordinary', label: 'Ordinary income', value: Math.round(result.grossOrdinaryIncome), role: 'ordinary' },
+    {
+      key: 'preferential',
+      label: 'Preferential income',
+      value: Math.round(result.grossPreferentialIncome),
+      role: 'preferential',
+    },
+    {
+      key: 'ssTaxable',
+      label: 'Social Security — taxable',
+      value: result.taxableSocialSecurity,
+      role: 'ssTaxable',
+    },
+    {
+      key: 'ssNotTaxed',
+      label: 'Social Security — not taxed',
+      value: grossSs - result.taxableSocialSecurity,
+      role: 'ssNotTaxed',
+    },
   ]
 }
 
