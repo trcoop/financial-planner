@@ -102,6 +102,22 @@
   fill: var(--color-success-subtle);
 }
 
+.segmentSourcesOrdinary {
+  fill: var(--color-primary);
+}
+
+.segmentSourcesPreferential {
+  fill: var(--color-primary-hover);
+}
+
+.segmentSourcesSsTaxable {
+  fill: var(--color-warning);
+}
+
+.segmentSourcesSsNotTaxed {
+  fill: var(--color-border);
+}
+
 .segmentFica {
   fill: var(--color-warning);
 }
@@ -131,4 +147,20 @@
 
 .swatchFica {
   background: var(--color-warning);
+}
+
+.swatchOrdinary {
+  background: var(--color-primary);
+}
+
+.swatchPreferential {
+  background: var(--color-primary-hover);
+}
+
+.swatchSsTaxable {
+  background: var(--color-warning);
+}
+
+.swatchSsNotTaxed {
+  background: var(--color-border);
 }

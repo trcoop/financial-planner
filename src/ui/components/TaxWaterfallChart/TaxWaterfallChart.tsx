@@ -6,6 +6,7 @@ import { Table, TableRow } from '../Table/Table'
 import { formatCurrency } from '../../utils/format'
 import {
   buildIncomeSegments,
+  buildSourceSegments,
   buildTaxSegments,
   layoutSegments,
   toPixelWidth,
@@ -40,6 +41,17 @@ const roleClass: Record<SegmentRole, string> = {
   base: styles.segmentBase,
   reduction: styles.segmentReduction,
   reductionBonus: styles.segmentReductionBonus,
+  ordinary: styles.segmentSourcesOrdinary,
+  preferential: styles.segmentSourcesPreferential,
+  ssTaxable: styles.segmentSourcesSsTaxable,
+  ssNotTaxed: styles.segmentSourcesSsNotTaxed,
+}
+
+const sourceSwatch: Partial<Record<SegmentRole, string>> = {
+  ordinary: styles.swatchOrdinary,
+  preferential: styles.swatchPreferential,
+  ssTaxable: styles.swatchSsTaxable,
+  ssNotTaxed: styles.swatchSsNotTaxed,
 }
 
 export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
@@ -55,6 +67,11 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
   // exceed that total, which `toPixelWidth` clamps rather than overflowing the bar.
   const incomeScaleMax = Math.max(1, grossIncome)
   const taxScaleMax = Math.max(1, result.taxBeforeCredits)
+
+  const hasSocialSecurity = result.grossSocialSecurity > 0
+  const sourceSegments = buildSourceSegments(result)
+  const sourcesTotal = result.grossOrdinaryIncome + result.grossPreferentialIncome + result.grossSocialSecurity
+  const sourceBars = layoutSegments(sourceSegments, Math.max(1, Math.round(sourcesTotal)), VIEW_WIDTH)
 
   const incomeBars = layoutSegments(incomeSegments, incomeScaleMax, VIEW_WIDTH)
   const taxBars = layoutSegments(taxSegments, taxScaleMax, VIEW_WIDTH)
@@ -96,7 +113,17 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
     </div>
   )
 
+  const sourceLegendRows: { label: string; value: number; swatch?: string }[] = hasSocialSecurity
+    ? [
+        ...sourceSegments.slice(0, 2).map((seg) => ({ label: seg.label, value: seg.value, swatch: sourceSwatch[seg.role] })),
+        { label: 'Social Security — gross', value: Math.round(result.grossSocialSecurity) },
+        ...sourceSegments.slice(2).map((seg) => ({ label: seg.label, value: seg.value, swatch: sourceSwatch[seg.role] })),
+        { label: 'Total income including Social Security', value: sourcesTotal },
+      ]
+    : []
+
   const legendRows: { label: string; value: number; swatch?: string }[] = [
+    ...sourceLegendRows,
     { label: 'Gross income', value: grossIncome },
     { label: 'Standard deduction', value: result.deduction.standardDeduction, swatch: styles.swatchReduction },
     {
@@ -126,6 +153,12 @@ export function TaxWaterfallChart({ result, title }: TaxWaterfallChartProps) {
               value={formatCurrency(totalTaxLiability)}
             />
 
+            {hasSocialSecurity
+              ? renderRow(
+                  `Income sources ${formatCurrency(sourcesTotal)} (Social Security ${formatCurrency(result.grossSocialSecurity)}, ${formatCurrency(result.taxableSocialSecurity)} taxed)`,
+                  sourceBars,
+                )
+              : null}
             {renderRow(
               `Gross income ${formatCurrency(grossIncome)} → taxable income ${formatCurrency(result.taxableIncome)}`,
               incomeBars,
