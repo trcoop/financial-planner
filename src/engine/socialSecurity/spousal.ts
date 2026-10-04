@@ -26,8 +26,11 @@ function requireBenefit(value: number, name: string): void {
  * BASE $/month spousal top-up for a start in month `spousalStart` (PRD E6): `max(0, 0.5 x otherPia -
  * ownPia)` reduced 25/36 % per month for the first 36 months before the claimant's own FRA and 5/12 %
  * per month beyond, measured from `spousalStart` (the later of both filing months), not from the
- * claimant's own claim. No reduction at or after FRA and no delayed credits (nothing to gain from
- * waiting). `ownFraMonths` is the calendar month index of the claimant's own FRA month
+ * claimant's own claim. No reduction at or after FRA and no delayed credits of its own (nothing to gain
+ * from waiting). The claimant's OWN delayed retirement credits, `ownDrc` (BASE $/month, default 0, as
+ * actually paid in that month so the E9 January rule applies), are subtracted from the reduced top-up and
+ * floored at 0, so own + spousal never exceeds 0.5 x the other PIA (SSA POMS RS 00615.694: the DRCs are
+ * added to the RIB and that amount is subtracted from the combined payment). `ownFraMonths` is the calendar month index of the claimant's own FRA month
  * (`birthMonthIndex + fraMonths(birthYear)`), since `spousalStart` is calendar too. No January rule.
  */
 export function spousalAmount(a: {
@@ -35,15 +38,18 @@ export function spousalAmount(a: {
   otherPia: number;
   ownFraMonths: number;
   spousalStart: MonthIndex;
+  ownDrc?: number;
 }): number {
   requireBenefit(a.ownPia, 'ownPia');
   requireBenefit(a.otherPia, 'otherPia');
   requireFinite(a.ownFraMonths, 'ownFraMonths');
   requireFinite(a.spousalStart, 'spousalStart');
+  const ownDrc = a.ownDrc ?? 0;
+  requireBenefit(ownDrc, 'ownDrc');
   const excess = Math.max(0, 0.5 * a.otherPia - a.ownPia);
   const monthsEarly = Math.max(0, a.ownFraMonths - a.spousalStart);
   const reductionPercent = monthsEarly <= 36 ? (monthsEarly * 25) / 36 : 25 + ((monthsEarly - 36) * 5) / 12;
-  return excess * (1 - reductionPercent / 100);
+  return Math.max(0, excess * (1 - reductionPercent / 100) - ownDrc);
 }
 
 /** One validated household member: PIA (derived from the check for a collecting person) and own start. */
@@ -143,22 +149,30 @@ export function computeOwnAndSpousal(inputs: Omit<SsInputs, 'deathAgeYears'>): S
   const lastMonth = inputs.endYear * 12 + 11;
   const yearCount = inputs.endYear - asOf.year + 1;
   const starts: SsResult['starts'] = [];
-  const base: { own: number; spousal: number; ownFrom: MonthIndex; spousalFrom: MonthIndex }[] = [];
+  const base: { own: number; spousal: number; spousalNoDrc: number; ownFrom: MonthIndex; spousalFrom: MonthIndex }[] = [];
 
   members.forEach((m, i) => {
     let spousal = 0;
+    let spousalNoDrc = 0;
     let spousalFrom = Number.POSITIVE_INFINITY;
     if (members.length === 2) {
       const other = members[1 - i];
       spousalFrom = Math.max(m.ownStart, other.ownStart);
-      spousal = spousalAmount({
+      spousalNoDrc = spousalAmount({
         ownPia: m.pia,
         otherPia: other.pia,
         ownFraMonths: m.birthIdx + fraMonths(m.person.birthYear),
         spousalStart: spousalFrom,
       });
+      spousal = spousalAmount({
+        ownPia: m.pia,
+        otherPia: other.pia,
+        ownFraMonths: m.birthIdx + fraMonths(m.person.birthYear),
+        spousalStart: spousalFrom,
+        ownDrc: m.pia * Math.max(0, ownFactorAt(m.person, m.ownStart, spousalFrom) - 1),
+      });
     }
-    base.push({ own: m.pia, spousal, ownFrom: m.ownStart, spousalFrom });
+    base.push({ own: m.pia, spousal, spousalNoDrc, ownFrom: m.ownStart, spousalFrom });
     if (m.ownStart >= firstMonth && m.ownStart <= lastMonth) starts.push({ personIndex: i, kind: 'own', month: m.ownStart });
     if (spousal > 0 && spousalFrom >= firstMonth && spousalFrom <= lastMonth) {
       starts.push({ personIndex: i, kind: 'spousal', month: spousalFrom });
@@ -177,12 +191,15 @@ export function computeOwnAndSpousal(inputs: Omit<SsInputs, 'deathAgeYears'>): S
       // The own factor only changes in January (or at the claim), so one lookup per year suffices.
       const ownMonth = Math.max(year * 12, b.ownFrom);
       const ownBase = ownMonth <= year * 12 + 11 ? b.own * ownFactorAt(m.person, b.ownFrom, ownMonth) : 0;
+      // Own DRCs (ownBase - PIA, only above PIA) change only in January, so one value per year; they come
+      // off the spousal top-up (POMS RS 00615.694). `b.spousal` already holds the no-DRC reduced excess.
+      const spousalBase = Math.max(0, b.spousalNoDrc - Math.max(0, ownBase - m.pia));
       let own = 0;
       let spousal = 0;
       for (let k = 0; k < 12; k++) {
         const month = year * 12 + k;
         const o = month >= b.ownFrom ? ownBase * cola : 0;
-        const s = month >= b.spousalFrom ? b.spousal * cola : 0;
+        const s = month >= b.spousalFrom ? spousalBase * cola : 0;
         series[i].push({ own: o, spousal: s, survivor: 0 });
         own += o;
         spousal += s;

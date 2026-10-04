@@ -40,7 +40,10 @@ function oracleSpousal(me: OraclePerson, other: OraclePerson, t: number): number
   const excess = Math.max(0, 0.5 * other.pia - me.pia);
   const early = Math.max(0, me.birthIdx + FRA - start);
   const pct = early <= 36 ? (early * 25) / 36 : 25 + ((early - 36) * 5) / 12;
-  return excess * (1 - pct / 100);
+  // POMS RS 00615.694: the spouse's own delayed retirement credits (as actually paid this month, E9
+  // January rule included) come off the spousal top-up, so own + spousal never exceeds 0.5 x other PIA.
+  const drc = Math.max(0, oracleOwn(me, t) - me.pia);
+  return Math.max(0, excess * (1 - pct / 100) - drc);
 }
 
 /** Survivor amount fixed at the survivor's start month (E40/E41/E42), or 0 if none yet. */

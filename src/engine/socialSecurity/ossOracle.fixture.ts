@@ -19,8 +19,8 @@
  *  - E9 January rule: OSS pays the full delayed-retirement credits from the claim month; the engine
  *    posts a delayed (pre-70) claim's credits only through December of the prior year until the next
  *    January. So OSS >= engine, only for claims after FRA and before 70y0m, only in the claim year.
- *  - Spousal basis: when the spouse's own benefit carries delayed credits, OSS deducts that inflated
- *    benefit from half the other PIA; the engine deducts own PIA (PRD E6). Not exercised by exact cells.
+ *  - Spousal basis: RESOLVED. The engine now deducts the spouse's own delayed credits from the spousal
+ *    top-up like OSS does (SSA POMS RS 00615.694); see OSS_SPOUSAL_DRC.
  */
 
 export interface OssAnnualRun {
@@ -139,4 +139,16 @@ export const OSS_E40_DELAYED_BASE = {
   ossPv: 785080,
   annualTotals: { 2033: 9000, 2034: 10800, 2035: 10800, 2036: 10800, 2037: 37184, 2038: 37184, 2039: 37184, 2056: 37184 } as Record<number, number>,
   survivorAnnual: 26384,
+} as const;
+
+/**
+ * Spousal-basis cell (couple X people, A 3/2036 = 70y0m, B claims 3/2036 = 6 months after B's FRA 9/2035):
+ * B's own benefit is $900 x 1.04 = $936 and OSS pays spousal $464/mo = $500 excess - $36 own DRCs, i.e.
+ * own + spousal = $1,400 = 0.5 x A's PIA. OSS PV $1,217,328 (the pre-fix engine gave $1,223,988).
+ * SSA basis: POMS RS 00615.694 (DRCs are added to the RIB and subtracted from the combined payment).
+ */
+export const OSS_SPOUSAL_DRC = {
+  claim: { a: [2036, 3], b: [2036, 3] },
+  ossPv: 1217328,
+  spousalMonthly: 464,
 } as const;

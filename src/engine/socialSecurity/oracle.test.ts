@@ -11,6 +11,7 @@ import {
   OSS_COUPLE_X,
   OSS_E40_CAP,
   OSS_E40_DELAYED_BASE,
+  OSS_SPOUSAL_DRC,
   OSS_SINGLE,
 } from './ossOracle.fixture';
 import type { MonthIndex, SsInputs, SsPerson } from './types';
@@ -215,6 +216,41 @@ describe('E37 death-month rule and E40 survivor base against OSS', () => {
     expect(r.annual.find((a) => a.year === 2042)!.household).toBeCloseTo(OSS_E40_CAP.survivorAnnualFrom2042, 6);
     expect(r.annual.find((a) => a.year === 2042)!.perPerson[1].survivor).toBeCloseTo(27720, 6);
     expect(Math.abs(evaluateScenario(e40) - OSS_E40_CAP.ossPv)).toBeLessThan(1);
+  });
+});
+
+describe('spousal basis deducts own delayed credits (POMS RS 00615.694), OSS-frozen', () => {
+  const S = OSS_SPOUSAL_DRC;
+  const inputs: SsInputs = {
+    asOf,
+    colaRate: 0,
+    growthRate: null,
+    people: [
+      pia(OSS_COUPLE_X.a.birthYear, OSS_COUPLE_X.a.birthMonth, OSS_COUPLE_X.a.pia),
+      pia(OSS_COUPLE_X.b.birthYear, OSS_COUPLE_X.b.birthMonth, OSS_COUPLE_X.b.pia),
+    ],
+    claimMonth: [mi(S.claim.a[0], S.claim.a[1]), mi(S.claim.b[0], S.claim.b[1])],
+    deathAgeYears: [...OSS_COUPLE_X.deathAgeYears],
+    endYear: OSS_COUPLE_X.endYear,
+  };
+
+  it('B spousal is $464/mo once B own carries all 6 credit months (from Jan 2037)', () => {
+    const r = computeSocialSecurity(inputs);
+    const m = r.series[1][mi(2037, 6) - r.firstMonth];
+    expect(m.own).toBeCloseTo(936, 6);
+    expect(m.spousal).toBeCloseTo(S.spousalMonthly, 6);
+    expect(m.own + m.spousal).toBeCloseTo(1400, 6);
+  });
+
+  it('claim-year January rule: own + spousal stays $1,400 (credits paid in own come off spousal)', () => {
+    const r = computeSocialSecurity(inputs);
+    const m = r.series[1][mi(2036, 6) - r.firstMonth];
+    expect(m.own + m.spousal).toBeCloseTo(1400, 6);
+  });
+
+  it('engine == oracle and engine PV == OSS PV within $1', () => {
+    expectEngineMatchesOracle(inputs);
+    expect(Math.abs(evaluateScenario(inputs) - S.ossPv)).toBeLessThan(1);
   });
 });
 

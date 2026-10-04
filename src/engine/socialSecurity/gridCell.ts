@@ -116,7 +116,8 @@ export function makeCellEvaluator(base: Omit<SsInputs, 'claimMonth'>): (claimMon
         const ownBase =
           ownMonth <= year * 12 + 11 ? members[i].pia * ownFactorAt(members[i].person, ownFrom[i], ownMonth) : 0;
         ownVal[i] = ownBase * c;
-        spousalVal[i] = spousalBase[i] * c;
+        // Own DRCs (above PIA) come off the spousal top-up (POMS RS 00615.694); same rule as spousalAmount.
+        spousalVal[i] = Math.max(0, spousalBase[i] - Math.max(0, ownBase - members[i].pia)) * c;
       }
       for (let k = 0; k < 12; k++) {
         const month = year * 12 + k;
