@@ -48,6 +48,13 @@ function goldenInputs(key: GoldenKey): Inputs {
 describe('spousalAmount (ERD section 4, PRD E6/E22)', () => {
   const fra = mi(2032, 6); // calendar month index of the claimant's own FRA
 
+  it('POMS RS 00615.694: own delayed credits (ownDrc) come off the top-up, floored at 0', () => {
+    const a = { ownPia: 900, otherPia: 2800, ownFraMonths: fra, spousalStart: fra + 6 };
+    expect(spousalAmount({ ...a, ownDrc: 36 })).toBeCloseTo(464, 10);
+    expect(spousalAmount({ ...a, ownDrc: 0 })).toBeCloseTo(500, 10);
+    expect(spousalAmount({ ...a, ownDrc: 600 })).toBe(0);
+  });
+
   it('E6: 24 months before FRA keeps 83.3333% of the $400 top-up = $333.33', () => {
     const v = spousalAmount({ ownPia: 1000, otherPia: 2800, ownFraMonths: fra, spousalStart: fra - 24 });
     expect(v).toBeCloseTo(333.33, 2);
@@ -194,6 +201,33 @@ describe('computeOwnAndSpousal: G3 (Sally 1,200 / Jeff 3,500, 1.5% COLA)', () =>
   });
 });
 
+describe('computeOwnAndSpousal: spousal start event honours own DRCs (POMS RS 00615.694)', () => {
+  // D: born June 1960 (FRA June 2027) delays 3 months to Sep 2027 (2% credits, posted from Jan 2028).
+  // H: born June 1965, PIA 2,800, files Jan 2029, so D's spousal start (Jan 2029) is a year after D's claim.
+  const run = (dPia: number) =>
+    computeOwnAndSpousal({
+      asOf,
+      colaRate: 0,
+      growthRate: null,
+      people: [piaPerson(1960, 6, dPia), piaPerson(1965, 6, 2800)],
+      claimMonth: [mi(2027, 9), mi(2029, 1)],
+      endYear: 2030,
+    });
+  const spousalStarts = (r: SsResult) => r.starts.filter((x) => x.kind === 'spousal');
+
+  it('DRC larger than the top-up: no spousal start event and no spousal money', () => {
+    const r = run(1380); // top-up 20, own DRCs 27.60 by Jan 2029
+    expect(spousalStarts(r)).toEqual([]);
+    expect(at(r, 0, mi(2029, 6)).spousal).toBe(0);
+  });
+
+  it('DRC smaller than the top-up: spousal start at the later filing month, reduced amount', () => {
+    const r = run(1300); // top-up 100, own DRCs 26
+    expect(spousalStarts(r)).toEqual([{ personIndex: 0, kind: 'spousal', month: mi(2029, 1) }]);
+    expect(at(r, 0, mi(2029, 1)).spousal).toBeCloseTo(74, 8);
+  });
+});
+
 describe('computeOwnAndSpousal: E6 and E22 through the engine', () => {
   // Lower: born June 1965, FRA 67 = June 2032, PIA 1,000. Higher: born June 1960, PIA 2,800.
   const lower = piaPerson(1965, 6, 1000);
@@ -220,12 +254,15 @@ describe('computeOwnAndSpousal: E6 and E22 through the engine', () => {
     expect(at(r, 0, mi(2030, 7)).spousal).toBeCloseTo(400 * (1 - (23 * 25) / 36 / 100), 6);
   });
 
-  it('delaying the own claim past FRA adds nothing to the spousal part', () => {
+  it('delaying the own claim past FRA: own DRCs come off the top-up, own + spousal unchanged (POMS RS 00615.694)', () => {
     const atFra = computeOwnAndSpousal(couple(lower, higher, mi(2032, 6), mi(2027, 7)));
     const delayed = computeOwnAndSpousal(couple(lower, higher, mi(2035, 6), mi(2027, 7)));
     expect(at(atFra, 0, mi(2036, 1)).spousal).toBeCloseTo(400, 8);
-    expect(at(delayed, 0, mi(2036, 1)).spousal).toBeCloseTo(400, 8);
-    expect(at(delayed, 0, mi(2036, 1)).own).toBeGreaterThan(at(atFra, 0, mi(2036, 1)).own);
+    const d = at(delayed, 0, mi(2036, 1));
+    const f = at(atFra, 0, mi(2036, 1));
+    expect(d.own).toBeGreaterThan(f.own);
+    expect(d.spousal).toBeCloseTo(400 - (d.own - f.own), 8); // 36 credit months = 24% of PIA 1,000
+    expect(d.own + d.spousal).toBeCloseTo(f.own + f.spousal, 8);
   });
 
   it('own part keeps the January rule in the spousal path (E9: born March 1960, PIA 2,000)', () => {
