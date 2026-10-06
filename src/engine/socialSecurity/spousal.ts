@@ -30,8 +30,9 @@ function requireBenefit(value: number, name: string): void {
  * from waiting). The claimant's OWN delayed retirement credits, `ownDrc` (BASE $/month, default 0, as
  * actually paid in that month so the E9 January rule applies), are subtracted from the reduced top-up and
  * floored at 0, so own + spousal never exceeds 0.5 x the other PIA (SSA POMS RS 00615.694: the DRCs are
- * added to the RIB and that amount is subtracted from the combined payment). `ownFraMonths` is the calendar month index of the claimant's own FRA month
- * (`birthMonthIndex + fraMonths(birthYear)`), since `spousalStart` is calendar too. No January rule.
+ * added to the RIB and that amount is subtracted from the combined payment). `ownFraMonths` is the
+ * calendar month index of the claimant's own FRA month (`birthMonthIndex + fraMonths(birthYear)`),
+ * since `spousalStart` is calendar too. No January rule.
  */
 export function spousalAmount(a: {
   ownPia: number;
@@ -192,7 +193,8 @@ export function computeOwnAndSpousal(inputs: Omit<SsInputs, 'deathAgeYears'>): S
       const ownMonth = Math.max(year * 12, b.ownFrom);
       const ownBase = ownMonth <= year * 12 + 11 ? b.own * ownFactorAt(m.person, b.ownFrom, ownMonth) : 0;
       // Own DRCs (ownBase - PIA, only above PIA) change only in January, so one value per year; they come
-      // off the spousal top-up (POMS RS 00615.694). `b.spousal` already holds the no-DRC reduced excess.
+      // off the spousal top-up (POMS RS 00615.694). `b.spousal` holds the amount net of the DRCs
+      // at the spousal start (it only gates the start event); `b.spousalNoDrc` is the no-DRC value.
       const spousalBase = Math.max(0, b.spousalNoDrc - Math.max(0, ownBase - m.pia));
       let own = 0;
       let spousal = 0;
